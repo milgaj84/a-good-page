@@ -1,0 +1,61 @@
+/* A Good Page performance layer: loaded last. Keeps every frame cheap while typing and scrolling. */
+
+/* 1. The manuscript scroller gets its own compositor layer and never chains scroll to the window. */
+.scroller {
+  will-change: scroll-position;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  /* A mask on a scroll container re-composites the whole page per scrolled pixel, so the page scrolls unmasked. */
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.page { transition: none; }
+
+/* 2. Long manuscripts: off-screen paragraphs skip layout and paint until they near the viewport.
+      Limited to plain paragraphs, because paint containment would clip list markers and quote glyphs. */
+.ProseMirror > p:not(.has-focus):not(.is-editor-empty) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3em;
+}
+
+/* 3. No live blur: backdrop-filter re-samples everything behind it each frame. Solid tints look the same. */
+.overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: color-mix(in srgb, var(--bg) 82%, transparent); }
+.workspace-panel { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); }
+.session-badge { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); }
+
+/* 4. Focus mode dims with opacity only (compositor-friendly); filters repaint every block. */
+.focus-mode .ProseMirror > * { transition: opacity .3s var(--ease); }
+.focus-mode .ProseMirror.ProseMirror-focused > :not(.has-focus) { filter: none; }
+
+/* 5. The body glow and paper grain are painted once on fixed layers instead of behind scrolling content. */
+html, body { transition: none; }
+body { background-image: none; }
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; transform: translateZ(0);
+  background-image: radial-gradient(ellipse 80% 50% at 50% 0%, var(--glow), transparent 70%);
+}
+[data-theme="midnight"] body { background-image: none; }
+[data-theme="midnight"] body::after {
+  background-image: radial-gradient(ellipse 80% 50% at 50% 0%, var(--glow), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 85% 100%, rgba(183, 167, 240, .06), transparent 70%);
+}
+
+/* 6. optimizeLegibility runs costly shaping on every re-layout of long text; kerning and ligatures stay on. */
+body { text-rendering: auto; }
+
+/* 7. Middle-click autoscroll anchor. */
+.autoscroll-anchor {
+  position: fixed; left: -14px; top: -14px; z-index: 50; width: 28px; height: 28px; border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent); box-shadow: var(--shadow);
+  pointer-events: none; opacity: 0; will-change: transform, opacity; transition: opacity .12s var(--ease);
+}
+.autoscroll-anchor::before, .autoscroll-anchor::after {
+  content: ""; position: absolute; left: 50%; width: 0; height: 0; margin-left: -4px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent; opacity: .45;
+}
+.autoscroll-anchor::before { top: 4px; border-bottom: 5px solid var(--accent); }
+.autoscroll-anchor::after { bottom: 4px; border-top: 5px solid var(--accent); }
+.autoscroll-anchor.is-on { opacity: 1; }
+.autoscroll-anchor[data-dir="up"]::before, .autoscroll-anchor[data-dir="down"]::after { opacity: 1; }
+.is-autoscrolling, .is-autoscrolling * { cursor: ns-resize !important; user-select: none; }

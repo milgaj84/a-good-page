@@ -1,0 +1,108 @@
+/* Quick switcher, pinned notes, sprint ring and Time Machine. Loaded last; muted by design. */
+.switcher-input {
+  display: block; width: 100%; height: 64px; padding: 0 22px;
+  border: none; border-bottom: 1px solid var(--line); outline: none;
+  background: transparent; color: var(--ink); font: 400 19px var(--sans);
+}
+.switcher-input::placeholder { color: var(--muted); }
+.switcher-results { max-height: min(49vh, 410px); overflow-y: auto; padding: 8px; }
+.switcher-result[data-kind="document"] .command-label { font-family: var(--serif); font-style: italic; }
+
+/* Pinned notes: a slim, read-only slide-out beside the manuscript. */
+.reference-panel {
+  position: fixed; top: 118px; bottom: 72px; right: 14px; z-index: 7;
+  width: min(300px, 34vw); display: flex; flex-direction: column;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); font-family: var(--sans);
+  transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none;
+  transition: transform .32s var(--ease), opacity .24s var(--ease);
+}
+.reference-panel[data-side="left"] { right: auto; left: 14px; transform: translateX(calc(-100% - 24px)); }
+.reference-panel.is-open { transform: none; opacity: 1; pointer-events: auto; }
+.reference-panel.is-open.is-collapsed { transform: translateX(calc(100% - 4px)); }
+.reference-panel.is-open.is-collapsed[data-side="left"] { transform: translateX(calc(-100% + 4px)); }
+.reference-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px 16px; border-bottom: 1px solid var(--line); }
+.reference-title { flex: 1; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+.reference-tools { display: flex; gap: 2px; }
+.reference-tool { width: 26px; height: 26px; border: none; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+.reference-tool:hover, .reference-tool:focus-visible { background: var(--bg-soft); color: var(--ink); }
+.reference-tool[hidden], .reference-tab[hidden] { display: none; }
+.reference-status { margin: 0; padding: 0 16px; color: var(--muted); font-size: 12px; }
+.reference-status:empty { display: none; }
+.reference-status:not(:empty) { padding: 10px 16px 0; }
+.reference-body { flex: 1; overflow-y: auto; padding: 6px 16px 18px; }
+.reference-body[hidden], .reference-empty[hidden] { display: none; }
+.reader-prose { font-family: var(--serif); font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); outline: none; }
+.reader-prose h1 { font-size: 1.35em; } .reader-prose h2 { font-size: 1.18em; } .reader-prose h3 { font-size: 1.05em; }
+.reference-empty { padding: 18px 16px; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+.reference-choice { display: block; width: 100%; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; font: 13px var(--sans); text-align: left; }
+.reference-choice:hover, .reference-choice:focus-visible { background: var(--bg-soft); }
+.reference-tab {
+  position: absolute; top: 18px; left: -30px; width: 26px; padding: 10px 0; border: 1px solid var(--line); border-right: none;
+  border-radius: 10px 0 0 10px; background: var(--bg); color: var(--muted); cursor: pointer;
+  font: 600 10px var(--sans); letter-spacing: .08em; text-transform: uppercase; writing-mode: vertical-rl;
+}
+.reference-panel[data-side="left"] .reference-tab { left: auto; right: -30px; border: 1px solid var(--line); border-left: none; border-radius: 0 10px 10px 0; }
+@media (min-width: 1100px) {
+  html[data-reference="right"] .scroller { padding-right: 320px; }
+  html[data-reference="left"] .scroller { padding-left: 320px; }
+}
+
+/* Sprint ring: quiet in the lower-left corner until a goal is set, then a soft glow once it is reached. */
+.sprint { position: fixed; left: 18px; bottom: 64px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-family: var(--sans); }
+.sprint-ring {
+  position: relative; width: 40px; height: 40px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; color: var(--muted); cursor: pointer; opacity: .45;
+  transition: opacity .3s var(--ease), box-shadow .6s var(--ease);
+}
+.sprint.is-active .sprint-ring, .sprint-ring:hover, .sprint-ring:focus-visible { opacity: .9; }
+.sprint-ring svg { width: 40px; height: 40px; transform: rotate(-90deg); }
+.sprint-track { fill: none; stroke: var(--line); stroke-width: 2.5; }
+.sprint-arc { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; opacity: .7; transition: stroke-dashoffset .6s var(--ease); }
+.sprint:not(.is-active) .sprint-arc { opacity: 0; }
+.sprint-count { position: absolute; inset: 0; display: grid; place-items: center; font: 600 10px var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.sprint.is-reached .sprint-arc { opacity: 1; }
+.sprint.is-glowing .sprint-ring { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 55%, transparent); animation: sprint-glow 2.4s var(--ease) both; }
+@keyframes sprint-glow { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.sprint-form {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; width: 230px; padding: 14px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); color: var(--ink); font-size: 12px;
+}
+.sprint-form[hidden] { display: none; }
+.sprint-form label { grid-column: 1 / -1; color: var(--ink-soft); }
+.sprint-form input { min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); font: 13px var(--sans); }
+.sprint-start, .sprint-end { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); color: var(--ink); cursor: pointer; font: 12px var(--sans); }
+.sprint-end { grid-column: 1 / -1; background: transparent; color: var(--muted); }
+.sprint-end[hidden] { display: none; }
+.sprint-error { grid-column: 1 / -1; margin: 0; color: var(--danger, #b3453a); }
+.sprint-error:empty { display: none; }
+
+/* Time Machine */
+.time-sheet {
+  display: flex; flex-direction: column; width: min(720px, 100%); max-height: min(86vh, 760px);
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow);
+  font-family: var(--sans); overflow: hidden; transform: translateY(10px); transition: transform .25s var(--ease);
+}
+.overlay.is-open .time-sheet { transform: none; }
+.time-head { padding: 20px 24px 6px; }
+.time-head .session-eyebrow { margin: 0 0 4px; }
+.time-title { margin: 0; font: 600 20px var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.time-when { margin: 6px 0 0; color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
+.time-slider { margin: 10px 24px 12px; accent-color: var(--accent); }
+.time-slider[hidden], .time-page[hidden], .time-empty[hidden] { display: none; }
+.time-page { flex: 1; min-height: 180px; overflow-y: auto; margin: 0 24px; padding: 8px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-soft); }
+.time-empty { margin: 16px 24px; color: var(--muted); font: italic 15px var(--serif); }
+.time-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px 20px; }
+.time-actions button { padding: 8px 16px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; font: 13px var(--sans); }
+.time-actions .time-restore { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.time-actions .time-restore:disabled { opacity: .4; cursor: default; }
+
+/* Full-screen writing hides every extra; the quiet screen dims them with the chrome. */
+body:has(.fullscreen-writing) :is(.reference-panel, .sprint) { display: none; }
+body:has(.app.is-typing) .sprint:not(.is-editing):not(.is-glowing) { opacity: .25; transition: opacity .7s var(--ease) .12s; }
+@media (max-width: 640px) { .sprint { left: 12px; bottom: 73px; } .reference-panel { width: calc(100vw - 28px); } }
+@media (prefers-reduced-motion: reduce) {
+  .reference-panel, .sprint-ring, .sprint-arc, .time-sheet { transition-duration: .01ms; }
+  .sprint.is-glowing .sprint-ring { animation: none; }
+}
+body:has(.outline.is-open) .sprint { left: 266px; }

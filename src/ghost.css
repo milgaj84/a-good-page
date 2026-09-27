@@ -1,0 +1,19 @@
+/* Ghost interface: loaded last. The chrome fades slowly once you write and returns quickly. */
+.chrome { transition: opacity .7s var(--ease) .12s; }
+.app:not(.is-typing) .chrome { transition: opacity .28s var(--ease); }
+/* Scrollbars fade with the chrome (standard scrollbar-color, and the WebKit thumb). */
+.scroller { transition: scrollbar-color .5s var(--ease); }
+.is-typing .scroller { scrollbar-color: transparent transparent; }
+.is-typing .scroller::-webkit-scrollbar-thumb { background-color: transparent; }
+/* Typewriter line: half a screen of room above and below, so the first and last lines can sit at mid-screen. */
+.typewriter .page { padding-top: 50vh; padding-bottom: 50vh; }
+/* Zen draft marker in the footer. */
+.zen-badge {
+  display: inline-block; margin-left: 10px; padding: 2px 8px; border-radius: 999px; vertical-align: middle;
+  font: 600 11px/1.4 var(--sans); letter-spacing: .02em; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.zen-badge[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chrome, .app:not(.is-typing) .chrome, .scroller { transition-duration: .01ms; transition-delay: 0s; }
+}

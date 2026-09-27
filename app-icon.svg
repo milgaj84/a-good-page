@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="A Good Page app icon">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F6EFE3"/>
+      <stop offset="1" stop-color="#E4D5BE"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#ground)"/>
+  <path id="page" d="M306 197h318l112 113v498c0 15-12 27-27 27H306c-15 0-27-12-27-27V224c0-15 12-27 27-27z" fill="#FFFDF8" stroke="#B9A78F" stroke-width="15"/>
+  <path d="M624 198v100c0 12 10 22 22 22h90" fill="#EDE3D4" stroke="#B9A78F" stroke-width="15" stroke-linejoin="round"/>
+  <path d="M367 437h263M367 503h225M367 569h263" stroke="#6D7464" stroke-width="23" stroke-linecap="round" opacity=".83"/>
+  <path d="M367 681c53-36 81 26 127-4 18-12 33-22 63-11" fill="none" stroke="#AF694A" stroke-width="24" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,41 @@
+/* A Good Page open-page layer: loaded last. The manuscript is a page, not a form field. */
+
+/* 1. No frame around the writing column. The shared focus ring matched the editor, and the
+      inline-code border was inherited by code blocks, drawing a box around whole passages. */
+#editor, .page, .scroller, .ProseMirror,
+.ProseMirror:focus, .ProseMirror:focus-visible, .ProseMirror-focused {
+  outline: none !important; box-shadow: none !important; border: 0; background: transparent;
+}
+.ProseMirror pre { border: 0; box-shadow: none; background: color-mix(in srgb, var(--bg-soft) 70%, transparent); }
+.ProseMirror pre code { border: 0; background: none; box-shadow: none; }
+
+/* 2. The formatting bubble sizes to its buttons; each label is its own pill with room to breathe. */
+.tippy-box, .tippy-content { max-width: none !important; padding: 0; background: none; border: 0; box-shadow: none; }
+.bubble {
+  display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 5px;
+  width: max-content; max-width: calc(100vw - 24px); overflow-x: auto; white-space: nowrap;
+  scrollbar-width: none;
+}
+.bubble::-webkit-scrollbar { display: none; }
+.bubble button {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 32px; padding: 0 11px; white-space: nowrap;
+  font: 600 12.5px/1 var(--sans); letter-spacing: .01em;
+}
+.bubble button:hover, .bubble button:focus-visible { background: var(--bubble-hover); outline: none; }
+.bubble-sep { flex: none; width: 1px; height: 18px; align-self: center; margin: 0 4px; }
+
+/* 3. The scene-break ornament sits centred inside its own rule, never floating above the text. */
+.ProseMirror hr {
+  display: flex; align-items: center; justify-content: center; position: relative;
+  height: 1.6em; margin: 2.4em 0; line-height: 1.6em; border: 0; background: none;
+  overflow: hidden; contain: layout paint; content-visibility: visible;
+}
+.ProseMirror hr::before { position: static; display: block; line-height: 1; }
+
+/* 4. Chrome rows own their space; the page starts below them and never slides under the toolbar. */
+.app { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.chrome { position: relative; z-index: 3; }
+.scroller { min-height: 0; position: relative; z-index: 0; scroll-padding-top: 32px; }
+.page { padding-top: max(7vh, 48px); }
+@media (max-width: 640px) { .page { padding-top: max(4vh, 32px); } }

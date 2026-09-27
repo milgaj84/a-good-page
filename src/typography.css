@@ -1,0 +1,23 @@
+/* Typographic rhythm: loaded last. Values come from src/core/typography.ts as custom properties.
+   The measure is set on the text itself, so ch counts characters of the writing face at its own size;
+   the column stays the same width however wide the window is. */
+.page { max-width: none; }
+.ProseMirror {
+  max-width: var(--measure, 72ch);
+  margin-inline: auto;
+  font-family: var(--writing);
+  font-size: calc(var(--font-size, 20px) * var(--optical, 1));
+  line-height: var(--leading, 1.75);
+}
+.ProseMirror > p, .ProseMirror > ul, .ProseMirror > ol { margin-bottom: var(--para-gap, 1.1em); }
+.ProseMirror li > p { margin-bottom: calc(var(--para-gap, 1.1em) * 0.35); }
+
+/* Headings keep their own proportions but follow the chosen density. */
+[data-rhythm="dense"] .ProseMirror :is(h1, h2, h3) { margin-top: 1.2em; margin-bottom: 0.4em; }
+[data-rhythm="spacious"] .ProseMirror :is(h1, h2, h3) { margin-top: 2em; margin-bottom: 0.8em; }
+
+/* Duospace drafting: no ligatures, so the character grid stays even. */
+[data-font="mono"] .ProseMirror { font-variant-ligatures: none; letter-spacing: 0; }
+[data-font="sans"] .ProseMirror { letter-spacing: 0.003em; }
+
+@media (max-width: 640px) { .ProseMirror { max-width: 100%; } }

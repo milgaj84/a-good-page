@@ -1,0 +1,21 @@
+name: Idea
+description: Suggest something that would make writing calmer or easier.
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+    validations:
+      required: true
+  - type: textarea
+    id: quiet
+    attributes:
+      label: How does it stay out of the way?
+      description: A Good Page tries to keep the page quiet. How could this appear only when needed?
