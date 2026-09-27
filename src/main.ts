@@ -24,6 +24,7 @@ import { bindAutoscroll } from './ui/autoscroll';
 import {
   chooseWorkingDirectory, exportPdfFile, filesInWorkingDirectory, listWorkingDirectory, onCloseRequested, onFileDrop,
   openWorkingFile, setWindowTitle, setWritingFullscreen, tauriFiles, tauriPrompter,
+  exportRecoveryCopy,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -339,6 +340,7 @@ editor.instance.on('update', () => {
     chrome.toast('Preview closed because the manuscript changed. Open a fresh preview.');
 });
 const longProjects = createLongProjects({
+  exportRecoveryCopy: (name, content, path) => exportRecoveryCopy(name, content, path),
   host: document.body, store, snapshotBackend: snapshotBackend(window.indexedDB, store),
   now: () => Date.now(), every: (ms, task) => { window.setInterval(task, ms); },
   current: () => { const s = doc.snapshot(); return { path: s.path, name: s.name, plain: isPlainTextPath(s.path) }; },

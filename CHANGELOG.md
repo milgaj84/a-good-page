@@ -6,6 +6,24 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-27
+
+### Fixed
+
+- Corrected the PDF font virtual-file-system TypeScript compatibility call and PDF.js render parameters.
+- Canonicalized the macOS temporary workspace test directory before symlink checks.
+
+### Added
+
+- Time Machine exports the selected earlier version as a separate Markdown or plain-text recovery copy without restoring it or marking the current page saved. Cancelling the dialog leaves the page alone; the currently open manuscript cannot be chosen as the destination.
+- A cross-platform release checklist covers installer launch, interrupted saves, recovery after restart, the first ten minutes, keyboard focus, reduced motion and PDF export. Drafts remain unpublished until these checks pass.
+- Draft installer builds wait for three-OS Rust and web verification.
+
+### Limitations
+
+- CI alone does not prove installers launch on macOS, Windows or Linux; builds remain unsigned. App-local Time Machine history does not replace writing-folder backups.
+
+
 ## [0.1.0] - 2026-09-27
 
 First public release. Earlier internal builds were numbered up to 0.4.0; the
@@ -37,5 +55,6 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/OWNER/a-good-page/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/OWNER/a-good-page/releases/tag/v0.1.0

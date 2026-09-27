@@ -3,11 +3,11 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { layoutSpec, type ExportLayout } from './layout';
 
-const pdfMakeAny = pdfMake as unknown as { addVirtualFileSystem?: (fonts: unknown) => void; vfs?: unknown };
-if (typeof pdfMakeAny.addVirtualFileSystem === 'function') {
-  pdfMakeAny.addVirtualFileSystem(pdfFonts);
+const pdfMakeRuntime = pdfMake as unknown as { addVirtualFileSystem?: (fonts: unknown) => void; vfs?: unknown };
+if (typeof pdfMakeRuntime.addVirtualFileSystem === 'function') {
+  pdfMakeRuntime.addVirtualFileSystem(pdfFonts);
 } else {
-  pdfMakeAny.vfs = (pdfFonts as unknown as { pdfMake?: { vfs: unknown } }).pdfMake?.vfs ?? pdfFonts;
+  pdfMakeRuntime.vfs = (pdfFonts as unknown as { pdfMake?: { vfs: unknown } }).pdfMake?.vfs ?? pdfFonts;
 }
 
 export interface ProseNode {

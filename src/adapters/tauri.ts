@@ -5,6 +5,7 @@ import { ask, open, save } from '@tauri-apps/plugin-dialog';
 import type { FileGateway, OpenedDocument, Prompter } from '../core/session';
 import { WRITING_EXTENSIONS } from '../core/paths';
 import { suggestedSavePath } from '../core/workspace';
+import { exportRecoveryCopyWith } from '../core/recovery';
 
 const OPEN_FILTERS = [{ name: 'Writing', extensions: [...WRITING_EXTENSIONS] }];
 const SAVE_FILTERS = [{ name: 'Writing', extensions: ['md', 'txt'] }];
@@ -28,6 +29,13 @@ export async function exportPdfFile(suggestedName: string, bytes: Uint8Array): P
   if (!path) return null;
   const target = /\.pdf$/i.test(path) ? path : path + '.pdf';
   return invoke<string>('export_pdf', { path: target, bytes: Array.from(bytes) });
+}
+
+/** Save a selected historic version separately. A cancelled dialog never changes the open document. */
+export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {
+  return exportRecoveryCopyWith(name, content, livePath, navigator.userAgent.includes('Windows'),
+    async (suggestedName) => (await save({ defaultPath: suggestedName, filters: SAVE_FILTERS })) ?? null,
+    (path, words) => tauriFiles.write(path, words));
 }
 
 export const tauriPrompter: Prompter = {

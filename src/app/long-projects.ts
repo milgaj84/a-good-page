@@ -5,6 +5,7 @@ import { collectWorkspaceFiles } from '../core/quick-switch';
 import { ReferencePin } from '../core/reference-pin';
 import { SnapshotStore, snapshotDocKey, type AsyncKeyValue } from '../core/snapshots';
 import { SprintStore } from '../core/sprint';
+import { recoveryFileName } from '../core/recovery';
 import type { ReaderView } from '../editor/reader';
 import { QuickSwitcher } from '../ui/quick-switcher';
 import { ReferencePanel } from '../ui/reference-panel';
@@ -33,6 +34,7 @@ export interface LongProjectDeps {
   openWorkspaceFile(root: string, path: string): void;
   readFile(path: string): Promise<{ content: string }>;
   pickFile(): Promise<string | null>;
+  exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean>;
   createReader(element: HTMLElement): ReaderView;
   notify(message: string): void;
 }
@@ -92,6 +94,7 @@ export function createLongProjects(deps: LongProjectDeps) {
     documentName: () => deps.current().name,
     createReader: deps.createReader,
     now: deps.now,
+    exportCopy: (version) => deps.exportRecoveryCopy(recoveryFileName(deps.current().name, version.at, deps.current().plain), version.content, deps.current().path),
     notify: deps.notify,
   });
 

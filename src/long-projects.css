@@ -92,10 +92,10 @@
 .time-slider[hidden], .time-page[hidden], .time-empty[hidden] { display: none; }
 .time-page { flex: 1; min-height: 180px; overflow-y: auto; margin: 0 24px; padding: 8px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-soft); }
 .time-empty { margin: 16px 24px; color: var(--muted); font: italic 15px var(--serif); }
-.time-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px 20px; }
+.time-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 16px 24px 20px; }
 .time-actions button { padding: 8px 16px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; font: 13px var(--sans); }
 .time-actions .time-restore { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-.time-actions .time-restore:disabled { opacity: .4; cursor: default; }
+.time-actions button:disabled { opacity: .4; cursor: default; }
 
 /* Full-screen writing hides every extra; the quiet screen dims them with the chrome. */
 body:has(.fullscreen-writing) :is(.reference-panel, .sprint) { display: none; }

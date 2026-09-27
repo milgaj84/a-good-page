@@ -128,6 +128,7 @@ pub fn list_directory<R: DirectoryReader>(
         entries,
     })
 }
+
 /// Recheck the selected path at open time; never trust a path returned by a listing.
 pub fn open_file(root: &str, selected: &str) -> Result<crate::document::Document, String> {
     let base = fs::canonicalize(root).map_err(|e| format!("Cannot open working directory: {e}"))?;
@@ -168,7 +169,7 @@ pub fn open_file(root: &str, selected: &str) -> Result<crate::document::Document
         .map_err(|e| e.to_string())
 }
 
-/// Single source of truth for writing-file extensions lives in `document::SUPPORTED_EXTENSIONS`.
+/// Single source of truth for writing-file extensions lives in document::SUPPORTED_EXTENSIONS.
 fn writing_file(path: &Path) -> bool {
     crate::document::is_supported(path)
 }
@@ -176,6 +177,7 @@ fn writing_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn temp() -> PathBuf {
         let p = std::env::temp_dir().join(format!(
             "hearth-workspace-{}-{}",
@@ -186,8 +188,9 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&p).unwrap();
-        p
+        fs::canonicalize(p).unwrap()
     }
+
     #[test]
     fn lists_subfolders_first_and_only_writing_files() {
         let root = temp();
@@ -214,6 +217,7 @@ mod tests {
         .is_empty());
         fs::remove_dir_all(root).unwrap();
     }
+
     #[test]
     fn refuses_parent_traversal_and_nonfolders() {
         let root = temp();
@@ -233,6 +237,7 @@ mod tests {
         .is_err());
         fs::remove_dir_all(root).unwrap();
     }
+
     #[cfg(unix)]
     #[test]
     fn skips_symlinked_directories_and_files() {
@@ -257,6 +262,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(external).unwrap();
     }
+
     #[test]
     fn workspace_open_rejects_outside_and_non_writing_files() {
         let root = temp();
@@ -286,6 +292,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(external).unwrap();
     }
+
     #[cfg(unix)]
     #[test]
     fn workspace_open_rejects_symlink_even_if_target_is_inside() {
@@ -297,6 +304,7 @@ mod tests {
         assert!(open_file(root.to_str().unwrap(), alias.to_str().unwrap()).is_err());
         fs::remove_dir_all(root).unwrap();
     }
+
     #[test]
     fn limits_giant_directories_instead_of_silently_truncating() {
         let root = temp();
@@ -310,6 +318,7 @@ mod tests {
         );
         fs::remove_dir_all(root).unwrap();
     }
+
     #[test]
     fn empty_and_missing_roots_fail_readably() {
         assert!(list_directory(&DiskDirectoryReader, "", None).is_err());

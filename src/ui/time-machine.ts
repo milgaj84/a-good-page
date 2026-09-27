@@ -9,6 +9,7 @@ export interface TimeMachineDeps {
   /** Stores the page as it is now, so a restore can always be reversed; returns the current content. */
   captureCurrent(): Promise<string>;
   restore(content: string): void;
+  exportCopy(version: Snapshot): Promise<boolean>;
   isPlain(): boolean;
   documentName(): string;
   createReader(element: HTMLElement): ReaderView;
@@ -32,6 +33,8 @@ export class TimeMachine {
   private readonly page = make('div', 'time-page');
   private readonly empty = make('p', 'time-empty');
   private readonly restoreButton = make('button', 'time-restore', 'Restore this version');
+  private readonly exportButton = make('button', 'time-export', 'Export recovery copy');
+  private exporting = false;
   private readonly closeButton = make('button', 'time-close', 'Close');
   private readonly focus: DialogFocus;
   private reader: ReaderView | null = null;
@@ -53,9 +56,10 @@ export class TimeMachine {
     this.when.setAttribute('aria-live', 'polite');
     this.empty.textContent = 'No earlier versions yet. A Good Page keeps one as you save and about every ten minutes while you write.';
     this.restoreButton.type = 'button';
+    this.exportButton.type = 'button';
     this.closeButton.type = 'button';
     const actions = make('footer', 'time-actions');
-    actions.append(this.closeButton, this.restoreButton);
+    actions.append(this.closeButton, this.exportButton, this.restoreButton);
     sheet.append(head, this.slider, this.page, this.empty, actions);
     this.root.append(sheet);
     this.root.tabIndex = -1;
@@ -65,6 +69,7 @@ export class TimeMachine {
 
     this.slider.addEventListener('input', () => this.show(Number(this.slider.value)));
     this.restoreButton.addEventListener('click', () => this.restoreSelected());
+    this.exportButton.addEventListener('click', () => void this.exportSelected());
     this.closeButton.addEventListener('click', () => this.close());
     this.root.addEventListener('mousedown', (event) => { if (event.target === this.root) this.close(); });
   }
@@ -119,6 +124,7 @@ export class TimeMachine {
     this.slider.hidden = !has;
     this.page.hidden = !has;
     this.restoreButton.disabled = !has;
+    this.exportButton.disabled = !has || this.exporting;
     if (empty) this.when.textContent = '';
   }
 
@@ -132,6 +138,23 @@ export class TimeMachine {
     this.reader ??= this.deps.createReader(this.page);
     this.reader.show(version.content, this.deps.isPlain());
     this.page.scrollTop = 0;
+  }
+
+  private async exportSelected(): Promise<void> {
+    if (this.exporting) return;
+    const version = this.versions[Number(this.slider.value)];
+    if (!version) return;
+    this.exporting = true;
+    this.exportButton.disabled = true;
+    try {
+      const saved = await this.deps.exportCopy(version);
+      if (saved) this.deps.notify('Recovery copy exported. Your manuscript is unchanged.');
+    } catch (error) {
+      this.deps.notify('Could not export recovery copy: ' + String(error));
+    } finally {
+      this.exporting = false;
+      this.exportButton.disabled = !this.isOpen || this.versions.length === 0;
+    }
   }
 
   private restoreSelected(): void {

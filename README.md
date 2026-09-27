@@ -26,7 +26,7 @@ Your `.md` file is the editable original. PDF is a separate copy; a `.txt` file 
 
 ## Install and supported systems
 
-A Good Page is designed as a desktop app for **macOS, Windows and Linux**. The release workflow is set up to build macOS installers for Apple silicon and Intel, plus Windows and Linux packages. These builds still need to pass release checks; do not treat the platform list as a verified compatibility guarantee yet.
+A Good Page is designed as a desktop app for **macOS, Windows and Linux**. The release workflow is set up to build macOS installers for Apple silicon and Intel, plus Windows and Linux packages. These builds still need hands-on checks against `RELEASE_CHECKLIST.md`; do not treat the platform list as a verified compatibility guarantee yet. Publish only the installers that pass.
 
 For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer. Do not download a draft release expecting a finished installer.
 
@@ -107,7 +107,7 @@ opened, when it is saved, every ten minutes while it is open, and when Time
 Machine opens. Ctrl/Cmd+Shift+I shows a slider from the oldest version to now,
 labelled "12 minutes ago", "Yesterday at 4:05 PM" and so on, with a read-only
 preview. Restore replaces the page with that version as one edit, so Undo
-brings back what you had. Nothing is written to disk until you save.
+brings back what you had. Nothing is written to the manuscript until you save. **Export recovery copy** writes the selected older version to a separate `.md` or `.txt` file you choose, without restoring it or changing the open manuscript. It cannot replace the open manuscript; keep the exported file in your normal backup folder.
 Versions are kept in the app's local storage (IndexedDB, with localStorage as
 a fallback), not beside your files: every ten minutes for the last hour, hourly
 for a day, then daily for two weeks, up to 40 manuscripts.
@@ -292,7 +292,7 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
 
 Writing is hard enough without worrying about the Save button. Named files autosave; an untitled draft is kept locally. On disk, saves use an exclusive temporary file, sync it, then rename it into place. If a write fails, the page stays marked unsaved so you can try again.
 
-A delayed Open or Save As dialog cannot silently replace newer words or switch the active manuscript. Closing waits for an in-flight save and lets you save, discard or keep writing. A previewed PDF is a snapshot: edits made afterward are not secretly added to that export. Time Machine versions are local recovery points, not a replacement for a separate backup of your writing folder.
+A delayed Open or Save As dialog cannot silently replace newer words or switch the active manuscript. Closing waits for an in-flight save and lets you save, discard or keep writing. A previewed PDF is a snapshot: edits made afterward are not secretly added to that export. Time Machine versions are local recovery points, not a replacement for a separate backup of your writing folder. In Time Machine, select an older version and choose **Export recovery copy** to keep an independent file.
 
 For maintainers: tests cover the stale-dialog, save, preview, replacement, focus and welcome-flow cases; run them and a local build before publishing.
 ## Run the tests
@@ -307,7 +307,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.0 is the first public release; see `CHANGELOG.md`. Earlier internal
+Version 0.1.1 is a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -317,10 +317,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release to check before publishing.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md` on real machines before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.0 && git push origin v0.1.0`. Installers are unsigned, so
+then `git tag v0.1.1 && git push origin v0.1.1`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 
