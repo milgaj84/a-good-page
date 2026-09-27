@@ -33,7 +33,7 @@
     "@tiptap/starter-kit": "^2.11.5",
     "tiptap-markdown": "^0.8.10",
     "pdfmake": "^0.2.20",
-    "pdfjs-dist": "^4.10.38"
+    "pdfjs-dist": "^6.3.289"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.0",
