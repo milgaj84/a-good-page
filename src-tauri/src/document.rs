@@ -39,14 +39,19 @@ impl Storage for FsStorage {
 /// Write to a unique sibling temp file, fsync, then rename over the target.
 /// Shared by manuscript saves and PDF export so both get the same crash safety.
 pub fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let file_name = path.file_name()
+    let file_name = path
+        .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
     let (tmp_path, mut file) = loop {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let mut name = file_name.to_os_string();
         name.push(format!("{TEMP_SUFFIX}-{}-{sequence}", std::process::id()));
         let candidate = path.with_file_name(name);
-        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
             Ok(file) => break (candidate, file),
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(err) => return Err(err),
@@ -58,7 +63,9 @@ pub fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
         drop(file);
         fs::rename(&tmp_path, path)
     })();
-    if result.is_err() { let _ = fs::remove_file(&tmp_path); }
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
+    }
     result
 }
 
@@ -79,7 +86,10 @@ impl fmt::Display for DocError {
                 write!(f, "A Good Page opens Markdown (.md) and text (.txt) files.")
             }
             DocError::UnsupportedExtension(ext) => {
-                write!(f, "A Good Page opens Markdown and text files, not .{ext} files.")
+                write!(
+                    f,
+                    "A Good Page opens Markdown and text files, not .{ext} files."
+                )
             }
             DocError::TooLarge(bytes) => write!(
                 f,
@@ -200,7 +210,9 @@ pub fn display_name(path: &Path) -> String {
 }
 
 pub fn normalize_text(raw: &str) -> String {
-    raw.strip_prefix('\u{feff}').unwrap_or(raw).replace("\r\n", "\n")
+    raw.strip_prefix('\u{feff}')
+        .unwrap_or(raw)
+        .replace("\r\n", "\n")
 }
 
 #[cfg(test)]
@@ -373,7 +385,10 @@ mod tests {
     fn save_rejects_oversized_content() {
         let svc = service_with(&[]);
         let big = "a".repeat(MAX_DOCUMENT_BYTES as usize + 1);
-        assert!(matches!(svc.save("big.md", &big), Err(DocError::TooLarge(_))));
+        assert!(matches!(
+            svc.save("big.md", &big),
+            Err(DocError::TooLarge(_))
+        ));
     }
 
     #[test]
@@ -388,8 +403,13 @@ mod tests {
     #[test]
     fn save_then_open_round_trip() {
         let svc = service_with(&[]);
-        let path = svc.save("story.md", "It was a dark and cozy night.").unwrap();
-        assert_eq!(svc.open(&path).unwrap().content, "It was a dark and cozy night.");
+        let path = svc
+            .save("story.md", "It was a dark and cozy night.")
+            .unwrap();
+        assert_eq!(
+            svc.open(&path).unwrap().content,
+            "It was a dark and cozy night."
+        );
     }
 
     #[test]
@@ -414,7 +434,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let dir = std::env::temp_dir().join(format!("hearth-test-{}-{}", std::process::id(), nanos));
+        let dir =
+            std::env::temp_dir().join(format!("hearth-test-{}-{}", std::process::id(), nanos));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
@@ -442,10 +463,12 @@ mod tests {
         let dir = unique_temp_dir();
         let first = dir.join("one.md");
         let second = dir.join("two.md");
-        let a = first.clone(); let b = second.clone();
+        let a = first.clone();
+        let b = second.clone();
         let left = std::thread::spawn(move || FsStorage.write_atomic(&a, "first"));
         let right = std::thread::spawn(move || FsStorage.write_atomic(&b, "second"));
-        left.join().unwrap().unwrap(); right.join().unwrap().unwrap();
+        left.join().unwrap().unwrap();
+        right.join().unwrap().unwrap();
         assert_eq!(FsStorage.read(&first).unwrap(), "first");
         assert_eq!(FsStorage.read(&second).unwrap(), "second");
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
