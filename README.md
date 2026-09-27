@@ -1,64 +1,48 @@
 # A Good Page
 
-A cozy, minimalist, distraction-free WYSIWYG Markdown editor for writers.
-Built with Tauri 2 (Rust) and TipTap. You never see Markdown symbols - you just write.
-Files stay plain .md so they open anywhere.
+**More page. Less noise.**
 
-## Features
+A Good Page is a quiet writing space for the draft you want to finish. Write and format like a document, without staring at Markdown syntax. Your work stays in ordinary Markdown files you can open elsewhere; plain-text files work too.
 
-- Quick switcher (Ctrl/Cmd+P): type a few letters to jump to a chapter or open another workspace document
-- Pinned notes: keep an outline or research file open, read-only, in a slim panel on the left or right
-- Sprint ring: a quiet corner ring for a new-word goal that glows once when you reach it
-- Time Machine: scrub through automatic versions of the manuscript and restore one with Undo as a safety net
-- Polish typography: -- to —, ... to … and straight to curly quotes, in one command or as you paste
+Need a calmer screen? Let the bars fade, keep your current line in view, or write full-screen. Need your bearings again? Jump to a chapter, pin your notes beside the draft, and get back to the sentence you were writing.
 
-- Workspace panel: choose a working directory, browse its subfolders, and switch among Markdown or text manuscripts
-- Five recent working directories, persisted for quick switching; Save As starts in the currently viewed subfolder
+### Why it feels different
 
-- Export preview shows the actual PDF pages, page count, page breaks and typography before saving
-- Switch between Manuscript (spacious, restrained) and Reading copy (compact, polished) layouts
-- First-run writing guide: three optional steps to create, save and export without knowing Markdown; reopen from Help
+- **The page comes first.** A soft formatting bar and familiar shortcuts stay close when you need them; focus modes, five themes and adjustable typography get out of the way when you do not.
+- **Long drafts are easier to navigate.** Use the outline or Quick Switcher to find a chapter or another document in your working folder. Keep research or character notes in a slim, read-only side panel.
+- **Momentum without a scoreboard.** Set a small new-word sprint, watch a quiet progress ring fill, or start a timed writing session. The celebration is gentle; the writing is yours.
+- **A way back.** Time Machine keeps local versions as you write. Preview an earlier page, restore it, and use Undo if you change your mind. Named files autosave; untitled drafts have a local safety net.
+- **A clean copy when it is time to share.** Polish dashes, ellipses and quotes without touching code. Preview paginated A4 pages before exporting a PDF; your editable source stays put.
 
-- Three focus choices: paragraph, sentence, or a native full-screen writing page without app chrome
-- Type / in an empty paragraph for a plain-language formatting menu; selecting text shows descriptive quick actions
+No account or cloud workflow is needed for the editing and file features described here. This is a desktop app built with Tauri 2, Rust and TipTap.
 
-- Quit without a save trap: Save & quit, Quit without saving, or Keep writing; cancelling Save never forces an endless dialog
-- Search the entire manuscript via Ctrl/Cmd+F; match count, previous/next, replace one or all with Ctrl/Cmd+H
-- Collapse subsections in Outline and jump to the previous or next top-level chapter
+## Start here
 
-- Command palette: Ctrl/Cmd+Shift+P or the Commands button; search all actions by name, category or alias, then use arrows and Enter
-- Timed writing sessions: set 1–180 minutes and an optional new-word target; focus mode and a quiet countdown support uninterrupted writing, followed by a gentle summary
+1. Open the app and start typing. The optional writing guide walks through a new page, a save and a PDF export.
+2. Choose **Workspace** if your chapters live in a folder. Open a manuscript, or save your new page as Markdown (`.md`).
+3. Use **Ctrl/Cmd+P** to jump to a chapter or file. Choose **Export PDF** when you want to see the actual pages before sharing.
 
-- Export a paginated A4 PDF from the toolbar or Ctrl/Cmd+Shift+E; Markdown source stays untouched
-- Open and save literal UTF-8 .txt files; choose .txt in Save as for plain text
-- Five distinct palettes: Paper, Sepia, Sage, Night and Midnight
-- Smart footer: characters, selection, goal, current heading, document format and save state
-- Help (? or Ctrl/Cmd+/) explains files, formatting, writing preferences and shortcuts
+Your `.md` file is the editable original. PDF is a separate copy; a `.txt` file is saved as plain text without formatting.
 
-- A soft formatting bar at the top: text style (Body, Title, Heading, Subheading), bold, italic,
-  strikethrough, bullet / numbered / checklist, quote, scene break, link, undo and redo
-- True WYSIWYG: type "# " for a title, "> " for a quote, "**word**" for bold, "- " for a list, "[ ] " for a checklist
-- Floating bubble for quick formatting whenever you select text
-- Links without pop-up dialogs: Ctrl+K opens a small inline field; "example.com" or "me@site.com" just work
-- Outline panel: every heading in your manuscript, click to jump, current section highlighted
-- Display settings (Aa in the footer): typeface (Editorial serif, Humanist sans, Duospace), text size,
-  column width (about 60, 72 or 85 characters), spacing (Dense, Balanced, Spacious) and a word goal
-- Word goal progress in the footer with a small celebration when you reach it
-- Selection word count ("12 of 1,234 words selected")
-- Reopens the last file you worked on, or restores your untitled draft
-- Drop a .md, .markdown or .txt file onto the window to open it
-- Each opened document starts with a fresh undo history
-- Shortcut sheet (Ctrl+/); Esc closes whatever is open
-- Focus mode: dims every paragraph except the one you are writing, with typewriter scrolling
-- Middle-click autoscroll for fast travel through long manuscripts
-- Five visual themes: Paper, Sepia, Sage, Night, Midnight (follows your system on first launch)
-- Autosave for named files, safety-net draft for untitled writing
-- Smart typography: -- becomes an em dash, quotes become curly quotes
-- The top bar, status bar and scrollbar fade away while you type and return when you move the mouse or press Esc
-- Typewriter line: keep the line you are typing at the middle of the window
-- Zen draft: an optional first-draft mode that pauses Backspace and Delete so you keep moving forward
-- Atomic saves on disk (write to temp file, then rename) so a crash never corrupts a chapter
+## Install and supported systems
 
+A Good Page is designed as a desktop app for **macOS, Windows and Linux**. The release workflow is set up to build macOS installers for Apple silicon and Intel, plus Windows and Linux packages. These builds still need to pass release checks; do not treat the platform list as a verified compatibility guarantee yet.
+
+For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer. Do not download a draft release expecting a finished installer.
+
+Release builds are currently **unsigned**. macOS or Windows may show a security warning on first launch. Only open an installer if you trust where it came from; do not bypass a warning for an unverified download.
+
+**Build from source instead:** the steps below require Node.js 20+, stable Rust and the Tauri 2 system dependencies for your OS. The installer build uses `npm run icons` before `npm run tauri build`.
+## At a glance
+
+| When you want to… | Use… |
+| --- | --- |
+| Keep writing without distractions | Quiet screen, paragraph/sentence focus, full screen, typewriter line or Zen draft |
+| Find your place | Outline, manuscript Find, command palette or Quick Switcher |
+| Keep research nearby | Pinned read-only notes on either side of the page |
+| Stay in motion | Sprint ring, timed session and word-goal progress |
+| Keep or recover a draft | Autosave, local untitled draft and Time Machine |
+| Share clean pages | PDF preview with Manuscript or Reading copy layout |
 ## Shortcuts (Cmd on macOS)
 
     Ctrl + N / O / S          New / Open / Save
@@ -95,7 +79,7 @@ Files stay plain .md so they open anywhere.
     Ctrl + /                  All shortcuts
     Esc                       Close panels, leave focus mode
 
-## Tools for long projects
+## Find your place in a long project
 
 **Quick switcher.** Ctrl/Cmd+P (or "switch" in the command palette) opens one
 search box for the headings in this manuscript and the .md, .markdown and .txt
@@ -134,7 +118,7 @@ undoable edit. Code and inline code are left alone. Pasted text gets the same
 treatment unless you paste into code. The .md file stays ordinary Markdown with
 Unicode punctuation.
 
-## Find, chapters and quitting
+## Find a word, a chapter, or a way out
 
 Find searches the manuscript, including words split across formatting marks.
 Select a short phrase before opening Find to prefill it; Match case and Whole words
@@ -148,7 +132,7 @@ When you close with unsaved changes, choose Save & quit, Quit without saving, or
 Keep writing. If Save is cancelled or fails, the choice remains available. Quitting
 without saving clears an unsaved untitled draft; use Save & quit to keep those words.
 
-## Focus and contextual formatting
+## Make room for the next sentence
 
 Use Focus for paragraph emphasis, or the adjacent arrow to choose Sentence or Full screen.
 Sentence focus dims words outside the current sentence; Full screen hides the app
@@ -160,7 +144,7 @@ Choose Heading, Scene break, lists or other blocks with arrows and Enter, or
 click a choice. Typing / elsewhere inserts an ordinary slash. Selecting text
 shows the familiar floating bubble, now with plain-language block labels.
 
-## Quiet screen, typewriter line and Zen draft
+## Find your writing rhythm
 
 **Quiet screen.** When you start typing, the top bar, the status bar and the
 scrollbar fade out. They come back when you move the mouse or press Esc.
@@ -184,7 +168,7 @@ it is on; click it or press the shortcut again to edit normally. Zen draft
 turns off every time the app starts, so you never open a manuscript you
 cannot edit.
 
-## Typography and rhythm
+## Make the page yours
 
 Three settings in Aa control how the page reads. They change only what you see;
 the Markdown file is untouched.
@@ -211,7 +195,7 @@ palette finds them by words such as "line length", "line height" or "duospace".
 PDF export keeps its own Manuscript and Reading copy layouts and does not follow
 these screen settings.
 
-## Writing sessions
+## Write for a while
 
 Click Session in the footer or search "session" in the command palette. Set a duration and
 optionally a target for new words (not the total words in the file). A discreet countdown
@@ -220,7 +204,7 @@ to see progress or end early. At the end you get a short summary. Switching docu
 ends the current session, so a different manuscript's words never inflate its result.
 Sessions do not modify, save, or export your manuscript.
 
-## PDF preview and first-run guide
+## See the pages before you share
 
 Choose Export PDF in the top bar (or Ctrl/Cmd+Shift+E). The preview renders the
 actual A4 PDF pages, with Previous/Next page controls and a layout switch.
@@ -239,7 +223,7 @@ page, save it, then preview and export a PDF. Steps advance only after the
 requested action succeeds (Save also requires no newer unsaved edits). Skip persists your choice; you can reopen the guide
 from Help → Show writing guide at any time. No Markdown knowledge is needed.
 
-## Text and PDF
+## Keep your files yours
 
 A .txt file opens literally: # and * remain text, not formatting instructions.
 Saving a .txt writes only readable text; styles are deliberately not retained in plain text.
@@ -247,7 +231,7 @@ Save as .md to retain headings, lists and other rich formatting. PDF export prod
 separate styled, paginated file with embedded fonts and does not mark the current draft
 as saved. Keep the Markdown manuscript as your editable original.
 
-## Working directories
+## Bring your whole folder
 
 Click **Workspace → Choose folder** to browse one level of the folder at a time.
 Open subfolders, click breadcrumbs or ↑ to return to a parent, filter the visible
@@ -274,7 +258,7 @@ recent directory was moved or deleted,
 choose it again at its new location. Files are still plain Markdown or UTF-8
 text on disk; selecting a workspace does not copy or import them.
 
-## Look and feel
+## Small details, quieter writing
 
 All stylesheets share one polish layer (src/polish.css): a common radius, motion and
 focus-ring scale, themed danger/success colours, and unified primary and secondary
@@ -282,7 +266,7 @@ buttons. Switching themes cross-fades softly; light themes carry a faint paper g
 Dialogs, popovers, menus and toasts ease in, lists fade in gently, and the save dot
 settles when your words are safe. Everything respects the system "reduce motion" setting.
 
-## Performance
+## Built to keep up
 
 A Good Page is tuned to stay at full frame rate while you type and scroll, even in long manuscripts:
 
@@ -292,66 +276,32 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
 - Middle-click autoscroll (which WebView2 and WebKitGTK do not provide) is built in: click the wheel and move the pointer, or hold and drag. The wheel click never pastes on Linux.
 - Release builds use `opt-level = 3`, LTO, one codegen unit and `panic = "abort"`.
 
-## Prerequisites
+## What you need to build from source
 
 - Node.js 20+
 - Rust (stable) via rustup
 - Tauri 2 system dependencies for your OS: https://v2.tauri.app/start/prerequisites/
 
-## Run
+## Run from source
 
     npm install
     npm run icons
     npm run tauri dev
 
-## Save safety
+## How your work is protected
 
-Each requested save captures its document, destination, revision and contents before it
-joins the write queue. Only an explicit Save As may adopt a new file path; a queued
-autosave for the previous file cannot switch the manuscript back.
-An explicitly discarded draft also invalidates any still-open Save As picker; if
-the native picker fails, A Good Page reports the error and keeps the manuscript dirty. Edits arriving during a save remain marked unsaved, and a stale
-Save As dialog cannot redirect a different document. Disk writes create exclusive,
-uniquely named temporary files, sync their bytes and clean up after failures.
-Confirm the save/quit regressions with the tests below before shipping.
+Writing is hard enough without worrying about the Save button. Named files autosave; an untitled draft is kept locally. On disk, saves use an exclusive temporary file, sync it, then rename it into place. If a write fails, the page stays marked unsaved so you can try again.
 
-## Close and session reliability
+A delayed Open or Save As dialog cannot silently replace newer words or switch the active manuscript. Closing waits for an in-flight save and lets you save, discard or keep writing. A previewed PDF is a snapshot: edits made afterward are not secretly added to that export. Time Machine versions are local recovery points, not a replacement for a separate backup of your writing folder.
 
-Closing waits for any in-flight save before deciding whether to prompt. Failed writes
-remain dirty and the writer can retry, discard, or keep writing. A writing session
-uses elapsed wall-clock time across laptop sleep, does not emit a second summary,
-and ends quietly with a status message when switching manuscripts.
-
-## Preview and search reliability
-
-Page preview renders off-screen and displays only the most recently requested page;
-layout changes and closing invalidate pending renders. Find and replace continues
-from after inserted text, even if the replacement contains the search phrase.
-Replace all remains one undoable editor transaction. Run the regression tests below.
-
-## Open and export reliability
-
-An Open picker or file read is ignored if the writer edits or switches manuscripts
-before it finishes; the newer words remain untouched. A competing older Open
-cannot replace a newer one. PDF exports now use exclusive, uniquely named
-synced temporary files, avoiding a shared-temp collision during concurrent saves.
-These cases have regression tests but require a local build before release.
-
-## Keyboard and welcome-flow reliability
-
-Existing dialogs keep Tab navigation inside the open panel and return focus to the
-invoking control when closed. The welcome guide waits for a Create or Save action
-to settle before allowing Skip, never advances on a failed action, and does not
-auto-appear over a recovered draft or reopened manuscript. The PDF preview closes
-before reporting a successful export to the guide, avoiding a double handoff.
-
-## Test
+For maintainers: tests cover the stale-dialog, save, preview, replacement, focus and welcome-flow cases; run them and a local build before publishing.
+## Run the tests
 
     npm test
     cd src-tauri
     cargo test
 
-## Build an installer
+## Build an installer yourself
 
     npm run tauri build
 
@@ -374,12 +324,3 @@ then `git tag v0.1.0 && git push origin v0.1.0`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 
-## Rebranding and existing data
-
-The app is now called A Good Page. Its Tauri bundle identifier remains
-`app.hearth.writer` and its `hearth.*` local-storage keys remain unchanged
-so updates can still find existing drafts, display settings, and recent folders.
-These are compatibility identifiers, not the name shown to writers. Do not
-change them without a tested data migration. Before building a release, run
-`npm run icons` to regenerate platform icons from `app-icon.svg`. Rebuild
-the installer and verify a previously installed copy retains its drafts.
