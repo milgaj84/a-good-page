@@ -75,9 +75,12 @@ export function pdfDocument(doc: ProseNode, title: string, layout: ExportLayout 
   };
 }
 
-export function renderPdf(doc: ProseNode, title: string, layout: ExportLayout = 'reading'): Promise<Uint8Array> {
+export function renderPdfDefinition(definition: TDocumentDefinitions): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
-    try { pdfMake.createPdf(pdfDocument(doc, title, layout)).getBuffer((buffer) => resolve(new Uint8Array(buffer))); }
+    try { pdfMake.createPdf(definition).getBuffer(buffer => resolve(new Uint8Array(buffer))); }
     catch (error) { reject(error); }
   });
+}
+export function renderPdf(doc: ProseNode, title: string, layout: ExportLayout = 'reading'): Promise<Uint8Array> {
+  return renderPdfDefinition(pdfDocument(doc, title, layout));
 }

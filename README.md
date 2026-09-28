@@ -16,6 +16,12 @@ Need a calmer screen? Let the bars fade, keep your current line in view, or writ
 
 No account or cloud workflow is needed for the editing and file features described here. This is a desktop app built with Tauri 2, Rust and TipTap.
 
+## A whole manuscript, not just a chapter
+
+Click **Manuscript** beside Workspace to build a book from the Markdown and text files in your chosen writing folder. Chapters appear with titles and word counts; move them up or down without renaming or moving their original files. The order lives in a small portable `.a-good-page.json` beside the chapters. New chapters appear at the end; missing or unreadable ones are flagged and **block compilation** until you fix them or deliberately remove a missing entry. The project scan includes subfolders up to four levels deep (maximum 200 folders and 200 chapters); an incomplete scan stops with an error rather than silently skipping a chapter.
+
+Search across every chapter for a phrase, or click a heading in the project outline to open it in the editor. Check the chapters to include, then **Compile selected chapters** for a read-only combined view with clear chapter breaks. Choose **Preview whole PDF** for the actual paginated A4 pages and their layout controls. Export produces a separate PDF; the chapter files and project order remain editable. Save unsaved edits in the open chapter before compiling. Immediately before export, including after the native Save dialog, the app rechecks the included files and project order. If either changed, refresh the preview; it never exports a silently stale compilation. Search shows the first 100 matching lines and its full match count.
+
 ## Start here
 
 1. Open the app and start typing. The optional writing guide walks through a new page, a save and a PDF export.
@@ -260,21 +266,7 @@ text on disk; selecting a workspace does not copy or import them.
 
 ## Small details, quieter writing
 
-All stylesheets share one polish layer (src/polish.css): a common radius, motion and
-focus-ring scale, themed danger/success colours, and unified primary and secondary
-buttons. Switching themes cross-fades softly; light themes carry a faint paper grain.
-Dialogs, popovers, menus and toasts ease in, lists fade in gently, and the save dot
-settles when your words are safe. Everything respects the system "reduce motion" setting.
-
-## Built to keep up
-
-A Good Page is tuned to stay at full frame rate while you type and scroll, even in long manuscripts:
-
-- Keystrokes do the minimum: word counts, the status line and outline are debounced; toolbar state and caret-follow run at most once per frame; the window title, storage and file list only update when the name or save state really changes.
-- Untitled drafts are serialised once typing pauses (500 ms) and flushed on blur, reload and quit, never per keystroke.
-- Scrolling stays on the compositor: no live blur, no filters, no scroll masks; off-screen paragraphs skip layout via `content-visibility`.
-- Middle-click autoscroll (which WebView2 and WebKitGTK do not provide) is built in: click the wheel and move the pointer, or hold and drag. The wheel click never pastes on Linux.
-- Release builds use `opt-level = 3`, LTO, one codegen unit and `panic = "abort"`.
+Themes, buttons, focus rings and motion share a consistent polish layer. Animations respect reduced-motion settings. Word counts and outline updates are debounced; long pages skip off-screen layout, and untitled drafts flush after typing pauses. Middle-click autoscroll is built in for WebViews that lack it.
 
 ## What you need to build from source
 
@@ -325,7 +317,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.2.0 adds whole-manuscript compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -335,10 +327,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.1.6.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.0.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.6 && git push origin v0.1.6`. Installers are unsigned, so
+then `git tag v0.2.0 && git push origin v0.2.0`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

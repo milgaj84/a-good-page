@@ -14,6 +14,7 @@ import { GoalTracker, goalProgress, type GoalProgress } from './core/goal';
 import { resolveShortcut } from './core/keymap';
 import { bindButtons, bindShortcuts } from './app/shortcuts';
 import { createLongProjects } from './app/long-projects';
+import { attachManuscript } from './app/manuscript';
 import { FileConflictDialog } from './ui/file-conflict';
 import { OutsideNotice } from './ui/outside-notice';
 import { NamedRecoveryStore } from './core/named-recovery';
@@ -70,7 +71,7 @@ const chrome = new Chrome(
     focusButton: el('btn-focus'), themeButton: el('btn-theme'), toast: el('toast'), goal: el('goal'), goalFill: el('goal-fill') },
   browserScheduler,
 );
-// Ghost chrome, typewriter line and Zen draft. The caret is read through a closure, so this can precede the editor.
+// Ghost chrome, typewriter line and Zen draft.
 const ghostUI = bindGhostInterface({
   win: window, app, editorEl: el('editor'), scroller, chrome, caretLine: () => editor.caretLine(),
   zenBadge: el<HTMLButtonElement>('zen-badge'), zenCheck: el<HTMLInputElement>('zen-check'),
@@ -270,7 +271,7 @@ const sessionEditor: EditorPort = {
   },
   focus: () => editor.focus(),
 };
-// Every keystroke emits a snapshot; window title (IPC), storage and the file list only change on real transitions.
+// Update chrome only on state transitions.
 const shown = new ChangeLatch();
 function render(snapshot: SessionSnapshot): void {
   stats.trigger();
@@ -294,7 +295,6 @@ const namedWriter = new NamedRecoveryWriter(namedStore, browserScheduler, () => 
 const recoveryDialog = new RecoveryDialog(document.body);
 const fileConflict = new FileConflictDialog(document.body);
 const outsideNotice = new OutsideNotice(document.body, () => void session?.reviewOutside(), () => outsideNotice.remind());
-
 session = new DocumentSession({
   editor: sessionEditor,
   files: filesInWorkingDirectory(() => workspace?.directory ?? null),
@@ -306,6 +306,7 @@ session = new DocumentSession({
     }) },
 });
 const doc = session;
+const manuscript = attachManuscript(document.body, doc, editor, () => new WorkspaceHistory(store).active, message => chrome.toast(message, 4200));
 workspace = new WorkspacePanel({
   root: el('workspace-panel'), toggle: el<HTMLButtonElement>('btn-workspace'),
   choose: el<HTMLButtonElement>('workspace-choose'), refresh: el<HTMLButtonElement>('workspace-refresh'), recent: el('workspace-recent'),
@@ -354,9 +355,7 @@ const guide = new WritingGuide({
   position: el('guide-position'), error: el('guide-error'),
 }, new FirstRunGuide(store), () => doc.newDocument(), async () => guideSaveComplete(await doc.save(), doc.isDirty), () => preview.open(doc.snapshot().name), () => editor.restoreFocus());
 el('help-guide').addEventListener('click', () => { help.close(); guide.open(true); });
-
 async function exportPdf(): Promise<void> { await preview.open(doc.snapshot().name); }
-
 async function saveWith(run: () => Promise<boolean>): Promise<void> {
   autosave.cancel();
   if (await run()) chrome.toast(doc.isDirty ? 'Snapshot saved; newer edits remain unsaved.' : 'Saved');
@@ -379,6 +378,7 @@ function resize(size: number): void { applyPrefs(prefsStore.update({ size })); }
 
 /** Closes the top-most layer; returns false when there was nothing to close. */
 function closeLayers(): boolean {
+  if (manuscript.close()) return true;
   if (recoveryDialog.isOpen) { recoveryDialog.close(); return true; }
   if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;

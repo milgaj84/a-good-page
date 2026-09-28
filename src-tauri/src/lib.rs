@@ -3,6 +3,7 @@ mod conflict;
 mod disk_probe;
 pub mod document;
 mod pdf;
+mod project;
 mod workspace;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -15,6 +16,8 @@ pub fn run() {
             commands::save_document,
             commands::guarded_save_document,
             commands::probe_document,
+            commands::read_project_order,
+            commands::write_project_order,
             commands::export_pdf,
             commands::list_workspace,
             commands::open_workspace_file

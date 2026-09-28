@@ -32,10 +32,11 @@ export const tauriFiles: FileGateway = {
   },
 };
 
-export async function exportPdfFile(suggestedName: string, bytes: Uint8Array): Promise<string | null> {
+export async function exportPdfFile(suggestedName: string, bytes: Uint8Array, recheck?: () => Promise<void>): Promise<string | null> {
   const path = await save({ defaultPath: suggestedName + '.pdf', filters: PDF_FILTERS });
   if (!path) return null;
   const target = /\.pdf$/i.test(path) ? path : path + '.pdf';
+  if (recheck) await recheck();
   return invoke<string>('export_pdf', { path: target, bytes: Array.from(bytes) });
 }
 
@@ -132,4 +133,12 @@ export function filesInWorkingDirectory(current: () => string | null): FileGatew
 /** Workspace clicks are revalidated on the Rust side immediately before opening. */
 export function openWorkingFile(root: string, path: string): Promise<OpenedDocument> {
   return invoke<OpenedDocument>('open_workspace_file', { root, path });
+}
+
+/** The small project order file lives beside chapters; only the chosen root is accepted by Rust. */
+export function readProjectOrder(root: string): Promise<string | null> {
+  return invoke<string | null>('read_project_order', { root });
+}
+export function writeProjectOrder(root: string, expected: string | null, value: string): Promise<string> {
+  return invoke<string>('write_project_order', { root, expected, value });
 }

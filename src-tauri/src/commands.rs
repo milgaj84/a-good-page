@@ -71,3 +71,16 @@ pub fn list_workspace(
         directory.as_deref(),
     )
 }
+
+#[tauri::command]
+pub fn read_project_order(root: String) -> Result<Option<String>, String> {
+    crate::project::read(&root)
+}
+#[tauri::command]
+pub fn write_project_order(
+    root: String,
+    expected: Option<String>,
+    value: String,
+) -> Result<String, String> {
+    crate::project::write(&root, expected.as_deref(), &value)
+}

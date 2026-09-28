@@ -19,3 +19,4 @@ import './long-projects.css';
 import './file-conflict.css';
 import './outside-notice.css';
 import './recovery.css';
+import './manuscript.css';

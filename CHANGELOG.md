@@ -6,6 +6,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
+### Added
+
+- Whole-manuscript project panel with chapter order, title/word-count list, project outline and search across the selected workspace.
+- Portable `.a-good-page.json` order manifest with guarded writes. Chapter files are never moved or renamed by reordering.
+- Read-only combined preview and paginated A4 whole-manuscript PDF preview/export using the existing PDF engine.
+- Missing/unreadable chapter and incomplete scan blockers, and disk/manifest rechecks before PDF export, including after choosing the destination.
+
+### Limits and verification
+
+- Project scan: four subfolder levels, 200 folders, 200 chapters. Search presents the first 100 matching lines with a full result count. No automatic merge, cloud sync or edits to chapter sources.
+- Focused project tests are run locally against this workbook; full TypeScript/Rust builds, CI and actual installer checks are pending for 0.2.0.
+
+
 ## [0.1.6] - 2026-09-28
 
 ### Hardened
@@ -136,7 +151,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/OWNER/a-good-page/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/OWNER/a-good-page/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/OWNER/a-good-page/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/OWNER/a-good-page/compare/v0.1.3...v0.1.4
