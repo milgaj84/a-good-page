@@ -1,5 +1,5 @@
 import { DialogFocus } from './dialog-focus';
-import { compareParagraphs, type ConflictChoice, type FileConflict } from '../core/file-conflict';
+import { compareParagraphs, conflictCopy, type ConflictChoice, type FileConflict } from '../core/file-conflict';
 
 /** Modal decision surface. No outside version can overwrite the writer's words automatically. */
 export class FileConflictDialog {
@@ -8,6 +8,7 @@ export class FileConflictDialog {
   private resolve: ((choice: ConflictChoice) => void) | null = null;
   private readonly title = document.createElement('h2');
   private readonly message = document.createElement('p');
+  private readonly file = document.createElement('p');
   private readonly comparison = document.createElement('div');
   private readonly review = document.createElement('button');
   private readonly reload = document.createElement('button');
@@ -26,17 +27,18 @@ export class FileConflictDialog {
     sheet.setAttribute('aria-describedby', 'conflict-message');
     this.title.id = 'conflict-title';
     this.message.id = 'conflict-message';
+    this.file.className = 'conflict-file';
     this.comparison.className = 'conflict-comparison';
     this.comparison.hidden = true;
     this.review.textContent = 'Review changes';
-    this.reload.textContent = 'Reload from disk';
+    this.reload.textContent = 'Keep safety snapshot & reload';
     this.copy.textContent = 'Save my version as a copy';
     this.keep.textContent = 'Keep writing';
     for (const button of [this.review, this.reload, this.copy, this.keep]) button.type = 'button';
     const actions = document.createElement('div');
     actions.className = 'conflict-actions';
     actions.append(this.review, this.reload, this.copy, this.keep);
-    sheet.append(this.title, this.message, this.comparison, actions);
+    sheet.append(this.title, this.file, this.message, this.comparison, actions);
     this.root.append(sheet);
     host.append(this.root);
     this.review.addEventListener('click', () => {
@@ -56,18 +58,17 @@ export class FileConflictDialog {
 
   ask(conflict: FileConflict): Promise<ConflictChoice> {
     if (this.resolve) return Promise.resolve('keep');
-    this.title.textContent = 'This file changed elsewhere';
-    this.message.textContent = conflict.deleted
-      ? 'The file was moved or deleted. Your draft is still here. Save it as a copy before closing.'
-      : !conflict.canReload ? 'That destination already contains a file. Choose a new filename for your copy.'
-      : 'Another app changed this file. A Good Page stopped saving so neither version is overwritten. Choose what to keep.';
+    const copy = conflictCopy(conflict);
+    this.title.textContent = copy.title;
+    this.file.textContent = 'File: ' + conflict.path.split(String.fromCharCode(92)).pop()?.split('/').pop();
+    this.message.textContent = copy.message;
     this.reload.disabled = !conflict.canReload;
     this.comparison.replaceChildren();
     this.comparison.hidden = true;
     this.review.textContent = 'Review changes';
     const data = compareParagraphs(conflict.mine, conflict.disk);
     for (const [label, paragraphs, other] of [
-      ['Your draft', data.mine, data.disk], ['On disk', data.disk, data.mine],
+      ['Your draft', data.mine, data.disk], ['File on disk', data.disk, data.mine],
     ] as const) {
       const column = document.createElement('div');
       const heading = document.createElement('h3');

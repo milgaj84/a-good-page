@@ -14,3 +14,19 @@ export async function protectReload(choice: ConflictChoice, preserve: () => Prom
   if (choice === 'reload') await preserve();
   return choice;
 }
+
+/** Writer-facing wording stays precise when a file cannot be read. */
+export function conflictCopy(conflict: Pick<FileConflict, 'deleted' | 'canReload' | 'disk'>): { title: string; message: string } {
+  if (!conflict.canReload && conflict.disk !== null) return {
+    title: 'That filename is already in use',
+    message: 'Nothing was replaced. Choose a different filename for your copy, or keep writing here.',
+  };
+  if (conflict.deleted) return {
+    title: 'This file is unavailable',
+    message: 'The file could not be found or read. Your draft remains open and autosave is paused. Save a copy to a different filename before closing.',
+  };
+  return {
+    title: 'This file changed elsewhere',
+    message: 'The version on disk differs from the one you opened. Autosave is paused; review both versions before choosing what to keep.',
+  };
+}

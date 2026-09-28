@@ -81,7 +81,7 @@ export class DocumentSession {
   private documentId = 0;
   private saveIntent = 0;
   private queue: Promise<unknown> = Promise.resolve();
-  private pendingDecision: Promise<unknown> | null = null;
+  private readonly pendingDecisions = new Set<Promise<unknown>>();
   private baseline: string | null = null;
   private conflictHold = false;
   private conflictBusy = false;
@@ -118,7 +118,10 @@ export class DocumentSession {
   }
 
   /** Wait for already requested writes before deciding whether it is safe to close. */
-  async settleWrites(): Promise<void> { await this.queue; await this.pendingDecision; }
+  async settleWrites(): Promise<void> {
+    await this.queue;
+    while (this.pendingDecisions.size) await Promise.all([...this.pendingDecisions]);
+  }
 
   /** Explicit discard on quit must not reopen an untitled draft next launch. */
   discardDraft(): void {
@@ -145,7 +148,7 @@ export class DocumentSession {
 
   async autosave(): Promise<boolean> {
     if (this.path === null || !this.isDirty || this.conflictHold) return false;
-    return this.writeTo(this.path);
+    return this.writeTo(this.path, false, false);
   }
 
   async open(): Promise<boolean> {
@@ -239,13 +242,14 @@ export class DocumentSession {
   }
 
   /** Writes are serialized so overlapping saves never race each other. */
-  private writeTo(target: string, adoptPath = false): Promise<boolean> {
+  private writeTo(target: string, adoptPath = false, explicit = true): Promise<boolean> {
     const revision = this.revision;
     const documentId = this.documentId;
     const content = isPlainTextPath(target)
       ? this.deps.editor.getPlainText?.() ?? this.deps.editor.getMarkdown()
       : this.deps.editor.getMarkdown();
-    const job = this.queue.then(() => this.performWrite(target, content, revision, documentId, adoptPath));
+    const job = this.queue.then(() =>
+      !explicit && this.conflictHold ? false : this.performWrite(target, content, revision, documentId, adoptPath));
     this.queue = job;
     const result = job.then(async (ok) => {
       if (!ok && this.conflictPath === target && !this.conflictBusy && this.deps.events.onConflict &&
@@ -267,9 +271,9 @@ export class DocumentSession {
       }
       return ok;
     });
-    this.pendingDecision = result;
-    void result.then(() => { if (this.pendingDecision === result) this.pendingDecision = null; },
-      () => { if (this.pendingDecision === result) this.pendingDecision = null; });
+    this.pendingDecisions.add(result);
+    void result.then(() => { this.pendingDecisions.delete(result); },
+      () => { this.pendingDecisions.delete(result); });
     return result;
   }
 

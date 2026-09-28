@@ -3,15 +3,21 @@ import { describe, expect, it } from 'vitest';
 
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-describe('0.1.2 release files', () => {
+describe('0.1.3 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.1.2');
+    expect(version).toBe('0.1.3');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
   });
   it('records the release in the changelog', () => {
-    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.1\.2\] - \d{4}-\d{2}-\d{2}$/m);
+    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.1\.3\] - \d{4}-\d{2}-\d{2}$/m);
+  });
+  it('keeps the Linux rendering fallback conditional and respects overrides', () => {
+    const startup = file('src-tauri/src/main.rs');
+    expect(startup).toContain('#[cfg(target_os = "linux")]');
+    expect(startup).toContain('WEBKIT_DISABLE_DMABUF_RENDERER');
+    expect(startup).toContain('needs_dmabuf_fallback');
   });
   it('ships the files GitHub expects', () => {
     for (const path of ['LICENSE', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', '.github/workflows/ci.yml', '.github/workflows/release.yml']) {

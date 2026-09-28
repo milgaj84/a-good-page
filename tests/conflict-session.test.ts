@@ -11,6 +11,7 @@ function setup(initial = 'On disk') {
   let decide: ((info: FileConflict) => Promise<ConflictChoice>) | null = null;
   let savePath: string | null = null;
   let writes = 0;
+  let attempts = 0;
   const session = new DocumentSession({
     editor: { getMarkdown: () => editor.text, setMarkdown: text => { editor.text = text; }, focus: () => {} },
     drafts: { load: () => null, save: () => {}, clear: () => {} },
@@ -23,6 +24,7 @@ function setup(initial = 'On disk') {
         return { path, name: path, content };
       },
       write: async (path, content, expected) => {
+        attempts++;
         const now = disk.get(path) ?? null;
         if (expected !== undefined && expected !== now) throw new FileChangedError(path);
         disk.set(path, content); writes++;
@@ -31,7 +33,7 @@ function setup(initial = 'On disk') {
     },
     events: { onChange: s => states.push(s), onError: () => {}, onConflict: async data => { events.push(data); return decide ? decide(data) : choice; } },
   });
-  return { session, disk, editor, events, states, get writes() { return writes; }, set choice(value: ConflictChoice) { choice = value; }, set decide(value: (info: FileConflict) => Promise<ConflictChoice>) { decide = value; }, set savePath(value: string | null) { savePath = value; } };
+  return { session, disk, editor, events, states, get writes() { return writes; }, get attempts() { return attempts; }, set choice(value: ConflictChoice) { choice = value; }, set decide(value: (info: FileConflict) => Promise<ConflictChoice>) { decide = value; }, set savePath(value: string | null) { savePath = value; } };
 }
 
 describe('conflict-aware session', () => {
@@ -47,6 +49,18 @@ describe('conflict-aware session', () => {
     expect(await t.session.autosave()).toBe(false);
     expect(t.events).toHaveLength(1);
     expect(t.writes).toBe(0);
+  });
+  it('stops already queued autosaves once the first discovers a conflict', async () => {
+    const t = setup();
+    await t.session.open(); t.editor.text = 'My draft'; t.session.markEdited();
+    t.disk.set('story.md', 'Edited outside');
+    const first = t.session.autosave();
+    const queued = t.session.autosave();
+    expect(await first).toBe(false);
+    expect(await queued).toBe(false);
+    expect(t.attempts).toBe(1);
+    expect(t.events).toHaveLength(1);
+    expect(t.disk.get('story.md')).toBe('Edited outside');
   });
   it('reloads disk content only when the user chooses it', async () => {
     const t = setup(); t.choice = 'reload';

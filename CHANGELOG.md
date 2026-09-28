@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-28
+
+### Changed
+
+- Conflict dialog names the affected file, distinguishes a file that cannot be read from an occupied copy destination, and labels Reload as keeping a safety snapshot first.
+- Already queued autosaves stop once a conflict is found; deliberate Save still rechecks disk contents.
+- Linux startup defaults to disabling WebKitGTK DMABUF rendering on affected desktops; an explicitly set environment value is respected. macOS and Windows startup are unchanged.
+
+### Verification
+
+- Focused source-level checks and conflict scenarios can be run from this code table; a full application build, Rust checks and installer launch must be repeated after extracting these 0.1.3 changes. Maintainer-reported earlier CI results are not 0.1.3 results.
+
+
 ## [0.1.2] - 2026-09-28
 
 ### Added
@@ -69,7 +82,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/OWNER/a-good-page/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/OWNER/a-good-page/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/OWNER/a-good-page/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/OWNER/a-good-page/releases/tag/v0.1.0

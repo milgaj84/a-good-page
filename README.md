@@ -26,11 +26,11 @@ Your `.md` file is the editable original. PDF is a separate copy; a `.txt` file 
 
 ## Install and supported systems
 
-A Good Page is built for **macOS, Windows and Linux**. It is tested on **Linux (Fedora 43 / Wayland & X11)** on physical hardware, and continuously verified on **macOS (Apple silicon and Intel)** and **Windows** across clean multi-OS automated build and test pipelines.
+A Good Page is designed as a desktop app for **macOS, Windows and Linux**. The release workflow is set up to build macOS installers for Apple silicon and Intel, plus Windows and Linux packages. The maintainer reports physical-hardware testing on Fedora 43 (Wayland and X11) and passing macOS and Windows CI; that is not the same as a hands-on installation test for each macOS/Windows package. Confirm the actual installer assets before claiming those platforms are verified.
 
-For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer.
+For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer. Do not download a draft release expecting a finished installer.
 
-Release builds are currently **unsigned**. macOS or Windows may show a security warning (Gatekeeper or SmartScreen) on first launch. Only open an installer if you trust where it came from; do not bypass a warning for an unverified download. On modern Linux Wayland desktops, hardware DMABUF display issues are automatically safeguarded out of the box.
+Release builds are currently **unsigned**. macOS or Windows may show a security warning on first launch. Only open an installer if you trust where it came from; do not bypass a warning for an unverified download.
 
 **Build from source instead:** the steps below require Node.js 20+, stable Rust and the Tauri 2 system dependencies for your OS. The installer build uses `npm run icons` before `npm run tauri build`.
 ## At a glance
@@ -290,9 +290,13 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
 
 ## Working alongside another editor
 
-If a chapter changes on disk after A Good Page opens or saves it, autosave stops instead of silently replacing the outside edit. A conflict dialog lets you **Review changes** side by side, **Reload from disk** (first keeping the current draft in local Time Machine, then replacing the in-memory page), **Save my version as a copy** to a different new file, or **Keep writing**. While a conflict is unresolved, autosave stays paused; an explicit Save checks the file again. If Time Machine cannot preserve the draft, Reload is cancelled. When the file has been deleted, Reload is unavailable. Save As refuses a destination that already exists, to avoid overwriting an unrelated document; choose a new filename instead.
+If a chapter changes on disk after A Good Page opens or saves it, autosave stops instead of silently replacing the outside edit. A conflict dialog lets you **Review changes** side by side, **Keep safety snapshot & reload** (first keeping the current draft in local Time Machine, then replacing the in-memory page), **Save my version as a copy** to a different new file, or **Keep writing**. While a conflict is unresolved, autosave stays paused; an explicit Save checks the file again. If Time Machine cannot preserve the draft, Reload is cancelled. If the file is missing or cannot be read, Reload is unavailable; your draft stays open. Save As refuses a destination that already exists, to avoid overwriting an unrelated document; choose a new filename instead.
 
-The comparison shows up to 300 paragraphs per side and highlights paragraphs unique to either version; the saved documents themselves are not truncated. Keep a backup of your writing folder. The pre-write content check prevents ordinary silent overwrites, but another program writing the same file at the exact instant A Good Page writes it is not a cross-application atomic lock.
+The dialog names the affected file and distinguishes an unavailable manuscript from an occupied Save As filename. The comparison shows up to 300 paragraphs per side and highlights paragraphs unique to either version; the saved documents themselves are not truncated. Keep a backup of your writing folder. The pre-write content check prevents ordinary silent overwrites, but another program writing the same file at the exact instant A Good Page writes it is not a cross-application atomic lock. Already queued autosaves stop once a conflict is detected; explicit Save still rechecks.
+
+## Linux window troubleshooting
+
+On Linux, A Good Page disables WebKitGTK DMABUF rendering by default to avoid a blank window or protocol error on affected Wayland desktops. It does not override an existing `WEBKIT_DISABLE_DMABUF_RENDERER` setting. This does not affect macOS or Windows.
 
 ## How your work is protected
 
@@ -313,7 +317,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -323,10 +327,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md` and `RELEASE_0.1.2.md` on real machines before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` for any remaining asset checks before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.2 && git push origin v0.1.2`. Installers are unsigned, so
+then `git tag v0.1.3 && git push origin v0.1.3`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 
