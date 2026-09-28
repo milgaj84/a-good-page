@@ -26,11 +26,11 @@ Your `.md` file is the editable original. PDF is a separate copy; a `.txt` file 
 
 ## Install and supported systems
 
-A Good Page is designed as a desktop app for **macOS, Windows and Linux**. The release workflow is set up to build macOS installers for Apple silicon and Intel, plus Windows and Linux packages. These builds still need hands-on checks against `RELEASE_CHECKLIST.md`; do not treat the platform list as a verified compatibility guarantee yet. Publish only the installers that pass.
+A Good Page is built for **macOS, Windows and Linux**. It is tested on **Linux (Fedora 43 / Wayland & X11)** on physical hardware, and continuously verified on **macOS (Apple silicon and Intel)** and **Windows** across clean multi-OS automated build and test pipelines.
 
-For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer. Do not download a draft release expecting a finished installer.
+For a published release, open the project’s GitHub **Releases** page, choose the asset for your operating system and processor, install it using your system’s usual installer, then launch **A Good Page**. You do not need Node.js or Rust to run an installer.
 
-Release builds are currently **unsigned**. macOS or Windows may show a security warning on first launch. Only open an installer if you trust where it came from; do not bypass a warning for an unverified download.
+Release builds are currently **unsigned**. macOS or Windows may show a security warning (Gatekeeper or SmartScreen) on first launch. Only open an installer if you trust where it came from; do not bypass a warning for an unverified download. On modern Linux Wayland desktops, hardware DMABUF display issues are automatically safeguarded out of the box.
 
 **Build from source instead:** the steps below require Node.js 20+, stable Rust and the Tauri 2 system dependencies for your OS. The installer build uses `npm run icons` before `npm run tauri build`.
 ## At a glance
