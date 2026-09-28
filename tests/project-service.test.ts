@@ -74,6 +74,16 @@ describe('project loading and export safety', () => {
     await moved.open('/new-place');expect(moved.chapters.map(x=>x.path)).toEqual(['a.md','b.md']);
     expect(moved.chapters.every(x=>x.file!==null)).toBe(true);
   });
+  it('scans new chapters without saving the manifest in health-check mode', async () => {
+    const t=fixture();await t.service.open('/book');const original=t.manifestRaw;
+    t.chapters.set('/book/new.md','# Newly arrived');
+    await t.service.open('/book',false);
+    expect(t.manifestRaw).toBe(original);
+    expect(t.service.health().issues.map(x=>x.kind+':'+x.path)).toContain('untracked:new.md');
+    await t.service.open('/book');
+    expect(t.manifestRaw).toContain('new.md');
+    expect(t.service.health().issues).toEqual([]);
+  });
   it('rejects export when a source or order changes after preview', async () => {
     const t=fixture();await t.service.open('/book');const snap=t.service.preview(['a.md','b.md']);
     t.chapters.set('/book/a.md','# A\nNew words');

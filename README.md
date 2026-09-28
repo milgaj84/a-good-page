@@ -18,15 +18,13 @@ No account or cloud workflow is needed for the editing and file features describ
 
 ## A whole manuscript, not just a chapter
 
-Click **Manuscript** beside Workspace. It lists chapters with titles, word counts and headings; reordering writes a guarded `.a-good-page.json` manifest beside the files, never moves or edits the chapters. Search spans the project. Scan limits are four subfolder levels, 200 folders and 200 chapters; missing, unreadable or unscanned chapters block compilation rather than silently disappearing.
+Click **Manuscript** beside Workspace to order, search and preview chapters without editing or moving the underlying Markdown and text files. Order lives in a guarded, portable `.a-good-page.json` file. The project scan covers up to four subfolder levels, 200 folders and 200 chapters; missing or unreadable chapters block compilation. A read-only **Check project health** rescans without saving order changes and reports missing, unreadable, empty and new untracked files. **Refresh chapters** can append new files when the project has no unresolved missing entries. Checks never relink or delete chapters automatically.
 
-Select chapters and **Compile selected chapters** for a read-only combined view. A visible inventory shows every included chapter in order, excluded filenames and selected word total. **Preview whole PDF** uses the actual paginated A4 pages; the editable Markdown and text files remain separate. If a selected file or project order changes, export names the culprit and disables the old PDF. **Refresh preview** re-reads the sources; if refresh fails, old pages remain visible but unexportable. Saving to PDF checks all included files and the order both before and after choosing a destination. The final PDF must be checked on an installed build before release; CI cannot prove printed layout fidelity alone.
+Choose chapters, **Compile selected chapters**, and inspect the included/excluded inventory and word counts. **Preview whole PDF** renders paginated A4 pages; export checks selected files and order before and after the native Save dialog. If a source changes, the old pages remain visible but unexportable until refreshed. Test a real PDF on an installed build before publishing.
 
 ### Repair a moved chapter
 
-If a chapter was renamed or moved within the project folder, **Relink chapter** appears beside its missing entry. A Good Page suggests unused writing files from the same workspace, ranking matching filenames first, but never selects one automatically. Review the old path alongside each candidate's path, title, word count and short text excerpt; choose a file and confirm. The replacement takes the old chapter's position without moving or editing the source file. A changed candidate or project order blocks the update, leaving the missing entry in place; refresh suggestions and try again. If no replacement exists, restore the file or deliberately remove the missing entry.
-
-The order manifest stores relative paths, so a project folder moved intact to another computer retains its chapter order. Only files inside the chosen workspace can be linked; duplicates, traversal paths and unreadable candidates are rejected. Keep a backup of the project folder and its `.a-good-page.json` order file.
+A missing entry offers **Relink chapter**. Suggestions rank unused files inside the workspace but never select one. Review each candidate's path, title, words and excerpt; confirmation replaces only the missing path in its original position. If the candidate changes or the order file is edited elsewhere, no change is saved. A moved project folder retains its relative order paths. Back up both chapters and `.a-good-page.json`.
 
 ## Start here
 
@@ -319,7 +317,7 @@ For maintainers: run all checks and a local build before publishing.
 
 ## Releases
 
-Version 0.2.2 repairs moved or renamed chapters; 0.2.1 improved whole-manuscript preview and PDF fidelity; 0.2.0 added compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.2.3 adds a non-destructive project health check; 0.2.2 repaired moved or renamed chapters; 0.2.1 improved whole-manuscript preview and PDF fidelity; 0.2.0 added compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -329,10 +327,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.2.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.3.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.2.2 && git push origin v0.2.2`. Installers are unsigned, so
+then `git tag v0.2.3 && git push origin v0.2.3`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

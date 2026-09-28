@@ -6,6 +6,22 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-28
+
+### Added
+
+- **Project health check.** A read-only rescan reports missing, unreadable, empty and newly discovered untracked chapters with paths and suggested next steps. It shows readable/total chapter counts and word count without changing prose or project order.
+- **Clear readiness signal.** Missing or unreadable chapters remain compilation blockers; empty and newly discovered chapters are advisories, not automatic exclusions or relinks.
+
+### Fixed
+
+- **Health checks no longer save the manifest.** Refresh chapters can append newly found files when safe, but Check project health reports them without writing `.a-good-page.json`. Reorder, relink and remove actions refresh the health display after a successful guarded change.
+
+### Verification
+
+- Focused project-health and project-service tests were run against the workbook code. Full TypeScript/Rust CI, installer launch and multi-chapter PDF inspection remain release gates for 0.2.3.
+
+
 ## [0.2.2] - 2026-09-28
 
 ### Added
@@ -183,7 +199,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/OWNER/a-good-page/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/OWNER/a-good-page/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OWNER/a-good-page/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/OWNER/a-good-page/compare/v0.1.6...v0.2.0

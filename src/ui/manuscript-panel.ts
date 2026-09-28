@@ -39,6 +39,7 @@ export class ManuscriptPanel {
   private service: ProjectService;
   private readonly status=make('p','manuscript-status','Choose a working folder to begin.');
   private readonly list=make('div','manuscript-list');
+  private readonly health=make('section','manuscript-health');
   private readonly results=make('div','manuscript-results');
   private readonly page=make('div','manuscript-page');
   private readonly inventory=make('section','manuscript-inventory');
@@ -56,10 +57,11 @@ export class ManuscriptPanel {
   private pdfLayout: HTMLSelectElement | null=null;
   constructor(private readonly deps: ManuscriptDeps) {
     this.service=new ProjectService(deps.ports);
-    this.relink=new ProjectRelinkDialog(deps.host,this.service,deps.notify,()=>{this.clearPreview();this.draw();});
+    this.relink=new ProjectRelinkDialog(deps.host,this.service,deps.notify,()=>{this.clearPreview();this.draw();this.drawHealth();});
     const heading=make('h2','','Manuscript');const close=make('button','','Close');close.type='button';
     const head=make('div','manuscript-head');head.append(heading,close);
     const refresh=make('button','','Refresh chapters');refresh.type='button';
+    const check=make('button','','Check project health');check.type='button';
     const compile=make('button','','Compile selected chapters');compile.type='button';
     this.pdfButton.type='button';this.pdfButton.disabled=true;
     this.query.type='search';this.query.placeholder='Search every chapter';this.query.setAttribute('aria-label','Search the whole manuscript');
@@ -67,7 +69,8 @@ export class ManuscriptPanel {
     this.root.setAttribute('role','dialog');this.root.setAttribute('aria-modal','true');
     this.root.setAttribute('aria-label','Whole manuscript');this.root.setAttribute('aria-hidden','true');
     this.inventory.setAttribute('aria-label','Compiled chapter inventory');
-    this.root.append(head,refresh,this.status,this.list,this.query,this.results,compile,this.pdfButton,this.inventory,this.page);
+    this.health.setAttribute('aria-label','Project health');this.health.setAttribute('aria-live','polite');
+    this.root.append(head,refresh,check,this.status,this.health,this.list,this.query,this.results,compile,this.pdfButton,this.inventory,this.page);
     deps.host.append(this.root);
     const elements=previewElements(deps.host);
     this.refreshPdf=elements.refresh;this.pdfLayout=elements.layout;
@@ -87,6 +90,7 @@ export class ManuscriptPanel {
       error => this.markStale(error));
     close.addEventListener('click',()=>this.close());
     refresh.addEventListener('click',()=>void this.load());
+    check.addEventListener('click',()=>void this.load(false));
     compile.addEventListener('click',()=>this.compile());
     this.pdfButton.addEventListener('click',()=>{if(this.snapshot)void this.preview.open(this.title());});
     this.query.addEventListener('input',()=>this.search());
@@ -143,20 +147,32 @@ export class ManuscriptPanel {
     if(this.returnFocus?.isConnected)this.returnFocus.focus();this.returnFocus=null;return true;
   }
   private title(): string {return this.service.path?.split(String.fromCharCode(92)).pop()?.split('/').pop()||'Manuscript';}
-  private async load(): Promise<void> {
+  private async load(persistOrder = true): Promise<void> {
     if(this.busy)return;this.busy=true;this.status.textContent='Reading the project…';
     const root=this.deps.root()??await this.deps.chooseRoot();
     try {
       if(!root){this.status.textContent='Choose a working folder to begin.';return;}
-      await this.service.open(root);
+      await this.service.open(root,persistOrder);
       const paths=this.service.chapters.map(x=>x.path);
       this.selection=new Set([...this.selection].filter(p=>paths.includes(p)));
       if(!this.selection.size) this.selection=new Set(paths.filter(p=>this.service.chapters.find(x=>x.path===p)?.file));
       this.clearPreview();
       this.status.textContent=paths.length+' chapters · '+this.service.chapters.reduce((sum,x)=>sum+(x.file?.words??0),0).toLocaleString()+' words'+(this.service.chapters.some(x=>x.issue)?' · Resolve missing or unreadable files':'');
-      this.draw();this.search();
-    } catch(e){this.status.textContent='Could not load manuscript: '+String(e);this.deps.notify(this.status.textContent);}
+      this.draw();this.drawHealth();this.search();
+    } catch(e){this.health.replaceChildren();this.status.textContent='Could not check manuscript: '+String(e);this.deps.notify(this.status.textContent);}
     finally{this.busy=false;}
+  }
+  private drawHealth(): void {
+    const report=this.service.health();this.health.replaceChildren();
+    this.health.append(make('h3','',report.ready?'Project ready to compile':'Project needs attention'));
+    this.health.append(make('p','',report.readable+'/'+report.total+' readable chapters · '+report.words.toLocaleString()+' words · '+report.issues.length+' notices'));
+    if(!report.issues.length){this.health.append(make('p','','No missing, unreadable, empty or untracked chapters detected.'));return;}
+    const list=make('ul','');
+    for(const issue of report.issues){
+      list.append(make('li',issue.blocking?'health-blocking':'health-advisory',
+        issue.kind.toUpperCase()+' · '+issue.path+' — '+issue.advice));
+    }
+    this.health.append(list);
   }
   private draw(): void {
     this.list.replaceChildren();const root=this.service.path;if(!root)return;
@@ -175,8 +191,8 @@ export class ManuscriptPanel {
       for(const h of entry.file?.headings??[]){const jump=make('button','manuscript-heading',h.title);jump.type='button';jump.style.marginLeft=(h.level*12)+'px';jump.addEventListener('click',()=>void this.deps.openChapter(root,entry.path,h.title));this.list.append(jump);}
     }
   }
-  private async reorder(path:string,direction:-1|1):Promise<void>{try{await this.service.move(path,direction);this.clearPreview();this.draw();}catch(e){this.deps.notify('Project order was not saved: '+String(e));}}
-  private async remove(path:string):Promise<void>{try{await this.service.omitMissing(path);this.selection.delete(path);this.clearPreview();this.draw();}catch(e){this.deps.notify('Could not update project order: '+String(e));}}
+  private async reorder(path:string,direction:-1|1):Promise<void>{try{await this.service.move(path,direction);this.clearPreview();this.draw();this.drawHealth();}catch(e){this.deps.notify('Project order was not saved: '+String(e));}}
+  private async remove(path:string):Promise<void>{try{await this.service.omitMissing(path);this.selection.delete(path);this.clearPreview();this.draw();this.drawHealth();}catch(e){this.deps.notify('Could not update project order: '+String(e));}}
   private search():void{
     this.results.replaceChildren();const files=this.service.chapters.flatMap(x=>x.file?[x.file]:[]),hits=searchProject(files,this.query.value);
     if(this.query.value.trim())this.results.append(make('p','',hits.length+' matches'+(hits.length>100?' · first 100 shown':'')));

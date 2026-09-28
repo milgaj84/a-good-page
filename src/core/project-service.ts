@@ -2,6 +2,7 @@ import { chapterInfo, manifest, moveChapter, orderFiles, safeChapter, type Proje
 import type { FolderListing } from './quick-switch';
 import { ProjectChangeError } from './project-preview';
 import { rankRelinks, relinkOrder, type RelinkCandidate } from './project-relink';
+import { projectHealth, type ProjectHealth } from './project-health';
 export interface ProjectPorts {
   list(root: string, folder?: string): Promise<FolderListing>;
   read(root: string, path: string): Promise<{ content: string }>;
@@ -21,7 +22,8 @@ export class ProjectService {
   constructor(private readonly io: ProjectPorts) {}
   get chapters(): readonly ProjectEntry[] { return this.order.chapters.map(path => this.files.get(path) ?? { path, file: null, issue: 'Missing from workspace' }); }
   get path(): string | null { return this.root; }
-  async open(root: string): Promise<void> {
+  health(): ProjectHealth { return projectHealth(this.chapters,this.available,this.recorded); }
+  async open(root: string, persistOrder = true): Promise<void> {
     const first = await this.io.list(root);
     const base = first.root;
     const queue: { folder: string; rel: string; depth: number; listing?: FolderListing }[] = [{ folder: base, rel: '', depth: 0, listing: first }];
@@ -53,9 +55,9 @@ export class ProjectService {
     const existing = raw === null ? null : manifest(JSON.parse(raw));
     const changed = raw === null || JSON.stringify(existing) !== JSON.stringify(order);
     const missing = order.chapters.some(path=>!paths.includes(path));
-    const stored = order.chapters.length && changed && !missing ? await this.io.saveOrder(base, raw, JSON.stringify(order)) : raw;
+    const stored = persistOrder && order.chapters.length && changed && !missing ? await this.io.saveOrder(base, raw, JSON.stringify(order)) : raw;
     this.root = base; this.raw = stored; this.order = order; this.files = found; this.available = paths;
-    this.recorded = new Set(existing?.chapters ?? []);
+    this.recorded = new Set(stored !== null ? manifest(JSON.parse(stored)).chapters : []);
   }
   private full(path: string): string {
     if(!this.root)throw Error('Choose a project folder.');
