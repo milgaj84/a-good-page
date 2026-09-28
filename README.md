@@ -288,6 +288,12 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
     npm run icons
     npm run tauri dev
 
+## Pick up where you left off
+
+Named manuscripts now keep a separate **local recovery draft** while words remain unsaved. It is written after typing pauses (about 500 ms) and flushed when the window loses focus or closes normally. On restart, A Good Page compares that draft with the manuscript on disk and asks what to do; it never replaces the disk file automatically. Review both versions, **Resume draft**, **Save as a copy**, or explicitly **Discard recovered words & leave disk file as is**. Pressing Esc postpones the choice and retains the recovery record. If the file is missing or unreadable, Resume is disabled and a separate copy remains available.
+
+If the file changed outside the app, Resume keeps those disk words untouched and pauses autosave; use the conflict review or Save as a copy to resolve it. The app rechecks disk before resuming. A recovery record clears after a confirmed save, successful copy, or explicit discard, not just because the file was opened. The local recovery store holds one named manuscript at a time, verifies each write and warns if storage is unavailable or full; do not treat it as a backup. A force-close before the 500 ms pause may lose the most recent keystrokes. Untitled drafts retain their existing local safety net. Keep independent backups of your writing folder.
+
 ## Working alongside another editor
 
 When you return to A Good Page or refresh Workspace, it checks the open chapter without saving or reloading. A persistent notice names a file that **changed**, **went missing**, or **cannot currently be read** (for example, an unavailable drive). Choose Review changes for the latest side-by-side view, or Keep writing to retain your draft and leave autosave paused. The notice stays until the disk state is resolved. Returning to the app repeatedly does not stack dialogs.
@@ -319,7 +325,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -329,10 +335,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` and `RELEASE_0.1.4.md` for any remaining asset checks before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` and `RELEASE_0.1.4.md` and `RELEASE_0.1.5.md` for any remaining asset checks before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.4 && git push origin v0.1.4`. Installers are unsigned, so
+then `git tag v0.1.5 && git push origin v0.1.5`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

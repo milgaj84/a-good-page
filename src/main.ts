@@ -16,6 +16,10 @@ import { bindButtons, bindShortcuts } from './app/shortcuts';
 import { createLongProjects } from './app/long-projects';
 import { FileConflictDialog } from './ui/file-conflict';
 import { OutsideNotice } from './ui/outside-notice';
+import { NamedRecoveryStore } from './core/named-recovery';
+import { NamedRecoveryWriter } from './core/named-recovery-writer';
+import { RecoveryDialog } from './ui/recovery-dialog';
+import { offerNamedRecovery } from './app/named-recovery';
 import { protectReload } from './core/file-conflict';
 import { snapshotBackend } from './adapters/snapshot-store';
 import { createReader } from './editor/reader';
@@ -117,11 +121,9 @@ const linkBar = new LinkBar(
 );
 const slash = new SlashMenu(el('slash-menu'), (command) => editor.run(command));
 const help = new HelpSheet(el('help'), el('help-list'), el('help-close'), IS_MAC, () => editor.restoreFocus());
-
 const autosave = new Debouncer(() => void session?.autosave(), 1200, browserScheduler);
 const stats = new Debouncer(refreshStats, 150, browserScheduler);
 const outlineTimer = new Debouncer(refreshOutline, 250, browserScheduler);
-
 const editor = createWriterEditor({
   element: el('editor'),
   bubble: el('bubble'),
@@ -154,14 +156,12 @@ const focusUI = bindFocusControls({
   setSentenceFocus: on => { editor.sentenceFocus(on); },
   centered: keepCaretCentered, notify: message => chrome.toast(message, 4000),
 });
-
 const finder = new FindPanel({ root: el('find-dialog'), query: el<HTMLInputElement>('find-query'),
   replacement: el<HTMLInputElement>('replace-query'), count: el('find-count'), matchCase: el<HTMLInputElement>('find-case'), wholeWord: el<HTMLInputElement>('find-words'),
   previous: el<HTMLButtonElement>('find-prev'), next: el<HTMLButtonElement>('find-next'),
   one: el<HTMLButtonElement>('replace-one'), all: el<HTMLButtonElement>('replace-all'),
   close: el<HTMLButtonElement>('find-close') }, editor.instance);
 const quit = new QuitDialog(el('quit-dialog'), el('quit-error'), el('quit-save'), el('quit-discard'), el('quit-cancel'));
-
 const palette = new CommandPalette(
   { root: el('command-palette'), input: el<HTMLInputElement>('command-input'),
     list: el('command-results'), empty: el('command-empty') },
@@ -181,13 +181,11 @@ const sessionPanel = new SessionPanel(
   () => { sessionEnabledFocus = !focusMode; if (sessionEnabledFocus) toggleFocus(); editor.restoreFocus(); },
   (summary) => { if (sessionEnabledFocus && focusMode) toggleFocus(); sessionEnabledFocus = false; chrome.toast('Session ended · ' + summary, 4200); },
 );
-
 function syncControls(): void {
   toolbar.sync();
   bubble.sync();
   styleSelect.sync();
 }
-
 function centerCaret(fraction: number): void {
   const top = editor.caretTop();
   if (top === null) return;
@@ -196,17 +194,14 @@ function centerCaret(fraction: number): void {
   // Instant, not smooth: a smooth scroll per keystroke queues animations and feels like lag.
   if (Math.abs(delta) > 4) scroller.scrollTop += delta;
 }
-
 function keepCaretCentered(): void {
   // The typewriter line wins over focus mode's follow; neither fights a scroll the writer is making.
   if (autoscroll.active || ghostUI.anchor()) return;
   if (focusMode) centerCaret(0.45);
 }
-
 function currentProgress(): GoalProgress | null {
   return goalProgress(countWords(editor.getText()), prefs.goal);
 }
-
 function refreshStats(): void {
   const text = editor.getText();
   const total = countWords(text);
@@ -226,7 +221,6 @@ function refreshStats(): void {
     chrome.celebrate('Goal reached: ' + formatCount(prefs.goal) + ' words. Lovely work.');
   }
 }
-
 function refreshStatus(words: number, selected: number, characters: number): void {
   const caret = editor.caretPos();
   const section = editor.headings().filter((h) => h.pos < caret).slice(-1)[0]?.text ?? null;
@@ -234,17 +228,14 @@ function refreshStatus(words: number, selected: number, characters: number): voi
   chrome.setDetail(statusText({ words, selected, characters,
     goal: prefs.goal, section, filename: snapshot?.path ?? 'Untitled', save: snapshot?.state ?? 'saved' }));
 }
-
 function refreshOutline(): void {
   outline.update(editor.headings(), editor.caretPos());
 }
-
 const themeShift = new ThemeTransition(root, browserScheduler, 520, () => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function applyTheme(): void {
   themeShift.apply(themes.theme);
   chrome.setThemeLabel(THEME_LABELS[themes.theme]);
 }
-
 function applyPrefs(next: Preferences): void {
   const goalChanged = next.goal !== prefs.goal;
   prefs = next;
@@ -259,7 +250,6 @@ function applyPrefs(next: Preferences): void {
   if (goalChanged) goals.reset(currentProgress());
   refreshStats();
 }
-
 /** Runs whenever the session swaps the page content (open, new, draft restore). */
 function onDocumentLoaded(): void {
   if (preview.isOpen) preview.close();
@@ -269,7 +259,6 @@ function onDocumentLoaded(): void {
   syncControls();
   projects?.documentLoaded();
 }
-
 const sessionEditor: EditorPort = {
   getMarkdown: () => editor.getMarkdown(),
   getPlainText: () => editor.getPlainText(),
@@ -286,6 +275,7 @@ const sessionEditor: EditorPort = {
 const shown = new ChangeLatch();
 function render(snapshot: SessionSnapshot): void {
   stats.trigger();
+  namedWriter?.change(snapshot);
   if (!shown.changed(JSON.stringify([snapshot.name, snapshot.path, snapshot.state]))) return;
   chrome.setName(snapshot.name);
   workspace?.markActive(snapshot.path);
@@ -298,6 +288,12 @@ function render(snapshot: SessionSnapshot): void {
 }
 
 const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
+const namedStore = new NamedRecoveryStore(browserStorage(), () => Date.now());
+const namedWriter = new NamedRecoveryWriter(namedStore, browserScheduler, () => {
+  const path = session?.snapshot().path;
+  return { baseline: session?.recoveryBaseline() ?? null, content: path && isPlainTextPath(path) ? editor.getPlainText() : editor.getMarkdown() };
+}, message => chrome.toast(message, 5200));
+const recoveryDialog = new RecoveryDialog(document.body);
 const fileConflict = new FileConflictDialog(document.body);
 const outsideNotice = new OutsideNotice(document.body, () => void session?.reviewOutside(), () => outsideNotice.remind());
 
@@ -306,7 +302,7 @@ session = new DocumentSession({
   files: filesInWorkingDirectory(() => workspace?.directory ?? null),
   prompter: tauriPrompter,
   drafts,
-  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
+  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onDiscard: path => namedWriter.discard(path), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
       if (!projects) throw new Error('Recovery is not ready; the draft was not reloaded.');
       await projects.preserveBeforeReload();
     }) },
@@ -458,9 +454,9 @@ function dispatch(action: Action): void {
 bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
 
-window.addEventListener('blur', () => { drafts.flush(); if (!quit.isOpen) autosave.flush(); });
+window.addEventListener('blur', () => { namedWriter.flush(); drafts.flush(); if (!quit.isOpen) autosave.flush(); });
 window.addEventListener('focus', () => void doc.checkOutside());
-window.addEventListener('beforeunload', () => drafts.flush());
+window.addEventListener('beforeunload', () => { namedWriter.flush(); drafts.flush(); });
 
 onFileDrop({
   onHover: (active) => app.classList.toggle('is-dropping', active),
@@ -475,7 +471,7 @@ onFileDrop({
 });
 
 onCloseRequested(async () => {
-  drafts.flush();
+  namedWriter.flush(); drafts.flush();
   autosave.cancel();
   await doc.settleWrites();
   while (doc.isDirty) {
@@ -493,7 +489,11 @@ applyTheme();
 render(doc.snapshot());
 applyPrefs(prefs);
 syncControls();
-void restoreLastDocument(doc, lastPath, message => chrome.toast(message)).then(recovered => { if (!recovered && guide.shouldOffer) guide.open(); })
+void restoreLastDocument(doc, lastPath, message => chrome.toast(message)).then(async recovered => {
+  await offerNamedRecovery({ document: doc, store: namedStore, writer: namedWriter, dialog: recoveryDialog,
+    probe: path => tauriFiles.probe!(path), exportCopy: exportRecoveryCopy, notify: message => chrome.toast(message, 5200) });
+  if (!recovered && guide.shouldOffer && !namedStore.load()) guide.open();
+})
   .catch(error => chrome.toast('Could not restore your last document: ' + String(error), 4200));
 
 void workspace.restore();

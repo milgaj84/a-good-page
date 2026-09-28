@@ -45,7 +45,7 @@ describe('conflict-aware session', () => {
     const t = setup(); await t.session.open(); t.disk.set('story.md', 'New outside text');
     expect(await t.session.checkOutside()).toMatchObject({ kind: 'changed', disk: 'New outside text' });
     expect(t.events).toHaveLength(0);
-    expect(t.outside.at(-1)).toMatchObject({ kind: 'changed' });
+    expect(t.outside[t.outside.length - 1]).toMatchObject({ kind: 'changed' });
     expect(t.session.snapshot().state).toBe('error');
     expect(await t.session.autosave()).toBe(false);
   });
@@ -56,7 +56,7 @@ describe('conflict-aware session', () => {
     expect(await t.session.checkOutside()).toMatchObject({ kind: 'missing' });
     t.disk.set('story.md', 'On disk');
     expect(await t.session.checkOutside()).toBeNull();
-    expect(t.outside.at(-1)).toBeNull();
+    expect(t.outside[t.outside.length - 1]).toBeNull();
   });
   it('rejects a stale review without losing the draft', async () => {
     const t = setup(); await t.session.open();
@@ -69,7 +69,7 @@ describe('conflict-aware session', () => {
     t.disk.set('story.md', 'Outside two'); finish('reload');
     expect(await pending).toBe(false);
     expect(t.editor.text).toBe('Draft');
-    expect(t.outside.at(-1)).toMatchObject({ kind: 'changed', disk: 'Outside two' });
+    expect(t.outside[t.outside.length - 1]).toMatchObject({ kind: 'changed', disk: 'Outside two' });
   });
   it('does not Save a copy from a stale review', async () => {
     const t = setup(); await t.session.open(); t.editor.text = 'Mine'; t.session.markEdited();

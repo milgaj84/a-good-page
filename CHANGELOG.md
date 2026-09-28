@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-28
+
+### Added
+
+- Named-file crash recovery: a verified, debounced local record of unsaved words and their disk baseline. Restart offers explicit review, resume, separate copy or discard; Escape retains the record.
+- Outside edits remain on disk when a recovered draft is resumed; autosave stays paused. Missing/unreadable files can be exported as a separate copy without recreating the original.
+- Focused tests for recovery storage failures, delayed writes, startup choices and disk divergence.
+
+### Limitations
+
+- The local recovery slot holds one named manuscript; it is not a backup. A crash inside the 500 ms debounce window can lose the last keystrokes. Full 0.1.5 CI and installer checks must be rerun; earlier reported green results concerned 0.1.3.
+
+
 ## [0.1.4] - 2026-09-28
 
 ### Added
@@ -99,7 +112,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/OWNER/a-good-page/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/OWNER/a-good-page/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/OWNER/a-good-page/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/OWNER/a-good-page/compare/v0.1.1...v0.1.2

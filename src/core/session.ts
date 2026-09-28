@@ -49,6 +49,7 @@ export interface SessionEvents {
   onConflict?(conflict: FileConflict): Promise<ConflictChoice>;
   onOutside?(state: OutsideState | null): void;
   onResolved?(message: string): void;
+  onDiscard?(path: string): void;
 }
 
 export interface SessionDeps {
@@ -98,6 +99,23 @@ export class DocumentSession {
     return this.revision !== this.savedRevision;
   }
 
+  recoveryBaseline(): string | null { return this.baseline; }
+
+  /** Explicit recovery choice only. A changed disk keeps the guarded save paused. */
+  resumeNamedRecovery(path: string, content: string, baseline: string, disk: DiskProbe): boolean {
+    if (!path || this.path !== path || this.baseline === null) return false;
+    if (isPlainTextPath(path) && this.deps.editor.setPlainText) this.deps.editor.setPlainText(content);
+    else this.deps.editor.setMarkdown(content);
+    this.revision += 1;
+    this.baseline = baseline;
+    this.conflictHold = disk.kind !== 'present' || disk.content !== baseline;
+    this.failed = this.conflictHold;
+    this.outside = detectOutside(path, baseline, disk);
+    this.deps.events.onOutside?.(this.outside);
+    this.emit();
+    return true;
+  }
+
   snapshot(): SessionSnapshot {
     return { path: this.path, name: this.name, state: this.state() };
   }
@@ -132,6 +150,7 @@ export class DocumentSession {
   discardDraft(): void {
     this.saveIntent += 1;
     if (this.path === null) this.deps.drafts.clear();
+    else this.deps.events.onDiscard?.(this.path);
   }
 
   save(): Promise<boolean> {
@@ -291,7 +310,9 @@ export class DocumentSession {
     if (!this.isDirty) return true;
     if (this.path !== null) {
       if (await this.writeTo(this.path) && !this.isDirty) return true;
-      return this.deps.prompter.confirmDiscard();
+      const discard = await this.deps.prompter.confirmDiscard();
+      if (discard) this.deps.events.onDiscard?.(this.path);
+      return discard;
     }
     if (this.deps.editor.getMarkdown().trim().length === 0) return true;
     return this.deps.prompter.confirmDiscard();
