@@ -6,6 +6,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-28
+
+### Added
+
+- **Relink missing chapters.** Choose an unused writing file inside the project; inspect its path, title, word count and excerpt before explicitly replacing the missing entry in place. Suggestions rank matching filenames but never auto-link.
+- **Portable project-order repair.** Relative chapter paths continue to work after moving a project folder intact to another location.
+
+### Changed
+
+- Unreadable, already-used, or unsafe replacement paths are not offered. A project-order edit made in another app or changes to the selected replacement during review stop the relink and preserve the original missing entry.
+- The repair dialog supports keyboard selection, Escape to cancel, and refreshing suggestions after a failed save.
+
+### Verification
+
+- Focused relink and portability tests are run against the code table. Full app CI, Rust formatting/tests and installer-level relink checks remain required for this version.
+
+
 ## [0.2.1] - 2026-09-28
 
 ### Improved
@@ -166,7 +183,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/OWNER/a-good-page/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OWNER/a-good-page/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/OWNER/a-good-page/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/OWNER/a-good-page/compare/v0.1.5...v0.1.6

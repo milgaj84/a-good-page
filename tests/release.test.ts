@@ -3,15 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-describe('0.2.1 release files', () => {
+describe('0.2.2 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.2.1');
+    expect(version).toBe('0.2.2');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
   });
   it('records the release in the changelog', () => {
-    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.2\.1\] - \d{4}-\d{2}-\d{2}$/m);
+    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.2\.2\] - \d{4}-\d{2}-\d{2}$/m);
   });
   it('keeps the Linux rendering fallback conditional and respects overrides', () => {
     const startup = file('src-tauri/src/main.rs');
@@ -38,6 +38,13 @@ describe('0.2.1 release files', () => {
     expect(file('src/ui/manuscript-panel.ts')).toContain('previewInventory(');
     expect(file('src/ui/manuscript-panel.ts')).toContain('refreshPreview()');
     expect(file('src/ui/export-preview.ts')).toContain('this.bytes || this.blocked');
+  });
+  it('ships explicit chapter repair in 0.2.2', () => {
+    for (const path of ['src/core/project-relink.ts','src/ui/project-relink.ts',
+      'tests/project-relink.test.ts','RELEASE_0.2.2.md'])
+      expect(existsSync(new URL('../' + path, import.meta.url))).toBe(true);
+    expect(file('src/core/project-service.ts')).toContain('async relink(');
+    expect(file('src/ui/manuscript-panel.ts')).toContain('Relink chapter');
   });
   it('builds tagged releases as drafts with the icons generated first', () => {
     const release = file('.github/workflows/release.yml');

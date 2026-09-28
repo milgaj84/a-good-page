@@ -1,4 +1,3 @@
-// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
 import { chapterInfo } from '../src/core/project';
 import { compiledMarkdown, chapterBody, projectPdfDocument } from '../src/export/project-pdf';

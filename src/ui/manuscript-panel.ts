@@ -5,6 +5,7 @@ import { createReader, type ReaderView } from '../editor/reader';
 import { ExportPreview, type PreviewElements } from './export-preview';
 import type { ExportLayout } from '../export/layout';
 import { previewInventory, type ProjectChangeError } from '../core/project-preview';
+import { ProjectRelinkDialog } from './project-relink';
 
 export interface ManuscriptDeps {
   host: HTMLElement;
@@ -44,6 +45,7 @@ export class ManuscriptPanel {
   private readonly query=make('input','manuscript-query');
   private readonly pdfButton=make('button','','Preview whole PDF');
   private readonly preview: ExportPreview;
+  private readonly relink: ProjectRelinkDialog;
   private reader: ReaderView | null=null;
   private selection=new Set<string>();
   private snapshot: ProjectSnapshot | null=null;
@@ -54,6 +56,7 @@ export class ManuscriptPanel {
   private pdfLayout: HTMLSelectElement | null=null;
   constructor(private readonly deps: ManuscriptDeps) {
     this.service=new ProjectService(deps.ports);
+    this.relink=new ProjectRelinkDialog(deps.host,this.service,deps.notify,()=>{this.clearPreview();this.draw();});
     const heading=make('h2','','Manuscript');const close=make('button','','Close');close.type='button';
     const head=make('div','manuscript-head');head.append(heading,close);
     const refresh=make('button','','Refresh chapters');refresh.type='button';
@@ -117,7 +120,7 @@ export class ManuscriptPanel {
       stage=make('div','manuscript-stage');stage.hidden=true;this.page.append(stage);
       staged=createReader(stage);staged.show(text,false);
       this.preview.close();this.reader?.destroy();this.page.replaceChildren(stage);stage.hidden=false;
-      this.service=nextService;this.snapshot=next;this.reader=staged;staged=null;stage=null;
+      this.service=nextService;this.relink.setService(nextService);this.snapshot=next;this.reader=staged;staged=null;stage=null;
       this.showInventory();this.draw();this.pdfButton.disabled=false;
       if(this.refreshPdf)this.refreshPdf.hidden=true;
       this.status.textContent='Preview refreshed · '+next.chapters.length+' chapters. Export will recheck the sources.';
@@ -133,6 +136,7 @@ export class ManuscriptPanel {
     await this.load();this.query.focus();
   }
   close(): boolean {
+    if(this.relink.isOpen){this.relink.close();return true;}
     if(this.preview.isOpen){this.preview.close();return true;}
     if(!this.isOpen)return false;
     this.root.classList.remove('is-open');this.root.setAttribute('aria-hidden','true');
@@ -166,7 +170,7 @@ export class ManuscriptPanel {
       up.setAttribute('aria-label','Move '+entry.path+' earlier');down.setAttribute('aria-label','Move '+entry.path+' later');
       up.addEventListener('click',()=>void this.reorder(entry.path,-1));down.addEventListener('click',()=>void this.reorder(entry.path,1));
       row.append(check,label,meta,up,down);
-      if(entry.issue){const remove=make('button','','Remove missing entry');remove.type='button';remove.addEventListener('click',()=>void this.remove(entry.path));row.append(remove);}
+      if(entry.issue){const repair=make('button','','Relink chapter');repair.type='button';repair.addEventListener('click',()=>void this.relink.open(entry.path));const remove=make('button','','Remove missing entry');remove.type='button';remove.addEventListener('click',()=>void this.remove(entry.path));row.append(repair,remove);}
       this.list.append(row);
       for(const h of entry.file?.headings??[]){const jump=make('button','manuscript-heading',h.title);jump.type='button';jump.style.marginLeft=(h.level*12)+'px';jump.addEventListener('click',()=>void this.deps.openChapter(root,entry.path,h.title));this.list.append(jump);}
     }

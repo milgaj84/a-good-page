@@ -14,7 +14,7 @@ export default defineConfig({
   // Modern WebViews only: no down-levelling, smaller and faster bundles.
   build: { target: 'es2021', cssCodeSplit: false, reportCompressedSize: false },
   test: {
-    environment: 'node',
+    environment: 'happy-dom',
     include: ['tests/**/*.test.ts'],
   },
 });
