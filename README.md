@@ -288,9 +288,15 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
     npm run icons
     npm run tauri dev
 
+## Working alongside another editor
+
+If a chapter changes on disk after A Good Page opens or saves it, autosave stops instead of silently replacing the outside edit. A conflict dialog lets you **Review changes** side by side, **Reload from disk** (first keeping the current draft in local Time Machine, then replacing the in-memory page), **Save my version as a copy** to a different new file, or **Keep writing**. While a conflict is unresolved, autosave stays paused; an explicit Save checks the file again. If Time Machine cannot preserve the draft, Reload is cancelled. When the file has been deleted, Reload is unavailable. Save As refuses a destination that already exists, to avoid overwriting an unrelated document; choose a new filename instead.
+
+The comparison shows up to 300 paragraphs per side and highlights paragraphs unique to either version; the saved documents themselves are not truncated. Keep a backup of your writing folder. The pre-write content check prevents ordinary silent overwrites, but another program writing the same file at the exact instant A Good Page writes it is not a cross-application atomic lock.
+
 ## How your work is protected
 
-Writing is hard enough without worrying about the Save button. Named files autosave; an untitled draft is kept locally. On disk, saves use an exclusive temporary file, sync it, then rename it into place. If a write fails, the page stays marked unsaved so you can try again.
+Writing is hard enough without worrying about the Save button. Named files autosave unless an outside edit creates a conflict; an untitled draft is kept locally. On disk, saves use an exclusive temporary file, sync it, then rename it into place. If a write fails, the page stays marked unsaved so you can try again.
 
 A delayed Open or Save As dialog cannot silently replace newer words or switch the active manuscript. Closing waits for an in-flight save and lets you save, discard or keep writing. A previewed PDF is a snapshot: edits made afterward are not secretly added to that export. Time Machine versions are local recovery points, not a replacement for a separate backup of your writing folder. In Time Machine, select an older version and choose **Export recovery copy** to keep an independent file.
 
@@ -307,7 +313,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.1 is a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -317,10 +323,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md` on real machines before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md` and `RELEASE_0.1.2.md` on real machines before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.1 && git push origin v0.1.1`. Installers are unsigned, so
+then `git tag v0.1.2 && git push origin v0.1.2`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

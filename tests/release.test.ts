@@ -3,15 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-describe('0.1.1 release files', () => {
+describe('0.1.2 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.1.1');
+    expect(version).toBe('0.1.2');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
   });
   it('records the release in the changelog', () => {
-    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.1\.1\] - \d{4}-\d{2}-\d{2}$/m);
+    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.1\.2\] - \d{4}-\d{2}-\d{2}$/m);
   });
   it('ships the files GitHub expects', () => {
     for (const path of ['LICENSE', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', '.github/workflows/ci.yml', '.github/workflows/release.yml']) {

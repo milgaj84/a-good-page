@@ -6,6 +6,20 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-28
+
+### Added
+
+- Protected saves compare the on-disk manuscript with the version last opened or saved. If it changed or disappeared, the writer sees both versions before choosing Reload, Save my version as a copy, or Keep writing. Reload first preserves the current draft in local Time Machine; if preservation fails, the page stays put. Autosave pauses after a conflict.
+- Paragraph-level comparison highlights differences without sending writing to a service. Save As refuses to replace an already-existing destination.
+- Tests cover outside changes, deletion, explicit reload, a separate copy and a competing Save As destination.
+
+### Notes
+
+- The app compares content immediately before writing; other applications do not participate in its process lock, so simultaneous cross-app writes are not a fully atomic compare-and-swap.
+- The 0.1.1 hands-on installer checks remain pending until performed on actual machines.
+
+
 ## [0.1.1] - 2026-09-27
 
 ### Fixed
@@ -55,6 +69,7 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/OWNER/a-good-page/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/OWNER/a-good-page/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/OWNER/a-good-page/releases/tag/v0.1.0

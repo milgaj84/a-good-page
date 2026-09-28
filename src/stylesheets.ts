@@ -16,3 +16,4 @@ import './layout-fixes.css';
 import './ghost.css';
 import './typography.css';
 import './long-projects.css';
+import './file-conflict.css';

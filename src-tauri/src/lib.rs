@@ -1,4 +1,5 @@
 mod commands;
+mod conflict;
 pub mod document;
 mod pdf;
 mod workspace;
@@ -11,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::open_document,
             commands::save_document,
+            commands::guarded_save_document,
             commands::export_pdf,
             commands::list_workspace,
             commands::open_workspace_file

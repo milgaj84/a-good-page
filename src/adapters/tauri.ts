@@ -6,6 +6,7 @@ import type { FileGateway, OpenedDocument, Prompter } from '../core/session';
 import { WRITING_EXTENSIONS } from '../core/paths';
 import { suggestedSavePath } from '../core/workspace';
 import { exportRecoveryCopyWith } from '../core/recovery';
+import { FileChangedError } from '../core/file-conflict';
 
 const OPEN_FILTERS = [{ name: 'Writing', extensions: [...WRITING_EXTENSIONS] }];
 const SAVE_FILTERS = [{ name: 'Writing', extensions: ['md', 'txt'] }];
@@ -21,7 +22,13 @@ export const tauriFiles: FileGateway = {
     return result ?? null;
   },
   read: (path: string) => invoke<OpenedDocument>('open_document', { path }),
-  write: (path: string, content: string) => invoke<string>('save_document', { path, content }),
+  write: (path: string, content: string, expected?: string | null) => {
+    if (expected === undefined) return invoke<string>('save_document', { path, content });
+    return invoke<string>('guarded_save_document', { path, content, expected }).catch((error: unknown) => {
+      if (String(error).includes('AGP_FILE_CHANGED')) throw new FileChangedError(path);
+      throw error;
+    });
+  },
 };
 
 export async function exportPdfFile(suggestedName: string, bytes: Uint8Array): Promise<string | null> {
@@ -35,7 +42,7 @@ export async function exportPdfFile(suggestedName: string, bytes: Uint8Array): P
 export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {
   return exportRecoveryCopyWith(name, content, livePath, navigator.userAgent.includes('Windows'),
     async (suggestedName) => (await save({ defaultPath: suggestedName, filters: SAVE_FILTERS })) ?? null,
-    (path, words) => tauriFiles.write(path, words));
+    (path, words) => tauriFiles.write(path, words, null));
 }
 
 export const tauriPrompter: Prompter = {

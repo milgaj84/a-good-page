@@ -33,6 +33,15 @@ pub fn save_document(
 }
 
 #[tauri::command]
+pub fn guarded_save_document(
+    path: String,
+    content: String,
+    expected: Option<String>,
+) -> Result<String, String> {
+    crate::conflict::guarded_save(&path, &content, expected.as_deref())
+}
+
+#[tauri::command]
 pub fn export_pdf(
     path: String,
     bytes: Vec<u8>,

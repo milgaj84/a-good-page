@@ -14,6 +14,8 @@ import { GoalTracker, goalProgress, type GoalProgress } from './core/goal';
 import { resolveShortcut } from './core/keymap';
 import { bindButtons, bindShortcuts } from './app/shortcuts';
 import { createLongProjects } from './app/long-projects';
+import { FileConflictDialog } from './ui/file-conflict';
+import { protectReload } from './core/file-conflict';
 import { snapshotBackend } from './adapters/snapshot-store';
 import { createReader } from './editor/reader';
 import { isEditorCommand, type Action, type AppAction } from './core/commands';
@@ -45,23 +47,19 @@ import { ThemeTransition } from './ui/theme-transition';
 import { WorkspacePanel } from './ui/workspace-panel';
 import { restoreLastDocument } from './core/startup';
 import { bindGhostInterface } from './ui/ghost-interface';
-
 const LAST_PATH_KEY = 'hearth.lastPath';
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
-
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error('Missing element #' + id);
   return node as T;
 }
-
 const store = new SafeStore(browserStorage());
 const lastPath = store.get(LAST_PATH_KEY);
 const root = document.documentElement;
 const app = el('app');
 const scroller = el('scroller');
 const autoscroll = bindAutoscroll(scroller, browserFrames);
-
 const chrome = new Chrome(
   { app, name: el('doc-name'), saveDot: el('save-dot'), stats: el('stats'), detail: el('status-detail'),
     focusButton: el('btn-focus'), themeButton: el('btn-theme'), toast: el('toast'), goal: el('goal'), goalFill: el('goal-fill') },
@@ -73,7 +71,6 @@ const ghostUI = bindGhostInterface({
   zenBadge: el<HTMLButtonElement>('zen-badge'), zenCheck: el<HTMLInputElement>('zen-check'),
   isMac: IS_MAC, now: () => Date.now(), notify: (message) => chrome.toast(message, 3200),
 });
-
 const themes = new ThemeManager(store, window.matchMedia('(prefers-color-scheme: dark)').matches);
 const prefsStore = new PreferencesStore(store);
 const goals = new GoalTracker();
@@ -82,7 +79,6 @@ let focusMode = false;
 let session: DocumentSession | null = null;
 let workspace: WorkspacePanel | null = null;
 let projects: ReturnType<typeof createLongProjects> | null = null;
-
 // UI pieces reach the editor through closures, so they can be built before it exists.
 const commandState: CommandState = {
   isActive: (name) => editor.isActive(name),
@@ -92,7 +88,6 @@ const commandState: CommandState = {
 const toolbar = new CommandButtons(el('toolbar'), commandState, dispatch);
 const bubble = new CommandButtons(el('bubble'), commandState, dispatch);
 const styleSelect = new StyleSelect(el<HTMLSelectElement>('style-select'), commandState, dispatch);
-
 const outline = new OutlinePanel(
   { root: el('outline'), list: el('outline-list'), empty: el('outline-empty'),
     previous: el<HTMLButtonElement>('chapter-prev'), next: el<HTMLButtonElement>('chapter-next') },
@@ -101,7 +96,6 @@ const outline = new OutlinePanel(
     centerCaret(0.3);
   },
 );
-
 const settings = new SettingsPanel(
   { root: el('settings'), fontChoice: el('font-choice'), widthChoice: el('width-choice'), rhythmChoice: el('rhythm-choice'),
     sizeRange: el<HTMLInputElement>('size-range'), sizeValue: el('size-value'), goalInput: el<HTMLInputElement>('goal-input'),
@@ -110,7 +104,6 @@ const settings = new SettingsPanel(
   el('btn-settings'),
   (patch) => applyPrefs(prefsStore.update(patch)),
 );
-
 const linkBar = new LinkBar(
   { root: el('linkbar'), input: el<HTMLInputElement>('link-input'), apply: el('link-apply'), remove: el('link-remove') },
   {
@@ -121,7 +114,6 @@ const linkBar = new LinkBar(
     restoreFocus: () => editor.restoreFocus(),
   },
 );
-
 const slash = new SlashMenu(el('slash-menu'), (command) => editor.run(command));
 const help = new HelpSheet(el('help'), el('help-list'), el('help-close'), IS_MAC, () => editor.restoreFocus());
 
@@ -305,13 +297,17 @@ function render(snapshot: SessionSnapshot): void {
 }
 
 const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
+const fileConflict = new FileConflictDialog(document.body);
 
 session = new DocumentSession({
   editor: sessionEditor,
   files: filesInWorkingDirectory(() => workspace?.directory ?? null),
   prompter: tauriPrompter,
   drafts,
-  events: { onChange: render, onError: (message) => chrome.toast(message, 4200) },
+  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
+      if (!projects) throw new Error('Recovery is not ready; the draft was not reloaded.');
+      await projects.preserveBeforeReload();
+    }) },
 });
 const doc = session;
 workspace = new WorkspacePanel({
@@ -387,6 +383,7 @@ function resize(size: number): void { applyPrefs(prefsStore.update({ size })); }
 
 /** Closes the top-most layer; returns false when there was nothing to close. */
 function closeLayers(): boolean {
+  if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;
   if (preview.isOpen) { preview.close(); return true; }
   if (longProjects.closeLayer()) return true;

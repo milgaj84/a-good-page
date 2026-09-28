@@ -1,4 +1,5 @@
 import { isPlainTextPath, nameFromPath, UNTITLED } from './paths';
+import { FileChangedError, type ConflictChoice, type FileConflict } from './file-conflict';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -26,7 +27,7 @@ export interface FileGateway {
   pickOpenPath(): Promise<string | null>;
   pickSavePath(suggestedName: string): Promise<string | null>;
   read(path: string): Promise<OpenedDocument>;
-  write(path: string, content: string): Promise<string>;
+  write(path: string, content: string, expected?: string | null): Promise<string>;
 }
 
 export interface Prompter {
@@ -44,6 +45,7 @@ export interface DraftStore {
 export interface SessionEvents {
   onChange(snapshot: SessionSnapshot): void;
   onError(message: string): void;
+  onConflict?(conflict: FileConflict): Promise<ConflictChoice>;
 }
 
 export interface SessionDeps {
@@ -79,6 +81,11 @@ export class DocumentSession {
   private documentId = 0;
   private saveIntent = 0;
   private queue: Promise<unknown> = Promise.resolve();
+  private pendingDecision: Promise<unknown> | null = null;
+  private baseline: string | null = null;
+  private conflictHold = false;
+  private conflictBusy = false;
+  private conflictPath: string | null = null;
 
   constructor(private readonly deps: SessionDeps) {}
 
@@ -111,7 +118,7 @@ export class DocumentSession {
   }
 
   /** Wait for already requested writes before deciding whether it is safe to close. */
-  async settleWrites(): Promise<void> { await this.queue; }
+  async settleWrites(): Promise<void> { await this.queue; await this.pendingDecision; }
 
   /** Explicit discard on quit must not reopen an untitled draft next launch. */
   discardDraft(): void {
@@ -137,7 +144,7 @@ export class DocumentSession {
   }
 
   async autosave(): Promise<boolean> {
-    if (this.path === null || !this.isDirty) return false;
+    if (this.path === null || !this.isDirty || this.conflictHold) return false;
     return this.writeTo(this.path);
   }
 
@@ -213,6 +220,9 @@ export class DocumentSession {
     this.revision += 1;
     this.savedRevision = this.revision;
     this.failed = false;
+    this.baseline = path === null ? null : content;
+    this.conflictHold = false;
+    this.conflictPath = null;
     this.deps.drafts.clear();
     this.emit();
     this.deps.editor.focus();
@@ -237,7 +247,30 @@ export class DocumentSession {
       : this.deps.editor.getMarkdown();
     const job = this.queue.then(() => this.performWrite(target, content, revision, documentId, adoptPath));
     this.queue = job;
-    return job;
+    const result = job.then(async (ok) => {
+      if (!ok && this.conflictPath === target && !this.conflictBusy && this.deps.events.onConflict &&
+          documentId === this.documentId) {
+        this.conflictBusy = true;
+        this.conflictPath = null;
+        try {
+          let disk: string | null = null;
+          try { disk = (await this.deps.files.read(target)).content; } catch { /* Deleted or inaccessible. */ }
+          if (documentId !== this.documentId) return false;
+          const choice = await this.deps.events.onConflict({ path: target, mine: content, disk, deleted: disk === null, canReload: target === this.path && disk !== null });
+          if (documentId !== this.documentId) return false;
+          if (choice === 'reload' && disk !== null && this.revision === revision && this.path === target) {
+            return this.load(target, false, documentId, revision);
+          }
+          if (choice === 'copy') return this.saveAs();
+        } catch (error) { this.deps.events.onError(describeError(error)); }
+        finally { this.conflictBusy = false; }
+      }
+      return ok;
+    });
+    this.pendingDecision = result;
+    void result.then(() => { if (this.pendingDecision === result) this.pendingDecision = null; },
+      () => { if (this.pendingDecision === result) this.pendingDecision = null; });
+    return result;
   }
 
   private async performWrite(target: string, content: string, revision: number, documentId: number, adoptPath: boolean): Promise<boolean> {
@@ -245,20 +278,28 @@ export class DocumentSession {
     this.inflight += 1;
     this.emit();
     try {
-      const written = await this.deps.files.write(target, content);
+      const expected = adoptPath && target !== this.path ? null : this.baseline;
+      const written = await this.deps.files.write(target, content, expected);
       if (documentId !== this.documentId || (!adoptPath && this.path !== target)) return false;
       if (adoptPath) {
         this.path = written;
         this.name = nameFromPath(written);
       }
       this.savedRevision = Math.max(this.savedRevision, revision);
+      this.baseline = content;
+      this.conflictHold = false;
+      this.conflictPath = null;
       this.failed = false;
       if (!this.isDirty) this.deps.drafts.clear();
       return true;
     } catch (err) {
       if (documentId === this.documentId && (adoptPath || this.path === target)) {
         this.failed = true;
-        this.deps.events.onError(describeError(err));
+        if (err instanceof FileChangedError) {
+          this.conflictHold = !adoptPath || target === this.path;
+          this.conflictPath = target;
+          if (this.conflictBusy) this.deps.events.onError('That copy destination changed or already exists. Choose a new filename.');
+        } else this.deps.events.onError(describeError(err));
       }
       return false;
     } finally {

@@ -10,6 +10,7 @@ import {
   type SessionSnapshot,
 } from '../src/core/session';
 import { nameFromPath } from '../src/core/paths';
+import { FileChangedError } from '../src/core/file-conflict';
 
 class FakeEditor implements EditorPort {
   md = '';
@@ -47,10 +48,11 @@ class FakeFiles implements FileGateway {
     if (content === undefined) throw 'Could not access the file: missing';
     return { path, name: nameFromPath(path), content };
   }
-  async write(path: string, content: string) {
+  async write(path: string, content: string, expected?: string | null) {
     if (this.gate) await this.gate;
     if (this.failWrite !== null) throw this.failWrite;
     const finalPath = /\.(md|markdown|txt)$/i.test(path) ? path : path + '.md';
+    if (expected !== undefined && (this.disk.get(finalPath) ?? null) !== expected) throw new FileChangedError(finalPath);
     this.disk.set(finalPath, content);
     this.writes += 1;
     return finalPath;

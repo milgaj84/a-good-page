@@ -115,6 +115,11 @@ export function createLongProjects(deps: LongProjectDeps) {
 
   return {
     actions,
+    /** Preserve the current draft before an explicit Reload discards it. Failure blocks Reload. */
+    async preserveBeforeReload(): Promise<void> {
+      const content = deps.content();
+      if (content.trim()) await snapshots.capture(docKey(), content);
+    },
     /** Closes the top-most long-project layer; false when none was open. */
     closeLayer(): boolean {
       if (timeMachine.isOpen) { timeMachine.close(); return true; }
