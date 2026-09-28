@@ -82,22 +82,30 @@ fn create_new(path: &Path, content: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn temp() -> PathBuf {
+        let count = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!(
-            "agp-conflict-{}-{}",
+            "agp-conflict-{}-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            count,
+            nanos
         ));
         fs::create_dir_all(&dir).unwrap();
-        dir
+        fs::canonicalize(dir).unwrap()
     }
+
     #[test]
     fn outside_change_and_missing_file_never_get_overwritten() {
         let dir = temp();
-        let path = dir.join("story.md");
+        let path = dir.join("story_outside.md");
         let name = path.to_str().unwrap();
         guarded_save(name, "original", None).unwrap();
         fs::write(&path, "outside").unwrap();
@@ -114,10 +122,11 @@ mod tests {
         assert!(!path.exists());
         fs::remove_dir_all(dir).unwrap();
     }
+
     #[test]
     fn new_file_does_not_replace_existing_and_matching_save_succeeds() {
         let dir = temp();
-        let path = dir.join("story.md");
+        let path = dir.join("story_new.md");
         let name = path.to_str().unwrap();
         guarded_save(name, "old", None).unwrap();
         assert_eq!(guarded_save(name, "new", None), Err(CHANGED.into()));
