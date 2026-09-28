@@ -1,7 +1,7 @@
 {
   "name": "a-good-page",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A calm, distraction-free WYSIWYG Markdown editor for writers.",
   "license": "MIT",
   "type": "module",
@@ -31,14 +31,15 @@
     "@tiptap/extension-typography": "^2.11.5",
     "@tiptap/pm": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
-    "tiptap-markdown": "^0.8.10",
+    "pdfjs-dist": "^4.10.38",
     "pdfmake": "^0.2.20",
-    "pdfjs-dist": "^4.10.38"
+    "tiptap-markdown": "^0.8.10"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/pdfmake": "^0.2.11",
+    "happy-dom": "^20.14.5",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^3.0.5"

@@ -9,13 +9,18 @@ import { pdfDocument, renderPdfDefinition, type ProseNode } from './pdf';
 import type { ExportLayout } from './layout';
 import type { ProjectFile } from '../core/project';
 
+/** Remove only a leading display title; later headings stay in the chapter. */
+export function chapterBody(file: ProjectFile): string {
+  if (/\.txt$/i.test(file.path)) return file.text;
+  return file.text.replace(/^\uFEFF?\s*#{1,3}\s+[^\n]*\n?/, '');
+}
 /** Compile a fixed, ordered snapshot; never modify chapter sources. */
 export function compiledMarkdown(chapters: readonly ProjectFile[]): string {
   return chapters.map(file => {
     const title = file.title.replace(/[\r\n#]/g, ' ').trim();
     const body = /\.txt$/i.test(file.path)
       ? file.text.split(String.fromCharCode(10)).map(line => line.replace(/[\\\x60*_{}\[\]<>#+.!|~-]/g, '\\$&')).join('  ' + String.fromCharCode(10))
-      : file.text.replace(/^#\s+[^\n]*\n?/, '');
+      : chapterBody(file);
     return '# ' + title + String.fromCharCode(10,10) + body;
   }).join(String.fromCharCode(10,10) + '---' + String.fromCharCode(10,10));
 }
@@ -37,7 +42,7 @@ export function projectPdfDocument(chapters: readonly ProjectFile[], title: stri
   const content: Content[] = [];
   chapters.forEach((file, i) => {
     content.push({ text: file.title, style: 'title', ...(i ? { pageBreak: 'before' as const } : {}) });
-    const body = /\.txt$/i.test(file.path) ? file.text : file.text.replace(/^#\s+[^\n]*\n?/, '');
+    const body = chapterBody(file);
     const doc = parse(body, /\.txt$/i.test(file.path));
     const pages = pdfDocument(doc, title, layout).content as Content[];
     content.push(...pages);

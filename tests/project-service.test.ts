@@ -37,6 +37,13 @@ describe('project loading and export safety', () => {
     };
     await expect(t.service.open('/book')).rejects.toThrow('folder disconnected');
   });
+  it('identifies an unreadable chapter and a changed order file by name', async () => {
+    const t=fixture();await t.service.open('/book');const snap=t.service.preview(['a.md','b.md']);
+    t.chapters.delete('/book/b.md');
+    await expect(t.service.verify(snap)).rejects.toMatchObject({ kind: 'missing', path: 'b.md' });
+    t.io.order=async()=>{throw Error('drive unavailable');};
+    await expect(t.service.verify(snap)).rejects.toMatchObject({ kind: 'order', path: '.a-good-page.json' });
+  });
   it('rejects export when a source or order changes after preview', async () => {
     const t=fixture();await t.service.open('/book');const snap=t.service.preview(['a.md','b.md']);
     t.chapters.set('/book/a.md','# A\nNew words');

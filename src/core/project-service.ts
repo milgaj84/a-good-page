@@ -1,5 +1,6 @@
 import { chapterInfo, manifest, moveChapter, orderFiles, safeChapter, type ProjectFile, type ProjectManifest } from './project';
 import type { FolderListing } from './quick-switch';
+import { ProjectChangeError } from './project-preview';
 export interface ProjectPorts {
   list(root: string, folder?: string): Promise<FolderListing>;
   read(root: string, path: string): Promise<{ content: string }>;
@@ -73,13 +74,16 @@ export class ProjectService {
     return { root: this.root, orderRaw: this.raw, chapters };
   }
   async verify(snapshot: ProjectSnapshot): Promise<void> {
-    if (snapshot.root !== this.root || await this.io.order(snapshot.root) !== snapshot.orderRaw)
-      throw Error('Project order changed. Refresh before export.');
+    if (snapshot.root !== this.root) throw new ProjectChangeError('order', '.a-good-page.json');
+    const currentOrder = await this.io.order(snapshot.root).catch(() => {
+      throw new ProjectChangeError('order', '.a-good-page.json');
+    });
+    if (currentOrder !== snapshot.orderRaw) throw new ProjectChangeError('order', '.a-good-page.json');
     for (const file of snapshot.chapters) {
       const sep = snapshot.root.includes(String.fromCharCode(92)) ? String.fromCharCode(92) : '/';
       const full = (snapshot.root.endsWith(sep) ? snapshot.root : snapshot.root + sep) + file.path.split('/').join(sep);
-      const current = await this.io.read(snapshot.root, full).catch(() => { throw Error(file.path + ' is missing or unreadable. Refresh preview.'); });
-      if (current.content !== file.text) throw Error(file.path + ' changed on disk. Refresh preview before export.');
+      const current = await this.io.read(snapshot.root, full).catch(() => { throw new ProjectChangeError('missing', file.path); });
+      if (current.content !== file.text) throw new ProjectChangeError('content', file.path);
     }
   }
 }

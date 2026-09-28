@@ -18,9 +18,9 @@ No account or cloud workflow is needed for the editing and file features describ
 
 ## A whole manuscript, not just a chapter
 
-Click **Manuscript** beside Workspace to build a book from the Markdown and text files in your chosen writing folder. Chapters appear with titles and word counts; move them up or down without renaming or moving their original files. The order lives in a small portable `.a-good-page.json` beside the chapters. New chapters appear at the end; missing or unreadable ones are flagged and **block compilation** until you fix them or deliberately remove a missing entry. The project scan includes subfolders up to four levels deep (maximum 200 folders and 200 chapters); an incomplete scan stops with an error rather than silently skipping a chapter.
+Click **Manuscript** beside Workspace. It lists chapters in their chosen order with titles, word counts and headings; reordering writes a guarded `.a-good-page.json` manifest beside the files, never moves or edits the chapters. Search spans the project. Scan limits are four subfolder levels, 200 folders and 200 chapters; missing, unreadable or unscanned chapters block compilation rather than silently disappearing.
 
-Search across every chapter for a phrase, or click a heading in the project outline to open it in the editor. Check the chapters to include, then **Compile selected chapters** for a read-only combined view with clear chapter breaks. Choose **Preview whole PDF** for the actual paginated A4 pages and their layout controls. Export produces a separate PDF; the chapter files and project order remain editable. Save unsaved edits in the open chapter before compiling. Immediately before export, including after the native Save dialog, the app rechecks the included files and project order. If either changed, refresh the preview; it never exports a silently stale compilation. Search shows the first 100 matching lines and its full match count.
+Select chapters and **Compile selected chapters** for a read-only combined view. A visible inventory shows every included chapter in order, excluded filenames and selected word total. **Preview whole PDF** uses the actual paginated A4 pages; the editable Markdown and text files remain separate. If a selected file or project order changes, export names the culprit and disables the old PDF. **Refresh preview** re-reads the sources; if refresh fails, old pages remain visible but unexportable. Saving to PDF checks all included files and the order both before and after choosing a destination. The final PDF must be checked on an installed build before release; CI cannot prove printed layout fidelity alone.
 
 ## Start here
 
@@ -317,7 +317,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.2.0 adds whole-manuscript compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.2.1 improves whole-manuscript preview and PDF fidelity; 0.2.0 added compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -327,10 +327,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.0.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.1.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.2.0 && git push origin v0.2.0`. Installers are unsigned, so
+then `git tag v0.2.1 && git push origin v0.2.1`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

@@ -4,6 +4,7 @@ import type { ExportLayout } from '../export/layout';
 import { RenderTicket } from '../core/render-ticket';
 import { DialogFocus } from './dialog-focus';
 import { ExportState } from '../core/export-state';
+import { ProjectChangeError } from '../core/project-preview';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 export interface PreviewElements {
@@ -21,12 +22,14 @@ export class ExportPreview {
   private readonly renderTicket = new RenderTicket();
   private generation = 0;
   private busy = false;
+  private blocked = false;
   private readonly state = new ExportState();
   private readonly focus: DialogFocus;
   constructor(private readonly els: PreviewElements,
     private readonly build: (layout: ExportLayout) => Promise<Uint8Array>,
     private readonly save: (bytes: Uint8Array) => Promise<boolean>,
-    private readonly saved: () => void, private readonly closed: () => void) {
+    private readonly saved: () => void, private readonly closed: () => void,
+    private readonly stale?: (error: ProjectChangeError) => void) {
     this.focus = new DialogFocus(els.root);
     els.root.setAttribute('aria-hidden', 'true');
     els.root.tabIndex = -1;
@@ -38,6 +41,7 @@ export class ExportPreview {
     els.root.addEventListener('mousedown', event => { if (event.target === els.root) this.close(); });
   }
   get isOpen(): boolean { return this.els.root.classList.contains('is-open'); }
+  note(message: string): void { if (this.isOpen) this.els.status.textContent = message; }
   get changedDuringSave(): boolean { return this.state.changedDuringSave; }
   manuscriptEdited(): 'close' | 'pending' {
     const action = this.state.manuscriptEdited();
@@ -47,7 +51,7 @@ export class ExportPreview {
   }
   async open(title: string): Promise<void> {
     if (this.isOpen) return;
-    this.state.beginPreview();
+    this.blocked = false; this.state.beginPreview();
     this.els.title.textContent = title;
     this.els.root.classList.add('is-open'); this.els.root.setAttribute('aria-hidden', 'false');
     this.focus.open(this.els.close);
@@ -58,12 +62,13 @@ export class ExportPreview {
     this.generation++; this.renderTicket.cancel();
     this.els.root.classList.remove('is-open'); this.els.root.setAttribute('aria-hidden', 'true');
     this.els.canvas.width = 0; this.els.canvas.height = 0;
-    this.bytes = null; const old = this.pdf; this.pdf = null;
+    this.bytes = null; this.blocked = false; const old = this.pdf; this.pdf = null;
     if (old) void old.destroy();
     this.focus.close();
     if (notify) this.closed();
   }
   private async regenerate(): Promise<void> {
+    if (this.blocked) { this.els.status.textContent = 'Source changed. Use Refresh preview before exporting.'; return; }
     const token = ++this.generation;
     this.renderTicket.cancel();
     this.bytes = null;
@@ -131,7 +136,7 @@ export class ExportPreview {
     }
   }
   private async export(): Promise<void> {
-    if (this.busy || !this.bytes) return;
+    if (this.busy || !this.bytes || this.blocked) return;
     this.busy = true; this.state.beginSave(); this.els.exportButton.disabled = true;
     this.els.layout.disabled = true; this.els.close.disabled = true;
     this.els.previous.disabled = true; this.els.next.disabled = true;
@@ -143,12 +148,15 @@ export class ExportPreview {
     } catch (error) {
       const changed = this.state.endSave();
       if (changed) { this.busy = false; this.close(); }
-      else this.els.status.textContent = 'Export failed: ' + String(error);
+      else if (error instanceof ProjectChangeError && this.stale) {
+        this.blocked = true; this.stale(error);
+        this.els.status.textContent = error.message + ' Old pages remain visible but cannot be exported.';
+      } else this.els.status.textContent = 'Export failed: ' + String(error);
     }
     finally {
       this.busy = false; this.state.endSave(); this.els.layout.disabled = false; this.els.close.disabled = false;
       if (this.isOpen) {
-        this.els.exportButton.disabled = this.bytes === null;
+        this.els.exportButton.disabled = this.bytes === null || this.blocked;
         this.els.previous.disabled = this.currentPage <= 1;
         this.els.next.disabled = !this.pdf || this.currentPage >= this.pdf.numPages;
       }

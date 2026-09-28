@@ -4,6 +4,7 @@ import { compiledMarkdown, renderProjectPdf } from '../export/project-pdf';
 import { createReader, type ReaderView } from '../editor/reader';
 import { ExportPreview, type PreviewElements } from './export-preview';
 import type { ExportLayout } from '../export/layout';
+import { previewInventory, type ProjectChangeError } from '../core/project-preview';
 
 export interface ManuscriptDeps {
   host: HTMLElement;
@@ -18,10 +19,10 @@ export interface ManuscriptDeps {
 const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag); el.className = className; el.textContent = text; return el;
 };
-function previewElements(host: HTMLElement): PreviewElements {
+function previewElements(host: HTMLElement): PreviewElements & { refresh: HTMLButtonElement; layout: HTMLSelectElement } {
   const root = make('div','overlay preview-overlay');
   const sheet=make('div','preview-sheet');sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');sheet.setAttribute('aria-label','Whole manuscript PDF pages');
-  const top=make('header','preview-top');const title=make('h2','');const close=make('button','ghost','Close');close.type='button';top.append(title,close);
+  const top=make('header','preview-top');const title=make('h2','');const refresh=make('button','ghost','Refresh preview');refresh.type='button';refresh.hidden=true;const close=make('button','ghost','Close');close.type='button';top.append(title,refresh,close);
   const tools=make('div','preview-tools');const label=make('label','','Layout');const layout=make('select','');layout.id='manuscript-layout';label.htmlFor=layout.id;
   for(const key of ['reading','manuscript']) {const option=make('option','',key==='reading'?'Reading copy':'Manuscript');option.value=key;layout.add(option);}
   const status=make('span','');status.setAttribute('role','status');tools.append(label,layout,status);
@@ -29,16 +30,17 @@ function previewElements(host: HTMLElement): PreviewElements {
   const footer=make('footer','preview-bottom');const previous=make('button','','← Previous');const page=make('span','');const next=make('button','','Next →');const exportButton=make('button','preview-primary','Export whole PDF');
   for(const btn of [previous,next,exportButton])btn.type='button';footer.append(previous,page,next,exportButton);
   sheet.append(top,tools,pages,footer);root.append(sheet);host.append(root);
-  return {root,canvas,title,status,layout,page,previous,next,exportButton,close};
+  return {root,canvas,title,status,layout,page,previous,next,exportButton,close,refresh};
 }
 /** All project data is disk-backed; a preview is an immutable selection of chapters. */
 export class ManuscriptPanel {
   readonly root=make('aside','manuscript-panel');
-  private readonly service: ProjectService;
+  private service: ProjectService;
   private readonly status=make('p','manuscript-status','Choose a working folder to begin.');
   private readonly list=make('div','manuscript-list');
   private readonly results=make('div','manuscript-results');
   private readonly page=make('div','manuscript-page');
+  private readonly inventory=make('section','manuscript-inventory');
   private readonly query=make('input','manuscript-query');
   private readonly pdfButton=make('button','','Preview whole PDF');
   private readonly preview: ExportPreview;
@@ -46,6 +48,10 @@ export class ManuscriptPanel {
   private selection=new Set<string>();
   private snapshot: ProjectSnapshot | null=null;
   private busy=false;
+  private refreshing=false;
+  private returnFocus: HTMLElement | null=null;
+  private refreshPdf: HTMLButtonElement | null=null;
+  private pdfLayout: HTMLSelectElement | null=null;
   constructor(private readonly deps: ManuscriptDeps) {
     this.service=new ProjectService(deps.ports);
     const heading=make('h2','','Manuscript');const close=make('button','','Close');close.type='button';
@@ -54,10 +60,15 @@ export class ManuscriptPanel {
     const compile=make('button','','Compile selected chapters');compile.type='button';
     this.pdfButton.type='button';this.pdfButton.disabled=true;
     this.query.type='search';this.query.placeholder='Search every chapter';this.query.setAttribute('aria-label','Search the whole manuscript');
+    this.status.setAttribute('role','status');this.inventory.setAttribute('aria-live','polite');
+    this.root.setAttribute('role','dialog');this.root.setAttribute('aria-modal','true');
     this.root.setAttribute('aria-label','Whole manuscript');this.root.setAttribute('aria-hidden','true');
-    this.root.append(head,refresh,this.status,this.list,this.query,this.results,compile,this.pdfButton,this.page);
+    this.inventory.setAttribute('aria-label','Compiled chapter inventory');
+    this.root.append(head,refresh,this.status,this.list,this.query,this.results,compile,this.pdfButton,this.inventory,this.page);
     deps.host.append(this.root);
     const elements=previewElements(deps.host);
+    this.refreshPdf=elements.refresh;this.pdfLayout=elements.layout;
+    elements.refresh.addEventListener('click',()=>void this.refreshPreview());
     this.preview=new ExportPreview(elements,async(layout: ExportLayout)=>{
       if(!this.snapshot)throw Error('Compile a manuscript first.');
       return renderProjectPdf(this.snapshot.chapters,this.title(),layout);
@@ -69,7 +80,8 @@ export class ManuscriptPanel {
         if(this.deps.dirty())throw Error('Save the open chapter before exporting.');
         await this.service.verify(this.snapshot!);
       }))!==null;
-    },()=>deps.notify('Whole manuscript PDF exported; chapter sources are unchanged.'),()=>{});
+    },()=>deps.notify('Whole manuscript PDF exported; chapter sources are unchanged.'),()=>{},
+      error => this.markStale(error));
     close.addEventListener('click',()=>this.close());
     refresh.addEventListener('click',()=>void this.load());
     compile.addEventListener('click',()=>this.compile());
@@ -77,16 +89,54 @@ export class ManuscriptPanel {
     this.query.addEventListener('input',()=>this.search());
   }
   get isOpen(): boolean {return this.root.classList.contains('is-open');}
-  private clearPreview(): void { this.snapshot=null;this.pdfButton.disabled=true;this.reader?.destroy();this.reader=null;this.page.replaceChildren(); }
+  private markStale(error: ProjectChangeError): void {
+    if(this.refreshPdf)this.refreshPdf.hidden=false;
+    this.status.textContent='Export blocked: '+error.message+' Refresh preview to update the pages.';
+    this.deps.notify(this.status.textContent);
+  }
+  private showInventory(): void {
+    this.inventory.replaceChildren();if(!this.snapshot)return;
+    const info=previewInventory(this.service.chapters,this.snapshot);
+    const title=make('h3','','Included · '+info.included.length+' chapters · '+info.totalWords.toLocaleString()+' words');
+    const list=make('ol','');for(const item of info.included)list.append(make('li','',item.title+' · '+item.words.toLocaleString()+' words · '+item.path));
+    this.inventory.append(title,list);
+    if(info.excluded.length)this.inventory.append(make('p','',info.excluded.length+' excluded: '+info.excluded.join(', ')));
+    else this.inventory.append(make('p','','No chapters excluded.'));
+  }
+  private async refreshPreview(): Promise<void> {
+    if(this.refreshing||!this.snapshot)return;
+    this.refreshing=true;const previous=this.snapshot;
+    let staged: ReaderView | null=null;let stage: HTMLElement | null=null;
+    if(this.refreshPdf)this.refreshPdf.disabled=true;
+    try {
+      if(this.deps.dirty())throw Error('Save the open chapter before refreshing the preview.');
+      const nextService=new ProjectService(this.deps.ports);await nextService.open(previous.root);
+      const next=nextService.preview(previous.chapters.map(file=>file.path));
+      const text=compiledMarkdown(next.chapters);
+      await renderProjectPdf(next.chapters,this.title(), this.pdfLayout?.value === 'manuscript' ? 'manuscript' : 'reading');
+      stage=make('div','manuscript-stage');stage.hidden=true;this.page.append(stage);
+      staged=createReader(stage);staged.show(text,false);
+      this.preview.close();this.reader?.destroy();this.page.replaceChildren(stage);stage.hidden=false;
+      this.service=nextService;this.snapshot=next;this.reader=staged;staged=null;stage=null;
+      this.showInventory();this.draw();this.pdfButton.disabled=false;
+      if(this.refreshPdf)this.refreshPdf.hidden=true;
+      this.status.textContent='Preview refreshed · '+next.chapters.length+' chapters. Export will recheck the sources.';
+      await this.preview.open(this.title());
+    }catch(error){staged?.destroy();stage?.remove();this.status.textContent='Refresh failed: '+String(error)+' Old pages remain visible and cannot be exported.';this.preview.note(this.status.textContent);this.deps.notify(this.status.textContent);}
+    finally {this.refreshing=false;if(this.refreshPdf)this.refreshPdf.disabled=false;}
+  }
+  private clearPreview(): void { this.snapshot=null;this.pdfButton.disabled=true;this.reader?.destroy();this.reader=null;this.page.replaceChildren();this.inventory.replaceChildren(); }
   async open(): Promise<void> {
     if(this.isOpen)return;
+    this.returnFocus=document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.root.classList.add('is-open');this.root.setAttribute('aria-hidden','false');
     await this.load();this.query.focus();
   }
   close(): boolean {
     if(this.preview.isOpen){this.preview.close();return true;}
     if(!this.isOpen)return false;
-    this.root.classList.remove('is-open');this.root.setAttribute('aria-hidden','true');return true;
+    this.root.classList.remove('is-open');this.root.setAttribute('aria-hidden','true');
+    if(this.returnFocus?.isConnected)this.returnFocus.focus();this.returnFocus=null;return true;
   }
   private title(): string {return this.service.path?.split(String.fromCharCode(92)).pop()?.split('/').pop()||'Manuscript';}
   private async load(): Promise<void> {
@@ -136,7 +186,7 @@ export class ManuscriptPanel {
       const text=compiledMarkdown(this.snapshot.chapters);
       this.reader??=createReader(this.page);
       this.reader.show(text,false);
-      this.pdfButton.disabled=false;
+      this.showInventory();this.pdfButton.disabled=false;
       this.status.textContent='Previewing '+selected.length+' chapters · '+this.snapshot.chapters.reduce((n,x)=>n+x.words,0).toLocaleString()+' words. Export rechecks every source.';
     }catch(e){this.snapshot=null;this.pdfButton.disabled=true;this.status.textContent='Cannot compile: '+String(e);}
   }

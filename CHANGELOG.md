@@ -6,6 +6,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
+### Improved
+
+- Compiled preview lists included chapters in export order, per-chapter words, exclusions and selected total.
+- Export errors identify the changed or unreadable chapter or project-order file. Stale pages remain visible but cannot be exported, including after switching PDF layouts.
+- Refresh preview stages fresh chapters and PDF bytes before replacing the old view; failed refresh preserves the old unexportable pages.
+- PDF compilation removes a leading H1–H3 display title only once, keeps later headings and preserves literal .txt source. Added chapter-boundary, Unicode, list and scene-break tests.
+- Recheck sources before and after the native Save dialog; a stale source cannot be silently exported.
+
+### Verification
+
+- Focused source tests are not a substitute for the full app build, Rust checks, actual installer launch or inspecting the generated multi-chapter PDF. Record those results before tagging.
+
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
@@ -23,27 +38,27 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [0.1.6] - 2026-09-28
 
-### Hardened
+This release hardens local recovery for writers who move between several manuscripts. Recovery records remain separate from the editable files and are never silently discarded to make room for another draft.
 
-1. Keep up to eight named recovery records, with no silent eviction when full.
-2. Migrate the 0.1.5 single-record format without dropping existing words.
-3. Validate path, text and timestamp before trusting a stored record.
-4. Refuse to overwrite a damaged ledger or malformed legacy record.
-5. Check write-back and report unavailable, full or quota-limited storage.
-6. Restart the debounce timer on every edit to capture a finished typing burst.
-7. Flush pending named words before switching document content, blur and normal close.
-8. Track postponed recovery per document so another draft can still be protected.
-9. Review multiple recovered manuscripts individually on startup.
-10. A cancelled/failed recovery-copy dialog retains words without repeated picker loops.
-11. Recheck disk contents before Resume; preserve divergent outside edits and pause autosave.
-12. Protect the original recovery path from accidental copy-to-original selection.
-13. Closing an open recovery dialog retains the record rather than implicitly discarding it.
-14. Clear only the matching record after a confirmed save, copy or explicit discard.
+### Added
 
-### Verification
+- **Recovery for up to eight named manuscripts.** The local recovery store keeps separate unsaved drafts and refuses a ninth record rather than evicting earlier writing without consent.
+- **Migration from 0.1.5.** An existing single-manuscript recovery record is carried into the multi-manuscript store without dropping its words or disk baseline.
+- **Individual startup review.** Each recovered manuscript is presented separately, so choosing what to do with one draft does not resolve or erase another.
 
-- Focused recovery tests run locally against the code table. Full TypeScript/Rust CI and installed-app forced-restart scenarios remain required for 0.1.6; prior maintainer-reported CI results concerned earlier versions.
+### Changed
 
+- **More reliable capture timing.** Each edit restarts the typing-pause timer; pending named-file words are also flushed before document content changes, when the window loses focus, and during a normal close.
+- **Independent postponed drafts.** Leaving one recovery decision for later does not prevent a different named manuscript from being protected.
+- **Deliberate cleanup.** A confirmed save or recovery-copy export clears only the matching record. Explicit Discard removes that record; merely opening a file or closing the recovery dialog does not.
+
+### Fixed
+
+- **Damaged or unavailable storage fails safely.** Invalid paths, text, and timestamps are rejected. Damaged current or legacy data is not overwritten, and failed write-back, full storage, or quota errors prompt a warning instead of a false claim that recovery succeeded.
+- **Cancelled recovery exports keep the draft.** Cancelling or failing the Save a copy dialog retains the recovered words without repeatedly reopening the picker. Selecting the original manuscript as the copy destination is rejected.
+- **Outside edits remain protected on Resume.** The disk file is checked again before resuming. If it has diverged, the outside version remains on disk and autosave stays paused until the writer resolves the conflict.
+
+**Verification:** Focused recovery tests were run locally against the code table. Full TypeScript and Rust CI, plus installed-app force-quit and restart checks, remained required for 0.1.6; previously reported green CI results applied to earlier versions.
 
 ## [0.1.5] - 2026-09-28
 
@@ -151,7 +166,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/OWNER/a-good-page/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/OWNER/a-good-page/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/OWNER/a-good-page/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/OWNER/a-good-page/compare/v0.1.4...v0.1.5
