@@ -262,15 +262,14 @@ function onDocumentLoaded(): void {
 const sessionEditor: EditorPort = {
   getMarkdown: () => editor.getMarkdown(),
   getPlainText: () => editor.getPlainText(),
-  setPlainText: (text) => { sessionPanel.documentChanged(); editor.setPlainText(text); onDocumentLoaded(); },
+  setPlainText: (text) => { namedWriter.flush(); sessionPanel.documentChanged(); editor.setPlainText(text); onDocumentLoaded(); },
   setMarkdown: (markdown) => {
     sessionPanel.documentChanged();
-    editor.setMarkdown(markdown);
+    namedWriter.flush(); editor.setMarkdown(markdown);
     onDocumentLoaded();
   },
   focus: () => editor.focus(),
 };
-
 // Every keystroke emits a snapshot; window title (IPC), storage and the file list only change on real transitions.
 const shown = new ChangeLatch();
 function render(snapshot: SessionSnapshot): void {
@@ -286,7 +285,6 @@ function render(snapshot: SessionSnapshot): void {
   if (snapshot.path) store.set(LAST_PATH_KEY, snapshot.path);
   else store.remove(LAST_PATH_KEY);
 }
-
 const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
 const namedStore = new NamedRecoveryStore(browserStorage(), () => Date.now());
 const namedWriter = new NamedRecoveryWriter(namedStore, browserScheduler, () => {
@@ -381,6 +379,7 @@ function resize(size: number): void { applyPrefs(prefsStore.update({ size })); }
 
 /** Closes the top-most layer; returns false when there was nothing to close. */
 function closeLayers(): boolean {
+  if (recoveryDialog.isOpen) { recoveryDialog.close(); return true; }
   if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;
   if (preview.isOpen) { preview.close(); return true; }
@@ -471,6 +470,7 @@ onFileDrop({
 });
 
 onCloseRequested(async () => {
+  if (recoveryDialog.isOpen) { recoveryDialog.close(); return false; }
   namedWriter.flush(); drafts.flush();
   autosave.cancel();
   await doc.settleWrites();

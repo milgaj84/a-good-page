@@ -7,23 +7,30 @@ export class NamedRecoveryWriter {
   private handle: unknown = null;
   private current: SessionSnapshot | null = null;
   private warned = false;
-  private deferred: string | null = null;
+  private readonly deferred = new Set<string>();
   constructor(private readonly store: NamedRecoveryStore, private readonly schedule: Scheduler,
     private readonly read: (path: string) => { baseline: string | null; content: string },
     private readonly notify: (message: string) => void, private readonly delay = 500) {}
   arm(): void { this.armed = true; }
-  defer(path: string): void { this.deferred = path; this.cancel(); }
+  defer(path: string): void { this.deferred.add(path); this.cancel(); }
+  release(path: string): void { this.deferred.delete(path); }
   change(snapshot: SessionSnapshot): void {
     this.current = snapshot;
-    if (!this.armed || !snapshot.path || snapshot.path === this.deferred) return;
+    if (!this.armed || !snapshot.path) return;
+    if (this.deferred.has(snapshot.path)) {
+      if (snapshot.state === 'saved' && this.store.load(snapshot.path)?.content === this.read(snapshot.path).content) {
+        this.store.clear(snapshot.path); this.deferred.delete(snapshot.path);
+      }
+      return;
+    }
     if (snapshot.state === 'saved') { this.cancel(); this.store.clear(snapshot.path); return; }
-    if (this.handle !== null) return;
+    this.cancel(); // Restart the timer on every edit; do not snapshot mid-burst.
     this.handle = this.schedule.set(() => { this.handle = null; this.flush(); }, this.delay);
   }
   flush(): void {
     this.cancel();
     const path = this.current?.path;
-    if (!this.armed || !path || path === this.deferred || this.current?.state === 'saved') return;
+    if (!this.armed || !path || this.deferred.has(path) || this.current?.state === 'saved') return;
     const { baseline, content } = this.read(path);
     if (baseline === null) return;
     if (!this.store.save(path, baseline, content)) {
@@ -31,6 +38,6 @@ export class NamedRecoveryWriter {
       this.warned = true;
     } else this.warned = false;
   }
-  discard(path: string): void { this.cancel(); this.store.discard(path); if (this.deferred === path) this.deferred = null; }
+  discard(path: string): void { this.cancel(); this.store.discard(path); this.deferred.delete(path); }
   private cancel(): void { if (this.handle !== null) this.schedule.clear(this.handle); this.handle = null; }
 }

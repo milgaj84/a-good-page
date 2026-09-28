@@ -6,6 +6,30 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-28
+
+### Hardened
+
+1. Keep up to eight named recovery records, with no silent eviction when full.
+2. Migrate the 0.1.5 single-record format without dropping existing words.
+3. Validate path, text and timestamp before trusting a stored record.
+4. Refuse to overwrite a damaged ledger or malformed legacy record.
+5. Check write-back and report unavailable, full or quota-limited storage.
+6. Restart the debounce timer on every edit to capture a finished typing burst.
+7. Flush pending named words before switching document content, blur and normal close.
+8. Track postponed recovery per document so another draft can still be protected.
+9. Review multiple recovered manuscripts individually on startup.
+10. A cancelled/failed recovery-copy dialog retains words without repeated picker loops.
+11. Recheck disk contents before Resume; preserve divergent outside edits and pause autosave.
+12. Protect the original recovery path from accidental copy-to-original selection.
+13. Closing an open recovery dialog retains the record rather than implicitly discarding it.
+14. Clear only the matching record after a confirmed save, copy or explicit discard.
+
+### Verification
+
+- Focused recovery tests run locally against the code table. Full TypeScript/Rust CI and installed-app forced-restart scenarios remain required for 0.1.6; prior maintainer-reported CI results concerned earlier versions.
+
+
 ## [0.1.5] - 2026-09-28
 
 ### Added
@@ -112,7 +136,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/OWNER/a-good-page/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/OWNER/a-good-page/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/OWNER/a-good-page/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/OWNER/a-good-page/compare/v0.1.2...v0.1.3

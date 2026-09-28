@@ -20,7 +20,26 @@ describe('named recovery debounce', () => {
     writer.change({ path: 'chapter.md', name: 'chapter', state: 'saved' });
     expect(disk.load()).toBeNull(); expect(notices).toEqual([]);
   });
-  it('keeps deferred recovery after an Escape and refuses to replace it from another document', () => {
+  it('restarts debounce on every edit and flushes latest words on demand', () => {
+    const disk = store(), clock = timer();
+    let content = 'First';
+    const writer = new NamedRecoveryWriter(disk, clock.scheduler, () => ({ baseline: 'Saved', content }), () => {});
+    writer.arm(); writer.change({ path: 'chapter.md', name: 'chapter', state: 'dirty' });
+    content = 'Second'; writer.change({ path: 'chapter.md', name: 'chapter', state: 'dirty' });
+    writer.flush(); expect(disk.load('chapter.md')?.content).toBe('Second');
+  });
+  it('clears postponed words only after a confirmed save of those same words', () => {
+    const disk = store(), clock = timer(); let words = 'Old disk';
+    disk.save('chapter.md', 'Old disk', 'Recovered');
+    const writer = new NamedRecoveryWriter(disk, clock.scheduler, () => ({ baseline: 'Old disk', content: words }), () => {});
+    writer.defer('chapter.md'); writer.arm();
+    writer.change({ path: 'chapter.md', name: 'chapter', state: 'saved' });
+    expect(disk.load('chapter.md')?.content).toBe('Recovered');
+    words = 'Recovered';
+    writer.change({ path: 'chapter.md', name: 'chapter', state: 'saved' });
+    expect(disk.load('chapter.md')).toBeNull();
+  });
+  it('keeps deferred recovery and writes another document independently', () => {
     const disk = store(), clock = timer(), notices: string[] = [];
     disk.save('chapter.md', 'Old', 'Recovered');
     const writer = new NamedRecoveryWriter(disk, clock.scheduler, () => ({ baseline: 'Else', content: 'New' }), m => notices.push(m));
@@ -28,7 +47,9 @@ describe('named recovery debounce', () => {
     writer.change({ path: 'chapter.md', name: 'chapter', state: 'saved' });
     expect(disk.load()?.content).toBe('Recovered');
     writer.change({ path: 'other.md', name: 'other', state: 'dirty' }); clock.run();
-    expect(disk.load()?.content).toBe('Recovered'); expect(notices).toHaveLength(1);
-    writer.discard('chapter.md'); expect(disk.load()).toBeNull();
+    expect(disk.load('chapter.md')?.content).toBe('Recovered');
+    expect(disk.load('other.md')?.content).toBe('New'); expect(notices).toEqual([]);
+    writer.discard('chapter.md'); expect(disk.load('chapter.md')).toBeNull();
+    expect(disk.load('other.md')?.content).toBe('New');
   });
 });
