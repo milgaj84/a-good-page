@@ -6,6 +6,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-28
+
+### Added
+
+- Read-only check of the open file on window focus and manual Workspace refresh, with a persistent, specific notice for changed, missing, or unreadable files. No automatic reload or dialog stacking.
+- Review checks disk contents again before Reload or Save a copy; a changed disk version cancels the stale choice. Save a copy suggests a distinct filename and still refuses an occupied destination.
+- Queued autosaves remain paused after a detected conflict; explicit Save continues to recheck disk contents.
+
+### Fixed
+
+- Synchronized the 0.1.3 Rust test-helper fix: unique atomic test counter, canonical macOS temporary directory, and distinct test filenames. Maintainer reported commit e051a37 and green CI run 36386040057 for that earlier release; this workbook has not rerun 0.1.4 CI.
+
+### Limitation
+
+- Disk probes and writes are separate operations; other applications do not participate in a cross-process lock. Keep backups. Installer and hardware verification of these 0.1.4 changes remains pending.
+
+
 ## [0.1.3] - 2026-09-28
 
 ### Changed
@@ -82,7 +99,8 @@ and settings because the bundle identifier (`app.hearth.writer`) and the
 - Stale Open, Save As and autosave results cannot overwrite newer words or switch the open file.
 - Closing waits for in-flight saves; failed saves stay marked unsaved.
 
-[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/OWNER/a-good-page/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/OWNER/a-good-page/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/OWNER/a-good-page/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/OWNER/a-good-page/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/OWNER/a-good-page/compare/v0.1.0...v0.1.1

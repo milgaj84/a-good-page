@@ -1,5 +1,5 @@
 import { isPlainTextPath, nameFromPath, UNTITLED } from './paths';
-import { FileChangedError, type ConflictChoice, type FileConflict } from './file-conflict';
+import { FileChangedError, detectOutside, copySuggestion, type DiskProbe, type OutsideState, type ConflictChoice, type FileConflict } from './file-conflict';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
@@ -27,6 +27,7 @@ export interface FileGateway {
   pickOpenPath(): Promise<string | null>;
   pickSavePath(suggestedName: string): Promise<string | null>;
   read(path: string): Promise<OpenedDocument>;
+  probe?(path: string): Promise<DiskProbe>;
   write(path: string, content: string, expected?: string | null): Promise<string>;
 }
 
@@ -46,6 +47,8 @@ export interface SessionEvents {
   onChange(snapshot: SessionSnapshot): void;
   onError(message: string): void;
   onConflict?(conflict: FileConflict): Promise<ConflictChoice>;
+  onOutside?(state: OutsideState | null): void;
+  onResolved?(message: string): void;
 }
 
 export interface SessionDeps {
@@ -86,6 +89,8 @@ export class DocumentSession {
   private conflictHold = false;
   private conflictBusy = false;
   private conflictPath: string | null = null;
+  private outside: OutsideState | null = null;
+  private checking = false;
 
   constructor(private readonly deps: SessionDeps) {}
 
@@ -137,7 +142,8 @@ export class DocumentSession {
     const id = this.documentId;
     const intent = this.saveIntent;
     try {
-      const chosen = await this.deps.files.pickSavePath(this.name + '.md');
+      const suggested = this.path ? copySuggestion(this.path.split(String.fromCharCode(92)).pop()?.split('/').pop() || this.name + '.md') : this.name + '.md';
+      const chosen = await this.deps.files.pickSavePath(suggested);
       if (!chosen || id !== this.documentId || intent !== this.saveIntent) return false;
       return this.writeTo(chosen, true);
     } catch (error) {
@@ -186,6 +192,54 @@ export class DocumentSession {
     return true;
   }
 
+  /** Focus/refresh probe; reads only, never reloads or writes. */
+  async checkOutside(): Promise<OutsideState | null> {
+    if (!this.path || this.baseline === null || !this.deps.files.probe || this.checking) return this.outside;
+    const id = this.documentId, path = this.path, expected = this.baseline;
+    this.checking = true;
+    let probe: DiskProbe;
+    try { probe = await this.deps.files.probe(path); }
+    catch { probe = { kind: 'unreadable' }; }
+    finally { this.checking = false; }
+    if (id !== this.documentId || path !== this.path || expected !== this.baseline) return this.outside;
+    const next = detectOutside(path, expected, probe);
+    this.outside = next;
+    if (next) { this.conflictHold = true; this.failed = true; this.emit(); }
+    else if (this.conflictHold) { this.conflictHold = false; this.failed = false; this.emit(); }
+    this.deps.events.onOutside?.(next);
+    return next;
+  }
+
+  /** Review a fresh disk probe before asking, and recheck it before acting. */
+  async reviewOutside(): Promise<boolean> {
+    const state = await this.checkOutside();
+    if (!state || !this.deps.events.onConflict || !this.deps.files.probe) return false;
+    const id = this.documentId, revision = this.revision, path = this.path;
+    const mine = isPlainTextPath(path) ? this.deps.editor.getPlainText?.() ?? this.deps.editor.getMarkdown() : this.deps.editor.getMarkdown();
+    const choice = await this.deps.events.onConflict({ path: state.path, mine, disk: state.disk,
+      deleted: state.kind !== 'changed', canReload: state.kind === 'changed' });
+    if (id !== this.documentId || path !== this.path) return false;
+    if (choice === 'keep') { this.deps.events.onResolved?.('Your draft remains open. Autosave is paused until the file conflict is resolved.'); return false; }
+    const latest = await this.deps.files.probe(state.path).catch((): DiskProbe => ({ kind: 'unreadable' }));
+    const unchangedDisk = latest.kind === 'present' ? state.kind === 'changed' && latest.content === state.disk : latest.kind === state.kind;
+    if (!unchangedDisk || (choice === 'reload' && this.revision !== revision)) {
+      await this.checkOutside();
+      this.deps.events.onError('The file or your draft changed during review. Review the latest version before choosing.');
+      return false;
+    }
+    if (choice === 'reload' && latest.kind === 'present') {
+      const ok = await this.load(state.path, false, id, revision);
+      if (ok) this.deps.events.onResolved?.('File on disk reloaded. Your previous draft is in Time Machine. Autosave resumed.');
+      return ok;
+    }
+    if (choice === 'copy') {
+      const ok = await this.saveAs();
+      if (ok) this.deps.events.onResolved?.('Your draft is saved as a separate copy. The outside file was not changed. Autosave resumed.');
+      return ok;
+    }
+    return false;
+  }
+
   private unchanged(id: number, revision: number): boolean {
     return id === this.documentId && revision === this.revision;
   }
@@ -226,6 +280,8 @@ export class DocumentSession {
     this.baseline = path === null ? null : content;
     this.conflictHold = false;
     this.conflictPath = null;
+    this.outside = null;
+    this.deps.events.onOutside?.(null);
     this.deps.drafts.clear();
     this.emit();
     this.deps.editor.focus();
@@ -262,10 +318,27 @@ export class DocumentSession {
           if (documentId !== this.documentId) return false;
           const choice = await this.deps.events.onConflict({ path: target, mine: content, disk, deleted: disk === null, canReload: target === this.path && disk !== null });
           if (documentId !== this.documentId) return false;
-          if (choice === 'reload' && disk !== null && this.revision === revision && this.path === target) {
-            return this.load(target, false, documentId, revision);
-          }
-          if (choice === 'copy') return this.saveAs();
+           if (choice !== 'keep' && this.deps.files.probe) {
+             const probe = await this.deps.files.probe(target).catch((): DiskProbe => ({ kind: 'unreadable' }));
+             const same = probe.kind === 'present' ? probe.content === disk : disk === null && probe.kind === 'missing';
+             if (!same || (choice === 'reload' && this.revision !== revision)) {
+               const state = detectOutside(target, this.baseline ?? '', probe);
+               this.outside = state; this.deps.events.onOutside?.(state);
+               this.deps.events.onError('The file or your draft changed during review. Review the latest version before choosing.');
+               return false;
+             }
+           }
+           if (choice === 'reload' && disk !== null && this.revision === revision && this.path === target) {
+             const ok = await this.load(target, false, documentId, revision);
+             if (ok) this.deps.events.onResolved?.('File on disk reloaded. Your previous draft is in Time Machine. Autosave resumed.');
+             return ok;
+           }
+           if (choice === 'copy') {
+             const ok = await this.saveAs();
+             if (ok) this.deps.events.onResolved?.('Your draft is saved as a separate copy. The outside file was not changed. Autosave resumed.');
+             return ok;
+           }
+           this.deps.events.onResolved?.('Your draft remains open. Autosave is paused until the file conflict is resolved.');
         } catch (error) { this.deps.events.onError(describeError(error)); }
         finally { this.conflictBusy = false; }
       }
@@ -293,6 +366,8 @@ export class DocumentSession {
       this.baseline = content;
       this.conflictHold = false;
       this.conflictPath = null;
+      this.outside = null;
+      this.deps.events.onOutside?.(null);
       this.failed = false;
       if (!this.isDirty) this.deps.drafts.clear();
       return true;
@@ -302,6 +377,7 @@ export class DocumentSession {
         if (err instanceof FileChangedError) {
           this.conflictHold = !adoptPath || target === this.path;
           this.conflictPath = target;
+          if (!adoptPath && target === this.path) void this.checkOutside();
           if (this.conflictBusy) this.deps.events.onError('That copy destination changed or already exists. Choose a new filename.');
         } else this.deps.events.onError(describeError(err));
       }

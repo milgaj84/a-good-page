@@ -11,6 +11,7 @@ export interface WorkspaceServices {
   list(root: string, directory?: string): Promise<WorkspaceListing>;
   open(root: string, path: string): Promise<boolean>;
   report(message: string): void;
+  onRefresh?(): Promise<unknown>;
 }
 /** Browse one folder at a time. Opening files delegates dirty-work handling to DocumentSession. */
 export class WorkspacePanel {
@@ -24,7 +25,7 @@ export class WorkspacePanel {
     els.root.setAttribute('aria-hidden','true');
     els.toggle.addEventListener('click', () => this.toggle());
     els.choose.addEventListener('click', () => void this.choose());
-    els.refresh.addEventListener('click', () => void this.refresh());
+    els.refresh.addEventListener('click', () => void this.refresh().then(() => this.services.onRefresh?.()));
     els.up.addEventListener('click', () => void this.up());
     els.search.addEventListener('input', () => this.renderItems());
     els.search.addEventListener('keydown', event => {

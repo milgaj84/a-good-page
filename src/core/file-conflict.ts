@@ -1,4 +1,16 @@
 export type ConflictChoice = 'reload' | 'copy' | 'keep';
+export type DiskProbe = { kind: 'present'; content: string } | { kind: 'missing' } | { kind: 'unreadable' };
+export type OutsideState = { path: string; kind: 'changed' | 'missing' | 'unreadable'; disk: string | null };
+export function detectOutside(path: string, expected: string, probe: DiskProbe): OutsideState | null {
+  if (probe.kind === 'present' && probe.content === expected) return null;
+  return { path, kind: probe.kind === 'present' ? 'changed' : probe.kind, disk: probe.kind === 'present' ? probe.content : null };
+}
+export function copySuggestion(name: string): string {
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '.md';
+  return stem + '-my-copy' + ext;
+}
 export class FileChangedError extends Error {
   constructor(readonly path: string) { super('This file changed outside A Good Page. Your words were not overwritten.'); this.name = 'FileChangedError'; }
 }

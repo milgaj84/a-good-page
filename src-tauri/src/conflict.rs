@@ -82,26 +82,21 @@ fn create_new(path: &Path, content: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
-
     fn temp() -> PathBuf {
         let count = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!(
             "agp-conflict-{}-{}-{}",
             std::process::id(),
-            count,
-            nanos
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            count
         ));
         fs::create_dir_all(&dir).unwrap();
         fs::canonicalize(dir).unwrap()
     }
-
     #[test]
     fn outside_change_and_missing_file_never_get_overwritten() {
         let dir = temp();
@@ -122,7 +117,6 @@ mod tests {
         assert!(!path.exists());
         fs::remove_dir_all(dir).unwrap();
     }
-
     #[test]
     fn new_file_does_not_replace_existing_and_matching_save_succeeds() {
         let dir = temp();

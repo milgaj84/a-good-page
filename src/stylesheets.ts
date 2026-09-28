@@ -17,3 +17,4 @@ import './ghost.css';
 import './typography.css';
 import './long-projects.css';
 import './file-conflict.css';
+import './outside-notice.css';

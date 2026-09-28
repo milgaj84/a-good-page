@@ -15,6 +15,7 @@ import { resolveShortcut } from './core/keymap';
 import { bindButtons, bindShortcuts } from './app/shortcuts';
 import { createLongProjects } from './app/long-projects';
 import { FileConflictDialog } from './ui/file-conflict';
+import { OutsideNotice } from './ui/outside-notice';
 import { protectReload } from './core/file-conflict';
 import { snapshotBackend } from './adapters/snapshot-store';
 import { createReader } from './editor/reader';
@@ -298,13 +299,14 @@ function render(snapshot: SessionSnapshot): void {
 
 const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
 const fileConflict = new FileConflictDialog(document.body);
+const outsideNotice = new OutsideNotice(document.body, () => void session?.reviewOutside(), () => outsideNotice.remind());
 
 session = new DocumentSession({
   editor: sessionEditor,
   files: filesInWorkingDirectory(() => workspace?.directory ?? null),
   prompter: tauriPrompter,
   drafts,
-  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
+  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
       if (!projects) throw new Error('Recovery is not ready; the draft was not reloaded.');
       await projects.preserveBeforeReload();
     }) },
@@ -317,7 +319,7 @@ workspace = new WorkspacePanel({
   contents: el('workspace-contents'), status: el('workspace-status'), search: el<HTMLInputElement>('workspace-search'),
 }, new WorkspaceHistory(store), {
   pick: chooseWorkingDirectory, list: listWorkingDirectory,
-  open: (root, path) => doc.openWorkspacePath(root, path, openWorkingFile), report: message => chrome.toast(message, 4200),
+  open: (root, path) => doc.openWorkspacePath(root, path, openWorkingFile), report: message => chrome.toast(message, 4200), onRefresh: () => doc.checkOutside(),
 });
 const preview = new ExportPreview({
   root: el('export-preview'), canvas: el<HTMLCanvasElement>('preview-canvas'),
@@ -457,6 +459,7 @@ bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
 
 window.addEventListener('blur', () => { drafts.flush(); if (!quit.isOpen) autosave.flush(); });
+window.addEventListener('focus', () => void doc.checkOutside());
 window.addEventListener('beforeunload', () => drafts.flush());
 
 onFileDrop({

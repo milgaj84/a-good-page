@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { compareParagraphs, FileChangedError, protectReload, conflictCopy } from '../src/core/file-conflict';
+import { compareParagraphs, FileChangedError, protectReload, conflictCopy, detectOutside, copySuggestion } from '../src/core/file-conflict';
 describe('outside edits', () => {
   it('keeps both texts and marks missing disk separately', () => {
     const blank = String.fromCharCode(10, 10);
     expect(compareParagraphs('One' + blank + 'Mine', 'One' + blank + 'Theirs')).toEqual({ mine: ['One', 'Mine'], disk: ['One', 'Theirs'] });
     expect(compareParagraphs('', null)).toEqual({ mine: [''], disk: [] });
     expect(new FileChangedError('story.md').path).toBe('story.md');
+    expect(detectOutside('a.md', 'old', { kind: 'present', content: 'old' })).toBeNull();
+    expect(detectOutside('a.md', 'old', { kind: 'present', content: 'new' })).toMatchObject({ kind: 'changed', disk: 'new' });
+    expect(detectOutside('a.md', 'old', { kind: 'missing' })).toMatchObject({ kind: 'missing' });
+    expect(detectOutside('a.md', 'old', { kind: 'unreadable' })).toMatchObject({ kind: 'unreadable' });
+    expect(copySuggestion('story.txt')).toBe('story-my-copy.txt');
   });
   it('distinguishes a changed manuscript, an unavailable file and an occupied copy destination', () => {
     expect(conflictCopy({ deleted: false, canReload: true, disk: 'Other edit' }).title).toBe('This file changed elsewhere');

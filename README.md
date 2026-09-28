@@ -290,9 +290,11 @@ A Good Page is tuned to stay at full frame rate while you type and scroll, even 
 
 ## Working alongside another editor
 
+When you return to A Good Page or refresh Workspace, it checks the open chapter without saving or reloading. A persistent notice names a file that **changed**, **went missing**, or **cannot currently be read** (for example, an unavailable drive). Choose Review changes for the latest side-by-side view, or Keep writing to retain your draft and leave autosave paused. The notice stays until the disk state is resolved. Returning to the app repeatedly does not stack dialogs.
+
 If a chapter changes on disk after A Good Page opens or saves it, autosave stops instead of silently replacing the outside edit. A conflict dialog lets you **Review changes** side by side, **Keep safety snapshot & reload** (first keeping the current draft in local Time Machine, then replacing the in-memory page), **Save my version as a copy** to a different new file, or **Keep writing**. While a conflict is unresolved, autosave stays paused; an explicit Save checks the file again. If Time Machine cannot preserve the draft, Reload is cancelled. If the file is missing or cannot be read, Reload is unavailable; your draft stays open. Save As refuses a destination that already exists, to avoid overwriting an unrelated document; choose a new filename instead.
 
-The dialog names the affected file and distinguishes an unavailable manuscript from an occupied Save As filename. The comparison shows up to 300 paragraphs per side and highlights paragraphs unique to either version; the saved documents themselves are not truncated. Keep a backup of your writing folder. The pre-write content check prevents ordinary silent overwrites, but another program writing the same file at the exact instant A Good Page writes it is not a cross-application atomic lock. Already queued autosaves stop once a conflict is detected; explicit Save still rechecks.
+Before acting on a review choice the app checks the disk again; if it changed during review, the choice is cancelled and a fresh review is required. Save a copy suggests a distinct `-my-copy` filename without overwriting an existing file. After resolution the notice clears when the file matches the open version or the new copy is saved. The dialog names the affected file and distinguishes an unavailable manuscript from an occupied Save As filename. The comparison shows up to 300 paragraphs per side and highlights paragraphs unique to either version; the saved documents themselves are not truncated. Keep a backup of your writing folder. The pre-write content check prevents ordinary silent overwrites, but another program writing the same file at the exact instant A Good Page writes it is not a cross-application atomic lock. Already queued autosaves stop once a conflict is detected; explicit Save still rechecks.
 
 ## Linux window troubleshooting
 
@@ -317,7 +319,7 @@ For maintainers: tests cover the stale-dialog, save, preview, replacement, focus
 
 ## Releases
 
-Version 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
+Version 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
 builds went up to 0.4.0 and were renumbered. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
@@ -327,10 +329,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` for any remaining asset checks before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` and `RELEASE_0.1.4.md` for any remaining asset checks before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.1.3 && git push origin v0.1.3`. Installers are unsigned, so
+then `git tag v0.1.4 && git push origin v0.1.4`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

@@ -33,6 +33,11 @@ pub fn save_document(
 }
 
 #[tauri::command]
+pub fn probe_document(path: String) -> crate::disk_probe::DiskProbe {
+    crate::disk_probe::probe(&path)
+}
+
+#[tauri::command]
 pub fn guarded_save_document(
     path: String,
     content: String,

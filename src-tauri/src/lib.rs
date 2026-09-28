@@ -1,5 +1,6 @@
 mod commands;
 mod conflict;
+mod disk_probe;
 pub mod document;
 mod pdf;
 mod workspace;
@@ -13,6 +14,7 @@ pub fn run() {
             commands::open_document,
             commands::save_document,
             commands::guarded_save_document,
+            commands::probe_document,
             commands::export_pdf,
             commands::list_workspace,
             commands::open_workspace_file
