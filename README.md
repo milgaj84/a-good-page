@@ -16,11 +16,17 @@ Need a calmer screen? Let the bars fade, keep your current line in view, or writ
 
 No account or cloud workflow is needed for the editing and file features described here. This is a desktop app built with Tauri 2, Rust and TipTap.
 
-## A whole manuscript, not just a chapter
+## Chapters · Write · Share
 
-Click **Manuscript** beside Workspace to order, search and preview chapters without editing or moving the underlying Markdown and text files. Order lives in a guarded, portable `.a-good-page.json` file. The project scan covers up to four subfolder levels, 200 folders and 200 chapters; missing or unreadable chapters block compilation. A read-only **Check project health** rescans without saving order changes and reports missing, unreadable, empty and new untracked files. **Refresh chapters** can append new files when the project has no unresolved missing entries. Checks never relink or delete chapters automatically.
+A Good Page 0.3.0 is organised around one path: **choose your book, pick a chapter, write, share**. Three places sit in the top bar and stay in the same order everywhere:
 
-Choose chapters, **Compile selected chapters**, and inspect the included/excluded inventory and word counts. **Preview whole PDF** renders paginated A4 pages; export checks selected files and order before and after the native Save dialog. If a source changes, the old pages remain visible but unexportable until refreshed. Test a real PDF on an installed build before publishing.
+- **Chapters** (Ctrl/Cmd+Shift+1) lists your book folder in reading order. Find a phrase in any chapter, reorder, open a chapter, **Refresh chapters**, run the read-only **Check project health**, or **Change book folder**.
+- **Write** (Ctrl/Cmd+Shift+2) is the page itself. **Back to writing** or Esc returns here from anywhere.
+- **Share** (Ctrl/Cmd+Shift+3) walks three steps: *Choose chapters*, *Read it through*, *Export PDF*. Steps show as done, current, to do or blocked.
+
+A **next step** card at the top of Chapters and Share names one thing to do now, such as "Choose your book folder", "Fix 2 chapters", "Save this page" or "Refresh the pages", with a single button. Beside the title the save dot now has words: *Saved*, *Saving soon*, *Saving…*, *Not saved yet*, *Kept on this device* or *Save failed · press Save*.
+
+Your files are unchanged: order lives in a guarded, portable `.a-good-page.json`; the scan covers up to four subfolder levels, 200 folders and 200 chapters; missing or unreadable chapters block Share. Health checks never save order, relink or delete. In Share, export rechecks selected files and order before and after the native Save dialog; if a source changes, the old pages stay visible but cannot be exported until refreshed. Test a real PDF on an installed build before publishing.
 
 ### Repair a moved chapter
 
@@ -29,8 +35,8 @@ A missing entry offers **Relink chapter**. Suggestions rank unused files inside 
 ## Start here
 
 1. Open the app and start typing. The optional writing guide walks through a new page, a save and a PDF export.
-2. Choose **Workspace** if your chapters live in a folder. Open a manuscript, or save your new page as Markdown (`.md`).
-3. Use **Ctrl/Cmd+P** to jump to a chapter or file. Choose **Export PDF** when you want to see the actual pages before sharing.
+2. Click **Chapters** and follow the next-step card: choose your book folder, then pick a chapter. A single page can simply be saved as Markdown (`.md`).
+3. Click **Share** when you want to read the whole book through and export a PDF. **Ctrl/Cmd+P** still jumps to any chapter or heading.
 
 Your `.md` file is the editable original. PDF is a separate copy; a `.txt` file is saved as plain text without formatting.
 
@@ -58,6 +64,7 @@ Release builds are currently **unsigned**. macOS or Windows may show a security 
     Ctrl + N / O / S          New / Open / Save
     Ctrl + Shift + S          Save as
     Ctrl + Shift + E          Export PDF
+    Ctrl + Shift + 1 / 2 / 3  Chapters / Write / Share
     Ctrl + Shift + P          Search all commands
     Ctrl + P                  Quick switcher: chapters and files
     Ctrl + Shift + R          Pinned notes
@@ -317,8 +324,7 @@ For maintainers: run all checks and a local build before publishing.
 
 ## Releases
 
-Version 0.2.3 adds a non-destructive project health check; 0.2.2 repaired moved or renamed chapters; 0.2.1 improved whole-manuscript preview and PDF fidelity; 0.2.0 added compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. Earlier internal
-builds went up to 0.4.0 and were renumbered. `package.json`,
+Version 0.3.0 reorganises the app into Chapters, Write and Share with a next-step guide; 0.2.3 added a non-destructive project health check; 0.2.2 repaired moved or renamed chapters; 0.2.1 improved whole-manuscript preview and PDF fidelity; 0.2.0 added compilation; 0.1.6 hardens recovery across multiple manuscripts; 0.1.5 adds explicit crash recovery for unsaved named manuscripts; 0.1.4 warns about outside changes on return to the app; 0.1.3 polishes conflict recovery and Linux startup; 0.1.2 protects manuscripts edited in other tools; 0.1.1 was a recovery and release-readiness update; 0.1.0 was the first public release. See `CHANGELOG.md`. `package.json`,
 `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must carry the same
 version, which a test checks.
 
@@ -327,10 +333,10 @@ version, which a test checks.
   Linux, macOS and Windows.
 - `.github/workflows/release.yml` runs on a `v*` tag. It builds installers for
   macOS (Apple silicon and Intel), Windows and Linux with tauri-action and
-  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.2.3.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
+  attaches them to a draft GitHub release after CI verification. Follow `RELEASE_0.3.0.md` and the historical release checklists before publishing; a green CI build is not proof an installer launches.
 
 To release: update `CHANGELOG.md`, set the version in the three files, commit,
-then `git tag v0.2.3 && git push origin v0.2.3`. Installers are unsigned, so
+then `git tag v0.3.0 && git push origin v0.3.0`. Installers are unsigned, so
 macOS and Windows show a warning on first launch until signing secrets are
 added. See `CONTRIBUTING.md` for the checks to run first, and `LICENSE` (MIT).
 

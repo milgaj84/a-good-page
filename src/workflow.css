@@ -1,0 +1,42 @@
+/* 0.3.0 places: Chapters · Write · Share, a next-step card and three Share steps. Loaded last. */
+.places { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--bg-soft); }
+.places .place { appearance: none; border: 0; border-radius: 999px; padding: 5px 13px; background: transparent; color: var(--ink-soft); font: 12.5px var(--sans); cursor: pointer; }
+.places .place:hover { color: var(--ink); }
+.places .place[aria-current="page"] { background: var(--bg); color: var(--ink); box-shadow: 0 1px 3px #0002; font-weight: 600; }
+.places .place:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.places--top { margin: 0 12px; }
+.save-words { font: 12px var(--sans); font-style: normal; color: var(--muted); white-space: nowrap; }
+.save-words[data-state="error"] { color: var(--danger); font-weight: 600; }
+.save-words[data-state="dirty"] { color: var(--ink-soft); }
+.manuscript-panel .places .place { border: 0; padding: 5px 13px; border-radius: 999px; }
+.manuscript-head { flex-wrap: wrap; }
+.next-step { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 0 12px; padding: 14px 18px; border-radius: 12px; background: var(--bg-soft); }
+.next-step:empty { display: none; }
+.next-text { display: grid; gap: 3px; }
+.next-title { font: 600 16px var(--serif); color: var(--ink); }
+.next-detail { font: 13px/1.5 var(--sans); color: var(--ink-soft); }
+.manuscript-panel .next-button { flex: none; border-color: var(--accent); background: var(--accent); color: var(--bg); font-weight: 600; }
+.share-steps { display: none; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.manuscript-panel[data-place="share"] .share-steps { display: flex; flex-wrap: wrap; }
+.share-step { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); font: 12.5px var(--sans); color: var(--muted); }
+.share-step[data-mark="current"] { border-color: var(--accent); color: var(--ink); font-weight: 600; }
+.share-step[data-mark="done"] { color: var(--ink-soft); }
+.share-step[data-mark="done"]::after { content: " ✓"; }
+.share-step[data-mark="blocked"] { border-color: var(--danger); color: var(--danger); }
+.chapter-tools, .share-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+/* Chapters shows finding, ordering and repair; Share shows choosing, reading and export. */
+.manuscript-panel[data-place="share"] .chapter-tools,
+.manuscript-panel[data-place="share"] .manuscript-query,
+.manuscript-panel[data-place="share"] .manuscript-results,
+.manuscript-panel[data-place="share"] .manuscript-row > button:not(.manuscript-name),
+.manuscript-panel[data-place="chapters"] .share-tools,
+.manuscript-panel[data-place="chapters"] .manuscript-inventory,
+.manuscript-panel[data-place="chapters"] .manuscript-page { display: none; }
+.manuscript-panel[data-place="chapters"] .manuscript-list { max-height: 48vh; }
+.manuscript-panel .share-primary { border-color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) {
+  .places--top { margin: 0 4px; }
+  .places .place { padding: 5px 9px; }
+  .save-words { display: none; }
+  .next-step { flex-direction: column; align-items: stretch; }
+}

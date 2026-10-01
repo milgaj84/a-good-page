@@ -6,6 +6,28 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
+### Changed
+
+- **Three stable places: Chapters · Write · Share.** The app is reorganised around choosing a book, picking a chapter, writing and sharing. Tabs in the top bar and on the project page switch places; Ctrl/Cmd+Shift+1/2/3 do the same. Esc and **Back to writing** always return to the page.
+- **Chapters** gathers finding, ordering, opening, refresh, the read-only health check, relink and a new **Change book folder** button. Opening Chapters no longer pops up a folder picker by surprise; the next-step card offers it.
+- **Share** shows three steps, *Choose chapters → Read it through → Export PDF*, each marked done, current, to do or blocked. "Compile selected chapters" is now **Read it through**; "Preview whole PDF" is **See PDF pages**.
+
+### Added
+
+- **Next-step card.** One suggestion at a time, most urgent first: a failed save, choosing a book folder, fixing missing chapters, naming an untitled draft, saving before sharing, refreshing changed pages, or simply keep writing. It never acts on its own.
+- **Places in the command palette and shortcut sheet.** Search for "Chapters", "Write" or "Share your book" in Ctrl/Cmd+Shift+P; the All shortcuts list (Ctrl/Cmd+/) shows Ctrl/Cmd+Shift+1/2/3.
+- **Save state in words** beside the title: Saved, Saving soon, Saving…, Not saved yet, Kept on this device, or Save failed · press Save.
+
+### Preserved
+
+- No file format, manifest, storage key or app identifier changed. Guarded saves, conflict review, outside-change notices, eight-record named recovery, Save As refusal, Time Machine, manifest limits, symlink rejection, compile blockers, explicit relink, read-only health and stale-export rechecks behave as in 0.2.3.
+
+### Verification
+
+- New workflow tests (12) and updated palette/keymap tests ran against the workbook code in an isolated harness. Full TypeScript/Rust CI, installer launch and hands-on usability checks remain release gates for 0.3.0; see `RELEASE_0.3.0.md`.
+
 ## [0.2.3] - 2026-09-28
 
 ### Added

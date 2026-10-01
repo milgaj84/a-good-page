@@ -6,6 +6,9 @@ import { ExportPreview, type PreviewElements } from './export-preview';
 import type { ExportLayout } from '../export/layout';
 import { previewInventory, type ProjectChangeError } from '../core/project-preview';
 import { ProjectRelinkDialog } from './project-relink';
+import type { SaveState } from '../core/session';
+import { nextStep, shareSteps, type BookState, type NextAction, type Place } from '../core/workflow';
+import { PlaceTabs, drawNextStep, drawShareSteps } from './project-guide';
 
 export interface ManuscriptDeps {
   host: HTMLElement;
@@ -16,6 +19,12 @@ export interface ManuscriptDeps {
   dirty(): boolean;
   savePdf(name: string, bytes: Uint8Array, recheck?: () => Promise<void>): Promise<string | null>;
   notify(message: string): void;
+  /** Save state of the open page, for the next-step card. */
+  session(): { save: SaveState; named: boolean };
+  /** Actions that belong to the page rather than the project: save, new chapter, back to writing. */
+  act(action: NextAction): void;
+  /** Called when the writer picks a place; 'write' means leave the project page. */
+  go(place: Place): void;
 }
 const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag); el.className = className; el.textContent = text; return el;
@@ -33,7 +42,8 @@ function previewElements(host: HTMLElement): PreviewElements & { refresh: HTMLBu
   sheet.append(top,tools,pages,footer);root.append(sheet);host.append(root);
   return {root,canvas,title,status,layout,page,previous,next,exportButton,close,refresh};
 }
-/** All project data is disk-backed; a preview is an immutable selection of chapters. */
+/** Project home for 0.3.0: Chapters (find, order, open, repair) and Share (choose, read, export).
+ *  All project data is disk-backed; a preview is an immutable selection of chapters. */
 export class ManuscriptPanel {
   readonly root=make('aside','manuscript-panel');
   private service: ProjectService;
@@ -44,7 +54,7 @@ export class ManuscriptPanel {
   private readonly page=make('div','manuscript-page');
   private readonly inventory=make('section','manuscript-inventory');
   private readonly query=make('input','manuscript-query');
-  private readonly pdfButton=make('button','','Preview whole PDF');
+  private readonly pdfButton=make('button','','See PDF pages');
   private readonly preview: ExportPreview;
   private readonly relink: ProjectRelinkDialog;
   private reader: ReaderView | null=null;
@@ -55,22 +65,34 @@ export class ManuscriptPanel {
   private returnFocus: HTMLElement | null=null;
   private refreshPdf: HTMLButtonElement | null=null;
   private pdfLayout: HTMLSelectElement | null=null;
+  private place: Place='chapters';
+  private stale=false;
+  private loaded=false;
+  private readonly next=make('section','next-step');
+  private readonly steps=make('ol','share-steps');
+  private readonly heading=make('h2','','Chapters');
+  readonly tabs: PlaceTabs;
   constructor(private readonly deps: ManuscriptDeps) {
     this.service=new ProjectService(deps.ports);
     this.relink=new ProjectRelinkDialog(deps.host,this.service,deps.notify,()=>{this.clearPreview();this.draw();this.drawHealth();});
-    const heading=make('h2','','Manuscript');const close=make('button','','Close');close.type='button';
-    const head=make('div','manuscript-head');head.append(heading,close);
+    const close=make('button','','Back to writing');close.type='button';
+    this.tabs=new PlaceTabs('Project places',place=>deps.go(place));
+    const head=make('div','manuscript-head');head.append(this.heading,this.tabs.root,close);
     const refresh=make('button','','Refresh chapters');refresh.type='button';
     const check=make('button','','Check project health');check.type='button';
-    const compile=make('button','','Compile selected chapters');compile.type='button';
+    const folder=make('button','','Change book folder');folder.type='button';
+    const tools=make('div','chapter-tools');tools.append(refresh,check,folder);
+    const compile=make('button','share-primary','Read it through');compile.type='button';compile.title='Compile selected chapters into one reading page';
+    const shareTools=make('div','share-tools');shareTools.append(compile,this.pdfButton);
     this.pdfButton.type='button';this.pdfButton.disabled=true;
-    this.query.type='search';this.query.placeholder='Search every chapter';this.query.setAttribute('aria-label','Search the whole manuscript');
+    this.query.type='search';this.query.placeholder='Find in any chapter';this.query.setAttribute('aria-label','Search the whole manuscript');
     this.status.setAttribute('role','status');this.inventory.setAttribute('aria-live','polite');
     this.root.setAttribute('role','dialog');this.root.setAttribute('aria-modal','true');
-    this.root.setAttribute('aria-label','Whole manuscript');this.root.setAttribute('aria-hidden','true');
+    this.root.setAttribute('aria-label','Your book');this.root.setAttribute('aria-hidden','true');
     this.inventory.setAttribute('aria-label','Compiled chapter inventory');
     this.health.setAttribute('aria-label','Project health');this.health.setAttribute('aria-live','polite');
-    this.root.append(head,refresh,check,this.status,this.health,this.list,this.query,this.results,compile,this.pdfButton,this.inventory,this.page);
+    this.next.setAttribute('aria-live','polite');this.steps.setAttribute('aria-label','Share steps');this.root.dataset.place='chapters';
+    this.root.append(head,this.next,this.steps,this.query,this.results,this.status,tools,this.health,this.list,shareTools,this.inventory,this.page);
     deps.host.append(this.root);
     const elements=previewElements(deps.host);
     this.refreshPdf=elements.refresh;this.pdfLayout=elements.layout;
@@ -88,7 +110,8 @@ export class ManuscriptPanel {
       }))!==null;
     },()=>deps.notify('Whole manuscript PDF exported; chapter sources are unchanged.'),()=>{},
       error => this.markStale(error));
-    close.addEventListener('click',()=>this.close());
+    close.addEventListener('click',()=>deps.go('write'));
+    folder.addEventListener('click',()=>void this.load(true,true));
     refresh.addEventListener('click',()=>void this.load());
     check.addEventListener('click',()=>void this.load(false));
     compile.addEventListener('click',()=>this.compile());
@@ -98,6 +121,7 @@ export class ManuscriptPanel {
   get isOpen(): boolean {return this.root.classList.contains('is-open');}
   private markStale(error: ProjectChangeError): void {
     if(this.refreshPdf)this.refreshPdf.hidden=false;
+    this.stale=true;this.guide();
     this.status.textContent='Export blocked: '+error.message+' Refresh preview to update the pages.';
     this.deps.notify(this.status.textContent);
   }
@@ -127,40 +151,75 @@ export class ManuscriptPanel {
       this.service=nextService;this.relink.setService(nextService);this.snapshot=next;this.reader=staged;staged=null;stage=null;
       this.showInventory();this.draw();this.pdfButton.disabled=false;
       if(this.refreshPdf)this.refreshPdf.hidden=true;
+      this.stale=false;this.guide();
       this.status.textContent='Preview refreshed · '+next.chapters.length+' chapters. Export will recheck the sources.';
       await this.preview.open(this.title());
     }catch(error){staged?.destroy();stage?.remove();this.status.textContent='Refresh failed: '+String(error)+' Old pages remain visible and cannot be exported.';this.preview.note(this.status.textContent);this.deps.notify(this.status.textContent);}
     finally {this.refreshing=false;if(this.refreshPdf)this.refreshPdf.disabled=false;}
   }
-  private clearPreview(): void { this.snapshot=null;this.pdfButton.disabled=true;this.reader?.destroy();this.reader=null;this.page.replaceChildren();this.inventory.replaceChildren(); }
-  async open(): Promise<void> {
-    if(this.isOpen)return;
-    this.returnFocus=document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    this.root.classList.add('is-open');this.root.setAttribute('aria-hidden','false');
-    await this.load();this.query.focus();
+  private clearPreview(): void { this.stale=false;this.snapshot=null;this.pdfButton.disabled=true;this.reader?.destroy();this.reader=null;this.page.replaceChildren();this.inventory.replaceChildren();this.guide(); }
+  get current(): Place {return this.isOpen?this.place:'write';}
+  /** Opens (or switches) the project page. Chapters reloads from disk; Share keeps the chosen chapters. */
+  async show(place: 'chapters' | 'share'): Promise<void> {
+    const wasOpen=this.isOpen;this.place=place;this.root.dataset.place=place;
+    this.heading.textContent=place==='share'?'Share your book':'Chapters';this.tabs.mark(place);
+    if(!wasOpen){
+      this.returnFocus=document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.root.classList.add('is-open');this.root.setAttribute('aria-hidden','false');
+    }
+    this.guide();
+    if(wasOpen&&this.loaded)this.draw();
+    if(!wasOpen||!this.loaded)await this.load();
+    (place==='share'?this.next.querySelector('button'):this.query)?.focus();
+  }
+  async open(): Promise<void> { await this.show('chapters'); }
+  /** Where the book stands, for the next-step card and the Share steps. */
+  book(): Omit<BookState,'place'|'save'|'named'> {
+    const blocking=this.loaded?this.service.health().issues.filter(x=>x.blocking).length:0;
+    const readable=new Set(this.service.chapters.filter(x=>x.file).map(x=>x.path));
+    return { folder: Boolean(this.deps.root()), loaded: this.loaded, chapters: this.service.chapters.length, blocking,
+      selected: [...this.selection].filter(p=>readable.has(p)).length, preview: this.stale?'stale':this.snapshot?'ready':'none' };
+  }
+  /** Redraws the next-step card; also called when the open page's save state changes. */
+  guide(): void {
+    if(!this.isOpen)return;
+    const state: BookState={ ...this.book(), ...this.deps.session(), place: this.place };
+    drawNextStep(this.next,nextStep(state),action=>this.act(action));
+    drawShareSteps(this.steps,shareSteps(state));
+  }
+  private act(action: NextAction): void {
+    if(action==='chooseFolder'){void this.load(true,true);return;}
+    if(action==='openChapters'){void this.load();return;}
+    if(action==='fixChapters'){if(this.place!=='chapters')void this.show('chapters');this.health.scrollIntoView({block:'nearest'});return;}
+    if(action==='chooseChapters'){this.list.querySelector<HTMLElement>('input:not(:disabled)')?.focus();return;}
+    if(action==='preview'){this.compile();return;}
+    if(action==='refreshPreview'){void this.refreshPreview();return;}
+    if(action==='export'){if(this.snapshot)void this.preview.open(this.title());return;}
+    this.deps.act(action);
   }
   close(): boolean {
     if(this.relink.isOpen){this.relink.close();return true;}
     if(this.preview.isOpen){this.preview.close();return true;}
     if(!this.isOpen)return false;
+    this.tabs.mark('write');
     this.root.classList.remove('is-open');this.root.setAttribute('aria-hidden','true');
     if(this.returnFocus?.isConnected)this.returnFocus.focus();this.returnFocus=null;return true;
   }
   private title(): string {return this.service.path?.split(String.fromCharCode(92)).pop()?.split('/').pop()||'Manuscript';}
-  private async load(persistOrder = true): Promise<void> {
+  private async load(persistOrder = true, ask = false): Promise<void> {
     if(this.busy)return;this.busy=true;this.status.textContent='Reading the project…';
-    const root=this.deps.root()??await this.deps.chooseRoot();
     try {
-      if(!root){this.status.textContent='Choose a working folder to begin.';return;}
+      const root=ask?await this.deps.chooseRoot()??this.deps.root():this.deps.root();
+      if(!root){this.status.textContent='Choose your book folder to begin.';return;}
       await this.service.open(root,persistOrder);
       const paths=this.service.chapters.map(x=>x.path);
       this.selection=new Set([...this.selection].filter(p=>paths.includes(p)));
       if(!this.selection.size) this.selection=new Set(paths.filter(p=>this.service.chapters.find(x=>x.path===p)?.file));
       this.clearPreview();
       this.status.textContent=paths.length+' chapters · '+this.service.chapters.reduce((sum,x)=>sum+(x.file?.words??0),0).toLocaleString()+' words'+(this.service.chapters.some(x=>x.issue)?' · Resolve missing or unreadable files':'');
-      this.draw();this.drawHealth();this.search();
-    } catch(e){this.health.replaceChildren();this.status.textContent='Could not check manuscript: '+String(e);this.deps.notify(this.status.textContent);}
-    finally{this.busy=false;}
+      this.loaded=true;this.draw();this.drawHealth();this.search();
+    } catch(e){this.loaded=false;this.health.replaceChildren();this.status.textContent='Could not check manuscript: '+String(e);this.deps.notify(this.status.textContent);}
+    finally{this.busy=false;this.guide();}
   }
   private drawHealth(): void {
     const report=this.service.health();this.health.replaceChildren();
@@ -178,7 +237,7 @@ export class ManuscriptPanel {
     this.list.replaceChildren();const root=this.service.path;if(!root)return;
     for(const entry of this.service.chapters){
       const row=make('div','manuscript-row');const check=make('input','');check.type='checkbox';check.checked=this.selection.has(entry.path);check.disabled=!entry.file;
-      check.setAttribute('aria-label','Include '+entry.path);check.addEventListener('change',()=>{if(check.checked)this.selection.add(entry.path);else this.selection.delete(entry.path);this.clearPreview();});
+      check.setAttribute('aria-label','Include '+entry.path);check.addEventListener('change',()=>{if(check.checked)this.selection.add(entry.path);else this.selection.delete(entry.path);this.clearPreview();this.guide();});
       const label=make('button','manuscript-name',entry.file?.title??entry.path);label.type='button';label.disabled=!entry.file;
       label.addEventListener('click',()=>void this.deps.openChapter(root,entry.path));
       const meta=make('small','',entry.issue??(entry.file!.words.toLocaleString()+' words · '+entry.path));
@@ -188,6 +247,7 @@ export class ManuscriptPanel {
       row.append(check,label,meta,up,down);
       if(entry.issue){const repair=make('button','','Relink chapter');repair.type='button';repair.addEventListener('click',()=>void this.relink.open(entry.path));const remove=make('button','','Remove missing entry');remove.type='button';remove.addEventListener('click',()=>void this.remove(entry.path));row.append(repair,remove);}
       this.list.append(row);
+      if(this.place==='share')continue;
       for(const h of entry.file?.headings??[]){const jump=make('button','manuscript-heading',h.title);jump.type='button';jump.style.marginLeft=(h.level*12)+'px';jump.addEventListener('click',()=>void this.deps.openChapter(root,entry.path,h.title));this.list.append(jump);}
     }
   }
@@ -206,8 +266,8 @@ export class ManuscriptPanel {
       const text=compiledMarkdown(this.snapshot.chapters);
       this.reader??=createReader(this.page);
       this.reader.show(text,false);
-      this.showInventory();this.pdfButton.disabled=false;
+      this.showInventory();this.pdfButton.disabled=false;this.guide();
       this.status.textContent='Previewing '+selected.length+' chapters · '+this.snapshot.chapters.reduce((n,x)=>n+x.words,0).toLocaleString()+' words. Export rechecks every source.';
-    }catch(e){this.snapshot=null;this.pdfButton.disabled=true;this.status.textContent='Cannot compile: '+String(e);}
+    }catch(e){this.snapshot=null;this.pdfButton.disabled=true;this.status.textContent='Cannot compile: '+String(e);this.guide();}
   }
 }

@@ -399,15 +399,9 @@ function closeLayers(): boolean {
     editor.restoreFocus();
     return true;
   }
-  if (help.isOpen) {
-    help.close();
-    return true;
-  }
+  if (help.isOpen) { help.close(); return true; }
   if (workspace?.clearFilter() || workspace?.close()) return true;
-  if (focusMode) {
-    void focusUI.choose('off');
-    return true;
-  }
+  if (focusMode) { void focusUI.choose('off'); return true; }
   return false;
 }
 
@@ -424,10 +418,7 @@ const APP: Record<AppAction, () => void> = {
   focus: toggleFocus,
   sentenceFocus: () => void focusUI.choose(focusUI.choices.mode === 'sentence' ? 'off' : 'sentence'),
   fullScreen: () => void focusUI.choose(focusUI.choices.mode === 'fullscreen' ? 'off' : 'fullscreen'),
-  theme: () => {
-    themes.next();
-    applyTheme();
-  },
+  theme: () => { themes.next(); applyTheme(); },
   outline: () => applyPrefs(prefsStore.update({ outline: !prefs.outline })),
   toolbar: toggleToolbar,
   ghost: () => togglePref('ghost', 'The bars will fade while you type.', 'The bars stay visible.'),
@@ -440,7 +431,7 @@ const APP: Record<AppAction, () => void> = {
   smaller: () => resize(prefs.size - 1),
   resetSize: () => resize(DEFAULT_PREFS.size),
   ...typographyActions({ get: () => prefs, update: (patch) => applyPrefs(prefsStore.update(patch)), notify: (m) => chrome.toast(m) }),
-  ...longProjects.actions,
+  ...longProjects.actions, ...manuscript.places,
   switcher: () => { if (palette.isOpen) palette.close(false); longProjects.actions.switcher(); },
   escape: () => void closeLayers(),
 };

@@ -55,6 +55,9 @@ export const APP_ACTIONS = [
   'timeMachine',
   'sprint',
   'polish',
+  'chapters',
+  'writePage',
+  'share',
   'escape',
 ] as const;
 export type AppAction = (typeof APP_ACTIONS)[number];

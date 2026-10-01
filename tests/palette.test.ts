@@ -21,6 +21,9 @@ describe('command search', () => {
     expect(searchPalette('curly quotes')[0].action).toBe('polish');
     expect(searchPalette('pin notes')[0].action).toBe('reference');
     expect(searchPalette('ring').map(x => x.action)).toContain('sprint');
+    expect(searchPalette('book folder')[0].action).toBe('chapters');
+    expect(searchPalette('share your book')[0].action).toBe('share');
+    expect(searchPalette('back to the page')[0].action).toBe('writePage');
   });
   it('only lists dispatchable actions', () => {
     PALETTE_ITEMS.forEach(x => expect([...APP_ACTIONS, ...EDITOR_COMMANDS]).toContain(x.action));

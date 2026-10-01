@@ -39,5 +39,5 @@ CI runs the same checks on Linux, macOS and Windows.
 
 1. Move the `Unreleased` notes in `CHANGELOG.md` under a new version heading.
 2. Set the same version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
-3. Commit, then tag: `git tag v0.2.3 && git push origin v0.2.3`.
-4. The Release workflow builds installers and creates a draft GitHub release. Install and test each asset against `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` and `RELEASE_0.1.4.md` and `RELEASE_0.1.5.md` and `RELEASE_0.2.3.md` on its target platform. Publish only verified assets.
+3. Commit, then tag: `git tag v0.3.0 && git push origin v0.3.0`.
+4. The Release workflow builds installers and creates a draft GitHub release. Install and test each asset against `RELEASE_CHECKLIST.md`, `RELEASE_0.1.2.md` and `RELEASE_0.1.3.md` and `RELEASE_0.1.4.md` and `RELEASE_0.1.5.md` and `RELEASE_0.2.3.md` and `RELEASE_0.3.0.md` on its target platform. Publish only verified assets.
