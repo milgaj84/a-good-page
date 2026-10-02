@@ -11,6 +11,7 @@ export interface SettingsElements {
   sizeRange: HTMLInputElement;
   sizeValue: HTMLElement;
   goalInput: HTMLInputElement;
+  toolbarCheck: HTMLInputElement;
   ghostCheck: HTMLInputElement;
   typewriterCheck: HTMLInputElement;
   libraryPath: HTMLElement;
@@ -48,6 +49,7 @@ export class SettingsPanel {
     els.rhythmChoice.addEventListener('click', (event) => { const rhythm = choice(RHYTHMS, event); if (rhythm) onChange({ rhythm }); });
     els.sizeRange.addEventListener('input', () => onChange({ size: Number(els.sizeRange.value) }));
     els.goalInput.addEventListener('input', () => onChange({ goal: Number(els.goalInput.value) || 0 }));
+    els.toolbarCheck.addEventListener('change', () => onChange({ toolbar: els.toolbarCheck.checked }));
     els.ghostCheck.addEventListener('change', () => onChange({ ghost: els.ghostCheck.checked }));
     els.typewriterCheck.addEventListener('change', () => onChange({ typewriter: els.typewriterCheck.checked }));
     els.libraryChange.addEventListener('click', onChangeLibrary);
@@ -69,6 +71,7 @@ export class SettingsPanel {
     this.els.sizeRange.value = String(prefs.size);
     this.els.sizeValue.textContent = String(prefs.size);
     if (document.activeElement !== this.els.goalInput) this.els.goalInput.value = prefs.goal > 0 ? String(prefs.goal) : '';
+    this.els.toolbarCheck.checked = prefs.toolbar;
     this.els.ghostCheck.checked = prefs.ghost;
     this.els.typewriterCheck.checked = prefs.typewriter;
     this.els.libraryPath.textContent = libraryPath ?? 'No Library folder yet';

@@ -42,6 +42,7 @@ export const APP_ACTIONS = [
   'theme',
   'outline',
   'sidebar',
+  'toolbar',
   'ghost',
   'typewriter',
   'zen',

@@ -10,8 +10,10 @@
     <div class="app" id="app">
       <aside class="sidebar" id="sidebar" aria-label="Library">
         <div class="side-top">
-          <button type="button" class="btn-primary" id="btn-new" title="New page (Ctrl+N)">+ New page</button>
-          <button type="button" class="btn" id="btn-new-book" title="New book (Ctrl+Shift+N)">New book</button>
+          <div class="split">
+            <button type="button" class="btn-primary" id="btn-new" title="New page (Ctrl+N)">+ New page</button>
+            <button type="button" class="btn-primary split-more" id="btn-new-more" aria-label="More ways to start" title="More ways to start" aria-haspopup="menu" aria-expanded="false">▾</button>
+          </div>
         </div>
         <input class="side-search" id="side-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" spellcheck="false" />
         <nav class="tree" id="tree" aria-label="Pages and books"></nav>
@@ -32,17 +34,56 @@
           <input class="title-input" id="doc-title" type="text" aria-label="Page title" spellcheck="false" autocomplete="off" value="" />
           <span class="save-state" id="save-state" data-state="saved" role="status"><span class="save-dot" aria-hidden="true"></span><span id="save-text">Saved</span></span>
           <div class="top-actions">
-            <button type="button" class="btn" id="btn-find" title="Find on this page (Ctrl+F)">Find</button>
-            <button type="button" class="btn" id="btn-history" title="Earlier versions of this page (Ctrl+Shift+I)">History</button>
-            <button type="button" class="btn" id="btn-pdf" title="Export a PDF (Ctrl+Shift+E)">Export</button>
+            <button type="button" class="icon-btn" id="btn-find" aria-label="Find on this page" title="Find on this page (Ctrl+F)">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            </button>
+            <button type="button" class="icon-btn" id="btn-history" aria-label="History: earlier versions" title="History: earlier versions (Ctrl+Shift+I)">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>
+            </button>
+            <button type="button" class="icon-btn" id="btn-pdf" aria-label="Export a PDF" title="Export a PDF (Ctrl+Shift+E)">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
+            </button>
             <button type="button" class="icon-btn" id="btn-settings" aria-label="Settings" title="Settings" aria-haspopup="dialog" aria-expanded="false">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg>
             </button>
           </div>
         </header>
 
+        <div class="formatbar" id="toolbar" role="toolbar" aria-label="Formatting">
+          <button class="tb tb-text" data-cmd="h1" title="Title (Ctrl+Alt+1)" aria-label="Title">H1</button>
+          <button class="tb tb-text" data-cmd="h2" title="Heading (Ctrl+Alt+2)" aria-label="Heading">H2</button>
+          <button class="tb tb-text" data-cmd="h3" title="Subheading (Ctrl+Alt+3)" aria-label="Subheading">H3</button>
+          <span class="tb-sep"></span>
+          <button class="tb" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
+          <button class="tb" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i class="tb-italic">I</i></button>
+          <button class="tb" data-cmd="strike" title="Strikethrough (Ctrl+Shift+X)" aria-label="Strikethrough"><s>S</s></button>
+          <span class="tb-sep"></span>
+          <button class="tb" data-cmd="bullet" title="Bullet list (Ctrl+Shift+8)" aria-label="Bullet list">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7h10M9.5 12h10M9.5 17h10"/><circle class="dot" cx="5" cy="7" r="1.1"/><circle class="dot" cx="5" cy="12" r="1.1"/><circle class="dot" cx="5" cy="17" r="1.1"/></svg>
+          </button>
+          <button class="tb" data-cmd="ordered" title="Numbered list (Ctrl+Shift+7)" aria-label="Numbered list">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7h10M10 12h10M10 17h10"/><path d="M4.2 5.2l1.3-.7v4.3M4 13.4c.4-.8 2.6-.9 2.6.4 0 1-2.6 2-2.6 2.9h2.8"/></svg>
+          </button>
+          <button class="tb" data-cmd="task" title="Checklist (Ctrl+Shift+9)" aria-label="Checklist">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="5.5" height="5.5" rx="1.4"/><path d="M4.9 7.3l1.2 1.2 1.9-2.2"/><rect x="3.5" y="14" width="5.5" height="5.5" rx="1.4"/><path d="M12.5 7.2h8M12.5 16.8h8"/></svg>
+          </button>
+          <span class="tb-sep"></span>
+          <button class="tb" data-cmd="quote" title="Quote (Ctrl+Shift+B)" aria-label="Quote"><span class="tb-glyph">&ldquo;</span></button>
+          <button class="tb" data-cmd="hr" title="Scene break (Ctrl+Shift+H)" aria-label="Scene break"><span class="tb-glyph tb-glyph--small">&#8258;</span></button>
+          <button class="tb" data-cmd="link" title="Link (Ctrl+K)" aria-label="Link">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>
+          </button>
+          <span class="tb-sep"></span>
+          <button class="tb" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+          </button>
+          <button class="tb" data-cmd="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+          </button>
+        </div>
+
         <main class="scroller" id="scroller">
-          <article class="page"><div id="editor"></div></article>
+          <article class="page"><div id="editor"></div><button type="button" class="next-chapter" id="next-chapter" hidden></button></article>
         </main>
 
         <footer class="bottombar" id="bottombar">
@@ -95,7 +136,7 @@
         </div>
       </section>
       <section class="drawer-section">
-        <h3>The page</h3>
+        <h3>Text</h3>
         <div class="field">
           <span class="field-label">Typeface</span>
           <div class="segmented" id="font-choice">
@@ -105,44 +146,53 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="size-range">Text size <span id="size-value">20</span></label>
+          <label class="field-label" for="size-range">Size <span id="size-value">20</span></label>
           <input type="range" id="size-range" min="15" max="28" step="1" />
-        </div>
-        <div class="field">
-          <span class="field-label">Column width</span>
-          <div class="segmented" id="width-choice">
-            <button type="button" data-value="narrow" title="About 60 characters per line">Narrow</button>
-            <button type="button" data-value="medium" title="About 72 characters per line">Comfortable</button>
-            <button type="button" data-value="wide" title="About 85 characters per line">Wide</button>
-          </div>
-        </div>
-        <div class="field">
-          <span class="field-label">Spacing</span>
-          <div class="segmented" id="rhythm-choice">
-            <button type="button" data-value="dense">Dense</button>
-            <button type="button" data-value="balanced">Balanced</button>
-            <button type="button" data-value="spacious">Spacious</button>
-          </div>
         </div>
       </section>
       <section class="drawer-section">
-        <h3>Writing</h3>
-        <div class="field">
-          <label class="field-label" for="goal-input">Word goal for a page</label>
-          <input class="text-input" type="number" id="goal-input" min="0" step="50" placeholder="No goal" inputmode="numeric" />
-        </div>
+        <h3>Distraction-free</h3>
         <label class="check"><input type="checkbox" id="ghost-check" /> Fade the bars while I type</label>
         <label class="check"><input type="checkbox" id="typewriter-check" /> Keep my typing line mid-screen</label>
         <label class="check"><input type="checkbox" id="zen-check" /> Zen draft: pause Backspace and Delete</label>
       </section>
       <section class="drawer-section">
-        <h3>Library</h3>
-        <p class="drawer-note" id="library-path">Your Library folder</p>
-        <button type="button" class="btn" id="library-change">Change folder…</button>
+        <h3>Goal</h3>
+        <div class="field">
+          <label class="field-label" for="goal-input">Words to write on a page</label>
+          <input class="text-input" type="number" id="goal-input" min="0" step="50" placeholder="No goal" inputmode="numeric" />
+        </div>
       </section>
-      <section class="drawer-section">
-        <button type="button" class="btn" id="btn-help">Shortcuts and tips</button>
-      </section>
+      <details class="drawer-more">
+        <summary>More options</summary>
+        <div class="drawer-section">
+          <div class="field">
+            <span class="field-label">Column width</span>
+            <div class="segmented" id="width-choice">
+              <button type="button" data-value="narrow" title="About 60 characters per line">Narrow</button>
+              <button type="button" data-value="medium" title="About 72 characters per line">Comfortable</button>
+              <button type="button" data-value="wide" title="About 85 characters per line">Wide</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">Spacing</span>
+            <div class="segmented" id="rhythm-choice">
+              <button type="button" data-value="dense">Dense</button>
+              <button type="button" data-value="balanced">Balanced</button>
+              <button type="button" data-value="spacious">Spacious</button>
+            </div>
+          </div>
+          <label class="check"><input type="checkbox" id="toolbar-check" /> Show the formatting bar</label>
+        </div>
+        <div class="drawer-section">
+          <h3>Library folder</h3>
+          <p class="drawer-note" id="library-path">Your Library folder</p>
+          <button type="button" class="btn" id="library-change">Change folder…</button>
+        </div>
+        <div class="drawer-section">
+          <button type="button" class="btn" id="btn-help">Shortcuts and tips</button>
+        </div>
+      </details>
     </aside>
 
     <div class="popover popover--link" id="linkbar" role="dialog" aria-label="Link">

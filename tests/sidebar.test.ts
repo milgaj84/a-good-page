@@ -10,6 +10,17 @@ function setup(rows: SidebarRow[], renaming: string | null = null) {
 }
 const chapters = (): SidebarRow[] => ['a', 'b', 'c', 'd'].map((n, i) => ({ path: '/lib/B/' + n + '.md', kind: 'chapter', label: n, current: false, book: '/lib/B', index: i }));
 
+describe('Sidebar renaming with a nicer label', () => {
+  it('edits the file name, not the heading shown', () => {
+    const row: SidebarRow = { path: '/lib/B/03-a-letter.md', kind: 'chapter', label: 'A Letter', fileName: '03-a-letter', current: false, book: '/lib/B', index: 0 };
+    const t = setup([row], row.path);
+    const input = t.tree.querySelector('.row-input') as HTMLInputElement;
+    expect(input.value).toBe('03-a-letter');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(t.events.rename).toHaveBeenCalledWith(row, '');
+  });
+});
+
 describe('Sidebar', () => {
   it('shows a friendly line when there is nothing to list', () => {
     expect(setup([]).tree.textContent).toContain('Nothing yet.');

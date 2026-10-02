@@ -49,6 +49,7 @@ export const PALETTE_ITEMS: readonly PaletteItem[] = [
   { action: 'measure', label: 'Change column width', group: 'Display', keywords: 'line length measure narrow comfortable wide characters', shortcut: 'Mod+Shift+M' },
   { action: 'rhythm', label: 'Change spacing', group: 'Display', keywords: 'line height leading paragraph rhythm dense balanced spacious', shortcut: 'Mod+Shift+K' },
   { action: 'typeface', label: 'Change typeface', group: 'Display', keywords: 'font serif sans mono duospace editorial humanist', shortcut: 'Mod+Shift+Y' },
+  { action: 'toolbar', label: 'Show or hide the formatting bar', group: 'Display', keywords: 'format toolbar bold italic heading buttons' },
   { action: 'sidebar', label: 'Show or hide the sidebar', group: 'Display', keywords: 'library files', shortcut: 'Mod+\\' },
   { action: 'bigger', label: 'Increase text size', group: 'Display', shortcut: 'Mod+=' },
   { action: 'smaller', label: 'Decrease text size', group: 'Display', shortcut: 'Mod+-' },

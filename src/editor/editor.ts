@@ -40,6 +40,8 @@ export interface WriterEditor extends EditorPort {
   textStyle(): TextStyle | null;
   headings(): HeadingInfo[];
   jumpTo(pos: number): void;
+  /** Puts the caret at an exact document position without scrolling; clamps to the page. */
+  restoreCaret(pos: number): void;
   linkHref(): string | null;
   setLink(href: string): void;
   unsetLink(): void;
@@ -140,7 +142,7 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
   let sentenceEnabled = false;
   const editor = new Editor({
     element: opts.element,
-    autofocus: 'end',
+    autofocus: false,
     extensions: extensions(opts.bubble, () => sentenceEnabled, opts.zen),
     editorProps: {
       handleKeyDown: (_view, event) => opts.onSlashKey(event),
@@ -260,6 +262,11 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
         return node.isBlock;
       });
       return found;
+    },
+    restoreCaret: (pos: number) => {
+      const size = editor.state.doc.content.size;
+      const target = Math.min(Math.max(Math.floor(pos), 1), Math.max(1, size - 1));
+      editor.commands.setTextSelection(target);
     },
     jumpTo: (pos: number) => {
       const size = editor.state.doc.content.size;

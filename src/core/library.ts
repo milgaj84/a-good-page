@@ -31,6 +31,18 @@ export function autoRenameTarget(currentName: string, markdown: string): string 
   return title && !isAutoName(title) ? title : null;
 }
 
+const squash = (text: string): string =>
+  text.toLocaleLowerCase().replace(/^[\d\s._-]+/, '').replace(/[^\p{L}\p{N}]+/gu, '');
+
+/**
+ * What a page is called on screen. A file named after its heading ("03-a-letter-unsent" for "A Letter Unsent")
+ * shows the nicely written heading; any other file name is the writer's own and is shown as it is.
+ */
+export function displayName(stem: string, heading: string | null | undefined): string {
+  const title = (heading ?? '').trim();
+  return title && squash(title) !== '' && squash(stem) === squash(title) ? title : stem;
+}
+
 const sepOf = (path: string): string => (path.includes('\\') ? '\\' : '/');
 export const joinPath = (base: string, relative: string): string =>
   (base.endsWith('/') || base.endsWith('\\') ? base : base + sepOf(base)) + relative.split('/').join(sepOf(base));

@@ -14,7 +14,7 @@ function fixture(seed: Record<string, string> = {}) {
   const notes: string[] = [];
   const moves: Array<[string, string]> = [];
   const trashed: Array<{ item: string; name: string; original: string; trashed_at: number; is_dir: boolean }> = [];
-  let confirmed = true;
+  const undos: Array<{ message: string; run: () => void }> = [];
   const doc = {
     snapshot: () => ({ path: session.path, name: session.name, state: 'saved' as const }),
     get isDirty() { return session.dirty; },
@@ -72,14 +72,14 @@ function fixture(seed: Record<string, string> = {}) {
     doc, io,
     sidebar: { render: (v: SidebarView) => { views.push(v); } },
     menu: { open: vi.fn() },
-    confirm: async () => confirmed,
+    offerUndo: (message: string, _label: string, run: () => void) => { undos.push({ message, run }); },
     notify: (m: string) => { notes.push(m); },
     markdown: () => session.markdown,
     jumpToPhrase: () => undefined, focusEditor: () => undefined, flushAutosave: () => undefined, words: () => 0, changed: () => undefined,
     moved: (from: string, to: string) => { moves.push([from, to]); },
   } as unknown as LibraryDeps;
   const controller = new LibraryController(deps);
-  return { controller, files, dirs, session, views, notes, moves, setConfirm: (v: boolean) => { confirmed = v; }, last: () => views[views.length - 1] };
+  return { controller, files, dirs, session, views, notes, moves, undos, last: () => views[views.length - 1] };
 }
 
 describe('Library controller', () => {
@@ -141,19 +141,21 @@ describe('Library controller', () => {
     expect(t.files.get('/lib/B.md')).toBe('b');
   });
 
-  it('moves a chapter to the trash after asking, and lands on its neighbour', async () => {
+  it('moves a chapter to the trash at once, lands on its neighbour, and offers Undo', async () => {
     const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two', '/lib/Novel/03.md': '# Three' });
     await t.controller.start();
     await t.controller.open('/lib/Novel/02.md');
-    t.setConfirm(false);
-    await t.controller.trash('/lib/Novel/02.md', 'chapter', '02');
-    expect(t.files.has('/lib/Novel/02.md')).toBe(true);
-    t.setConfirm(true);
     await t.controller.trash('/lib/Novel/02.md', 'chapter', '02');
     expect(t.files.has('/lib/Novel/02.md')).toBe(false);
     expect(t.files.has('/lib/.trash/1/02.md')).toBe(true);
     expect(t.session.path).toBe('/lib/Novel/03.md');
     expect(JSON.parse(t.files.get('/lib/Novel/.a-good-page.json')!).chapters).toEqual(['01.md', '03.md']);
+    expect(t.undos).toHaveLength(1);
+    expect(t.undos[0].message).toContain('02');
+    t.undos[0].run();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.files.get('/lib/Novel/02.md')).toBe('# Two');
+    expect(t.session.path).toBe('/lib/Novel/02.md');
   });
 
   it('reorders chapters and keeps the order on disk', async () => {
@@ -191,6 +193,29 @@ describe('Library controller', () => {
     const labels = t.controller.places('o').map(e => e.label);
     expect(labels).toContain('01');
     expect(labels).toContain('Loose');
+  });
+});
+
+describe('names and the next chapter', () => {
+  it('shows a heading-style name for files named after their heading, and keeps other names', async () => {
+    const t = fixture({ '/lib/Novel/03-a-letter-unsent.md': '# A Letter Unsent\n\nx', '/lib/Novel/02.md': '# Two\n\nx' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/Novel');
+    const rows = t.last().rows.filter(r => r.kind === 'chapter');
+    expect(rows.map(r => r.label)).toEqual(['02', 'A Letter Unsent']);
+    expect(rows.map(r => r.fileName)).toEqual(['02', '03-a-letter-unsent']);
+  });
+
+  it('finds the chapter after the open one, and none at the end or for loose pages', async () => {
+    const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two', '/lib/Loose.md': 'x' });
+    await t.controller.start();
+    const go = async (path: string) => { await t.controller.open(path); await t.controller.documentLoaded(); };
+    await go('/lib/Novel/01.md');
+    expect(t.controller.nextChapter()).toEqual({ path: '/lib/Novel/02.md', label: '02' });
+    await go('/lib/Novel/02.md');
+    expect(t.controller.nextChapter()).toBeNull();
+    await go('/lib/Loose.md');
+    expect(t.controller.nextChapter()).toBeNull();
   });
 });
 

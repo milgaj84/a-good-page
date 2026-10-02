@@ -69,7 +69,23 @@ export class Chrome {
     this.els.app.classList.toggle('focus-mode', on);
   }
 
+  /** A toast that also offers one action, such as Undo. It stays a little longer so there is time to use it. */
+  toastAction(message: string, label: string, run: () => void, durationMs = 9000): void {
+    this.toast(message, durationMs);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-action';
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      this.els.toast.classList.remove('is-visible', 'has-action');
+      run();
+    });
+    this.els.toast.append(button);
+    this.els.toast.classList.add('has-action');
+  }
+
   toast(message: string, durationMs = 2600): void {
+    this.els.toast.classList.remove('has-action');
     this.els.toast.textContent = message;
     this.els.toast.classList.add('is-visible');
     if (this.toastHandle !== null) this.scheduler.clear(this.toastHandle);

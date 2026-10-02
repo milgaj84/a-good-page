@@ -5,7 +5,7 @@ import type { PaletteEntry } from '../core/palette';
 import { ProjectService, type ProjectPorts } from '../core/project-service';
 import { searchProject, type ProjectFile } from '../core/project';
 import { nameFromPath } from '../core/paths';
-import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
+import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
 import type { Menu, MenuItem } from '../ui/menu';
 import type { TrashItem } from '../adapters/tauri';
 import type { SearchHit, Sidebar, SidebarRow } from '../ui/sidebar';
@@ -33,7 +33,8 @@ export interface LibraryDeps {
     listTrash(root: string): Promise<TrashItem[]>;
     restore(root: string, path: string): Promise<string>;
   };
-  confirm(message: string, okLabel: string): Promise<boolean>;
+  /** A toast with one button, used to undo moving something to the trash. */
+  offerUndo(message: string, label: string, run: () => void): void;
   notify(message: string): void;
   markdown(): string;
   jumpToPhrase(phrase: string): void;
@@ -44,6 +45,8 @@ export interface LibraryDeps {
   changed(): void;
   /** A page or book changed path (rename), so anything keyed by path can follow. */
   moved(from: string, to: string): void;
+  /** Called after every redraw of the tree, so things that depend on it (the next-chapter link) can follow. */
+  rendered?(): void;
 }
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -163,7 +166,7 @@ export class LibraryController {
       const chapters = service ? service.chapters : [];
       const opened = row.kind === 'book' && (this.expanded.has(row.path) || Boolean(q));
       const nameHit = rows.some(r => r.path === row.path);
-      const chapterHits = chapters.filter(c => !q || stem(c.path).toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+      const chapterHits = chapters.filter(c => !q || (stem(c.path) + ' ' + (c.file?.title ?? '')).toLocaleLowerCase().includes(q.toLocaleLowerCase()));
       if (q && !nameHit && !chapterHits.length) continue;
       out.push({
         path: row.path, kind: row.kind, label: row.name, current: row.kind === 'page' && row.path === current,
@@ -175,7 +178,8 @@ export class LibraryController {
         const full = this.chapterPath(row.path, entry.path);
         const isCurrent = full === current;
         out.push({
-          path: full, kind: 'chapter', label: stem(entry.path), current: isCurrent, missing: entry.issue !== null,
+          path: full, kind: 'chapter', label: displayName(stem(entry.path), entry.file?.title), fileName: stem(entry.path),
+          current: isCurrent, missing: entry.issue !== null,
           meta: entry.issue ? 'missing' : (isCurrent ? live : entry.file!.words).toLocaleString(), book: row.path, index,
         });
       });
@@ -186,6 +190,7 @@ export class LibraryController {
       rows: out, hits: q.length >= 2 ? this.textHits(q) : [], renaming: this.renaming,
       empty: q ? 'Nothing here matches “' + q + '”.' : 'Your Library is empty. Press New page to begin.',
     });
+    this.d.rendered?.();
   }
 
   private textHits(q: string): SearchHit[] {
@@ -193,7 +198,7 @@ export class LibraryController {
     for (const [book, service] of this.books) {
       const files = service.chapters.flatMap(c => (c.file ? [c.file as ProjectFile] : []));
       for (const hit of searchProject(files, q).slice(0, 8)) {
-        hits.push({ path: this.chapterPath(book, hit.path), book, title: stem(hit.path), context: hit.context });
+        hits.push({ path: this.chapterPath(book, hit.path), book, title: displayName(stem(hit.path), hit.title), context: hit.context });
         if (hits.length >= 30) return hits;
       }
     }
@@ -349,17 +354,17 @@ export class LibraryController {
     await this.reorder(row.book, row.path, row.index + direction);
   }
 
+  /** Moves to the trash at once and offers Undo; nothing is erased and the trash view can restore it later. */
   async trash(path: string, kind: SidebarRow['kind'], label: string): Promise<void> {
     if (!this.root) return;
-    const what = kind === 'book' ? 'the book “' + label + '” and all its chapters' : '“' + label + '”';
-    if (!(await this.d.confirm('Move ' + what + ' to the trash? It stays in a hidden .trash folder inside your Library.', 'Move to trash'))) return;
     try {
       const current = this.d.doc.snapshot().path;
       const touchesCurrent = Boolean(current && (current === path || (kind === 'book' && current.startsWith(path))));
       if (touchesCurrent) { this.d.flushAutosave(); await this.d.doc.settleWrites(); }
       const book = kind === 'chapter' ? bookOf(this.root, path) : null;
       const neighbour = touchesCurrent && book ? await this.neighbourOf(book, path) : null;
-      await this.d.io.trash(this.root, path);
+      const original = relativeTo(this.root, path) ?? label;
+      const trashed = await this.d.io.trash(this.root, path);
       if (kind === 'book') { this.books.delete(path); this.expanded.delete(path); }
       if (kind === 'chapter' && book) {
         const service = this.books.get(book);
@@ -368,8 +373,21 @@ export class LibraryController {
       }
       await this.refresh();
       if (touchesCurrent) { if (neighbour) await this.open(neighbour); else await this.openSomething(path); }
-      this.d.notify('Moved to the trash.');
+      const item: TrashItem = { item: trashed, name: nameFromPath(path), original, trashed_at: Date.now(), is_dir: kind === 'book' };
+      this.d.offerUndo('Moved “' + label + '” to the trash.', 'Undo', () => void this.restore(item));
     } catch (error) { this.d.notify('Could not move to the trash: ' + message(error)); }
+  }
+
+  /** The chapter after the open one, for the "next chapter" link at the end of a page. */
+  nextChapter(): { path: string; label: string } | null {
+    const current = this.d.doc.snapshot().path;
+    const book = current && this.root ? bookOf(this.root, current) : null;
+    const service = book ? this.books.get(book) : undefined;
+    if (!book || !service) return null;
+    const readable = service.chapters.filter(c => c.file);
+    const at = readable.findIndex(c => this.chapterPath(book, c.path) === current);
+    const next = at >= 0 ? readable[at + 1] : undefined;
+    return next ? { path: this.chapterPath(book, next.path), label: displayName(stem(next.path), next.file?.title) } : null;
   }
 
   /** The chapter next to this one (later first), so removing a chapter lands you somewhere sensible. */
@@ -436,7 +454,7 @@ export class LibraryController {
         for (const entry of service?.chapters ?? []) {
           if (entry.issue) continue;
           const full = this.chapterPath(row.path, entry.path);
-          entries.push({ label: stem(entry.path), group: full === current ? 'Open now' : row.name, keywords: 'chapter go open ' + (entry.file?.title ?? ''), run: () => void this.open(full) });
+          entries.push({ label: displayName(stem(entry.path), entry.file?.title), group: full === current ? 'Open now' : row.name, keywords: 'chapter go open ' + stem(entry.path), run: () => void this.open(full) });
         }
       }
     }

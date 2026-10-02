@@ -4,6 +4,8 @@ export interface SidebarRow {
   path: string;
   kind: RowKind;
   label: string;
+  /** The name on disk, when the label shows a nicer heading. Renaming edits this. */
+  fileName?: string;
   meta?: string;
   current: boolean;
   expanded?: boolean;
@@ -110,13 +112,14 @@ export class Sidebar {
     if (this.view.renaming === row.path) {
       const input = document.createElement('input');
       input.className = 'row-input';
-      input.value = row.label;
+      const current = row.fileName ?? row.label;
+      input.value = current;
       input.setAttribute('aria-label', 'Name');
       let done = false;
       const finish = (commit: boolean): void => {
         if (done) return;
         done = true;
-        if (commit && input.value.trim() && input.value.trim() !== row.label) this.events.rename(row, input.value.trim());
+        if (commit && input.value.trim() && input.value.trim() !== current) this.events.rename(row, input.value.trim());
         else this.events.rename(row, '');
       };
       input.addEventListener('keydown', (event) => {
@@ -141,7 +144,7 @@ export class Sidebar {
     const label = document.createElement('span');
     label.className = 'label';
     label.textContent = row.label;
-    label.title = row.label;
+    label.title = row.fileName && row.fileName !== row.label ? row.label + ' — file: ' + row.fileName : row.label;
     open.append(label);
     if (row.meta) {
       const meta = document.createElement('span');

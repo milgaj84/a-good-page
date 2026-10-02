@@ -28,7 +28,7 @@ import { DebouncedDraftStore, LocalDraftStore, SafeStore, browserStorage } from 
 import { ChangeLatch, FrameTask, browserFrames } from './core/frame';
 import { bindAutoscroll } from './ui/autoscroll';
 import {
-  chooseWorkingDirectory, confirmAction, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
+  chooseWorkingDirectory, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
   tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry,
 } from './adapters/tauri';
@@ -51,7 +51,8 @@ import { bindGhostInterface } from './ui/ghost-interface';
 import { Sidebar } from './ui/sidebar';
 import { Menu } from './ui/menu';
 import { TrashDialog } from './ui/trash';
-import { bookOf, relativeTo } from './core/library';
+import { bookOf, displayName, relativeTo } from './core/library';
+import { ViewMemory } from './core/view-memory';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
 import type { PaletteEntry } from './core/palette';
 
@@ -96,6 +97,7 @@ const commandState: CommandState = {
   textStyle: () => editor.textStyle(),
 };
 const bubble = new CommandButtons(el('bubble'), commandState, dispatch);
+const toolbar = new CommandButtons(el('toolbar'), commandState, dispatch);
 const outline = new OutlinePanel(
   { root: el('outline'), list: el('outline-list'), empty: el('outline-empty') },
   (pos) => { editor.jumpTo(pos); centerCaret(0.3); if (SMALL()) setSidebar(false); },
@@ -104,7 +106,7 @@ const settings = new SettingsPanel(
   { root: el('settings'), close: el('settings-close'), themeChoice: el('theme-choice'), fontChoice: el('font-choice'),
     widthChoice: el('width-choice'), rhythmChoice: el('rhythm-choice'), sizeRange: el<HTMLInputElement>('size-range'),
     sizeValue: el('size-value'), goalInput: el<HTMLInputElement>('goal-input'), ghostCheck: el<HTMLInputElement>('ghost-check'),
-    typewriterCheck: el<HTMLInputElement>('typewriter-check'), libraryPath: el('library-path'), libraryChange: el('library-change') },
+    typewriterCheck: el<HTMLInputElement>('typewriter-check'), toolbarCheck: el<HTMLInputElement>('toolbar-check'), libraryPath: el('library-path'), libraryChange: el('library-change') },
   el('btn-settings'),
   (patch) => applyPrefs(prefsStore.update(patch)),
   (theme) => setTheme(theme),
@@ -136,11 +138,11 @@ const editor = createWriterEditor({
   onSlash: (anchor) => slash.open(anchor),
   onSlashKey: (event) => slash.handle(event),
   zen: ghostUI.zen,
-  onSelection: () => { selectionFrame.schedule(); stats.trigger(); },
+  onSelection: () => { selectionFrame.schedule(); stats.trigger(); viewTimer.trigger(); },
 });
 // Nothing can be typed until a page is open, so words are never written into a page that has no file.
 editor.instance.setEditable(false);
-const controlsFrame = new FrameTask(() => bubble.sync(), browserFrames);
+const controlsFrame = new FrameTask(() => { bubble.sync(); if (prefs.toolbar) toolbar.sync(); }, browserFrames);
 const selectionFrame = new FrameTask(() => {
   keepCaretCentered();
   outline.highlight(editor.caretPos());
@@ -212,7 +214,12 @@ function refreshStats(): void {
   projects?.statsChanged();
   if (progress && goals.check(progress)) chrome.celebrate('Goal reached: ' + formatCount(prefs.goal) + ' words. Lovely work.');
 }
-function refreshOutline(): void { outline.update(editor.headings(), editor.caretPos()); }
+function refreshOutline(): void {
+  outline.update(editor.headings(), editor.caretPos());
+  // "On this page" appears only once there is something to show.
+  el('onpage').hidden = outline.count === 0;
+  chrome.setName(shownName());
+}
 
 function setTheme(theme: Theme): void {
   themes.set(theme);
@@ -223,6 +230,8 @@ function applyPrefs(next: Preferences): void {
   const goalChanged = next.goal !== prefs.goal;
   prefs = next;
   applyTypography(root, next);
+  app.classList.toggle('no-toolbar', !next.toolbar);
+  if (next.toolbar) controlsFrame.schedule();
   ghostUI.setGhost(next.ghost);
   ghostUI.setTypewriter(next.typewriter);
   settings.render(next, themes.theme, library?.root ?? null);
@@ -259,12 +268,49 @@ function places(query: string): PaletteEntry[] {
 }
 
 // ---------- the document ----------
+const views = new ViewMemory(store);
+const viewTimer = new Debouncer(() => saveView(), 600, browserScheduler);
+let pendingRestore = false;
+let restoredView: { caret: number; scroll: number } | null = null;
+function saveView(): void {
+  const path = doc.snapshot().path;
+  if (path && editor.instance.isEditable) views.set(path, { caret: editor.caretPos(), scroll: scroller.scrollTop }, Date.now());
+}
+scroller.addEventListener('scroll', () => viewTimer.trigger(), { passive: true });
+/** The page's own first heading, so a chapter file called "03-a-letter-unsent" reads "A Letter Unsent". */
+function shownName(): string {
+  const heading = editor.headings().find(h => h.level === 1)?.text;
+  return displayName(doc.snapshot().name, heading);
+}
+function updateNext(): void {
+  const button = el<HTMLButtonElement>('next-chapter');
+  const next = lib.nextChapter();
+  button.hidden = !next;
+  if (!next) return;
+  button.replaceChildren();
+  const small = document.createElement('small');
+  small.textContent = 'Next chapter';
+  const name = document.createElement('span');
+  name.textContent = next.label + ' →';
+  button.append(small, name);
+  button.onclick = () => { void lib.open(next.path).then(() => { scroller.scrollTop = 0; }); };
+}
 const sessionEditor: EditorPort = {
   getMarkdown: () => editor.getMarkdown(),
   getPlainText: () => editor.getPlainText(),
-  setPlainText: (text) => { namedWriter.flush(); sessionPanel.documentChanged(); editor.setPlainText(text); onDocumentLoaded(); },
-  setMarkdown: (markdown) => { sessionPanel.documentChanged(); namedWriter.flush(); editor.setMarkdown(markdown); onDocumentLoaded(); },
-  focus: () => editor.focus(),
+  setPlainText: (text) => { viewTimer.flush(); namedWriter.flush(); sessionPanel.documentChanged(); editor.setPlainText(text); onDocumentLoaded(); },
+  setMarkdown: (markdown) => { viewTimer.flush(); sessionPanel.documentChanged(); namedWriter.flush(); editor.setMarkdown(markdown); onDocumentLoaded(); },
+  // A page you have been in opens where you left off; a page you have not been in opens ready to type at its end.
+  focus: () => {
+    const view = restoredView;
+    restoredView = null;
+    if (!view) { editor.focus(); return; }
+    const place = (): void => { editor.restoreCaret(view.caret); scroller.scrollTop = view.scroll; };
+    editor.restoreFocus();
+    place();
+    // The editor can become editable in this same moment; once more on the next frame so the browser cannot move the caret.
+    requestAnimationFrame(place);
+  },
 };
 /** Runs whenever the session swaps the page content (open, new, restore). */
 function onDocumentLoaded(): void {
@@ -276,15 +322,23 @@ function onDocumentLoaded(): void {
   controlsFrame.schedule();
   projects?.documentLoaded();
   scroller.scrollTop = 0;
+  pendingRestore = true;
   void library?.documentLoaded();
 }
 const shown = new ChangeLatch();
 function render(snapshot: SessionSnapshot): void {
   stats.trigger();
+  if (pendingRestore && snapshot.path) {
+    pendingRestore = false;
+    const view = views.get(snapshot.path);
+    restoredView = view ? { caret: view.caret, scroll: view.scroll } : null;
+    if (view) editor.restoreCaret(view.caret);
+  }
   namedWriter?.change(snapshot);
   if (!shown.changed(JSON.stringify([snapshot.name, snapshot.path, snapshot.state]))) return;
-  chrome.setName(snapshot.name);
+  chrome.setName(shownName());
   chrome.setSaveState(snapshot.state, IS_MAC);
+  updateNext();
   if (snapshot.state === 'saved' && snapshot.path) projects?.saved();
   const marker = snapshot.state === 'dirty' || snapshot.state === 'error' ? '• ' : '';
   void setWindowTitle(marker + snapshot.name + ' — A Good Page');
@@ -322,7 +376,7 @@ library = new LibraryController({
     pickFolder: chooseWorkingDirectory,
     listTrash, restore: restoreEntry,
   },
-  confirm: confirmAction,
+  offerUndo: (message, label, run) => chrome.toastAction(message, label, run),
   notify: (message) => chrome.toast(message, 4200),
   markdown: () => editor.getMarkdown(),
   jumpToPhrase: (phrase) => {
@@ -337,7 +391,8 @@ library = new LibraryController({
   flushAutosave: () => autosave.flush(),
   words: () => countWords(editor.getText()),
   changed: () => settings.render(prefs, themes.theme, library?.root ?? null),
-  moved: (from, to) => projects?.historyMoved(from, to),
+  moved: (from, to) => { projects?.historyMoved(from, to); views.move(from, to); },
+  rendered: () => updateNext(),
 });
 const lib = library;
 
@@ -491,6 +546,7 @@ const APP: Record<AppAction, () => void> = {
   theme: () => setTheme(themes.next()),
   outline: () => { setSidebar(true); const d = el<HTMLDetailsElement>('onpage'); d.open = !d.open; },
   sidebar: () => setSidebar(!sidebarShown()),
+  toolbar: () => { const next = prefsStore.update({ toolbar: !prefs.toolbar }); applyPrefs(next); chrome.toast(next.toolbar ? 'Formatting bar shown.' : 'Formatting bar hidden. Turn it back on in Settings.'); },
   ghost: () => togglePref('ghost', 'The bars will fade while you type.', 'The bars stay visible.'),
   typewriter: () => togglePref('typewriter', 'Typewriter line on. Your typing stays mid-screen.', 'Typewriter line off.'),
   zen: () => void ghostUI.toggleZen(),
@@ -514,7 +570,13 @@ bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
 el('btn-sidebar').addEventListener('click', () => APP.sidebar());
 el('btn-tools').addEventListener('click', openTools);
-el('btn-new-book').addEventListener('click', () => APP.newBook());
+el('btn-new-more').addEventListener('click', () => {
+  const more = el('btn-new-more');
+  menu.open([
+    { label: 'New page', hint: IS_MAC ? '⌘N' : 'Ctrl+N', run: () => APP.new() },
+    { label: 'New book', hint: IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N', run: () => APP.newBook() },
+  ], more.getBoundingClientRect(), more);
+});
 el('btn-history').addEventListener('click', () => APP.timeMachine());
 el('btn-help').addEventListener('click', () => { settings.close(); APP.help(); });
 
@@ -522,17 +584,17 @@ el('btn-help').addEventListener('click', () => { settings.close(); APP.help(); }
 const titleInput = el<HTMLInputElement>('doc-title');
 titleInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') { event.preventDefault(); titleInput.blur(); editor.focus(); }
-  else if (event.key === 'Escape') { event.stopPropagation(); titleInput.value = doc.snapshot().name; editor.focus(); }
+  else if (event.key === 'Escape') { event.stopPropagation(); titleInput.value = shownName(); editor.restoreFocus(); }
 });
 titleInput.addEventListener('blur', () => {
   const next = titleInput.value.trim();
-  if (next && next !== doc.snapshot().name) void lib.renameCurrent(next).then(() => chrome.setName(doc.snapshot().name));
-  else titleInput.value = doc.snapshot().name;
+  if (next && next !== shownName()) void lib.renameCurrent(next).then(() => chrome.setName(shownName()));
+  else titleInput.value = shownName();
 });
 
-window.addEventListener('blur', () => { namedWriter.flush(); drafts.flush(); if (!quit.isOpen) autosave.flush(); });
+window.addEventListener('blur', () => { viewTimer.flush(); namedWriter.flush(); drafts.flush(); if (!quit.isOpen) autosave.flush(); });
 window.addEventListener('focus', () => void doc.checkOutside());
-window.addEventListener('beforeunload', () => { namedWriter.flush(); drafts.flush(); });
+window.addEventListener('beforeunload', () => { viewTimer.flush(); namedWriter.flush(); drafts.flush(); });
 
 onFileDrop({
   onHover: (active) => app.classList.toggle('is-dropping', active),

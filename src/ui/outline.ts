@@ -42,6 +42,8 @@ export class OutlinePanel {
     els.next?.addEventListener('click', () => { const item = adjacentChapter(this.items, this.caret, 1); if (item) onJump(item.pos); });
   }
 
+  get count(): number { return this.items.length; }
+
   setVisible(on: boolean): void {
     this.els.root.classList.toggle('is-open', on);
     this.els.root.setAttribute('aria-hidden', String(!on));

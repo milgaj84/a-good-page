@@ -6,6 +6,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-02
+
+Simpler, with fewer decisions between you and the page.
+
+### Added
+
+- **The formatting bar is back**, as a quiet strip under the title: H1 H2 H3, bold, italic, strikethrough, bullet, numbered and checklist, quote, scene break, link, undo and redo. Buttons show what is active at the caret and fade with the other bars while you type. Show or hide it in Settings → More options, or with "Show or hide the formatting bar" in the go-to box. The selection bubble and `/` menu stay.
+- **Next chapter** link at the end of a chapter, naming the chapter that follows.
+- **It remembers where you were.** Each page reopens at your caret and scroll position, also after a restart, and a rename keeps the memory. A page you have not opened yet is ready to type at its end.
+- **Undo for trash.** Moving a page, chapter or book to the trash happens at once and shows an Undo button for several seconds. The Trash view still restores anything later.
+
+### Changed
+
+- **One start button.** "+ New page" is one click; a ▾ beside it holds "New book" (Ctrl/Cmd+Shift+N still works). Moving to the trash no longer asks first.
+- **Find, History and Export are icons** (magnifier, clock, arrow) with tooltips, leaving the title and save state as the only words on top.
+- **"On this page" appears only once the page has headings.**
+- **Readable names.** A chapter file named after its heading ("03-a-letter-unsent") shows the heading ("A Letter Unsent") in the sidebar, the title and the go-to box; a name you chose yourself is shown as it is, with the file name in the tooltip. Renaming still edits the file name.
+- **Settings regrouped:** Theme, Text (typeface, size), Distraction-free (fade bars, typewriter, Zen), Goal, and one collapsed "More options" (column width, spacing, formatting bar, Library folder, shortcuts).
+
+### Fixed
+
+- The editor no longer jumps to the end of the page a moment after launch: its delayed `autofocus` could fire after a page had loaded.
+
 ## [0.6.1] - 2026-10-02
 
 ### Fixed

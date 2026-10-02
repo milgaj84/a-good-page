@@ -20,24 +20,28 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 ```
 
 - **One Library.** On first launch the app creates `Documents/A Good Page`. Change it any time in Settings.
+- **It remembers where you were.** Each page reopens at your caret and scroll position, and a page you haven't opened yet is ready to type at its end.
 - **Nothing to save.** **New page** creates a real file at once and autosaves it. The page names itself from your first heading or line. There is no Save As, no "Untitled draft" and no folder picker.
 - **Pages and books.** A page is a file. A **book** is a folder of chapters. Drag chapters into order, or use ⋯ → Move up/down. Order is kept in `.a-good-page.json` beside them.
 - **Go anywhere.** **Ctrl/Cmd+P** searches pages, chapters, headings on this page and every command. Try "focus", "export" or "theme".
-- **Rename, trash.** Click the title, press **F2**, or use a row's ⋯ menu. Move to trash puts things in a hidden `.trash` folder inside your Library. **Tools → Trash…** lists them and puts each back where it was. Nothing is erased.
+- **Rename, trash.** Click the title, press **F2**, or use a row's ⋯ menu. Move to trash happens at once with an **Undo** button, and puts things in a hidden `.trash` folder inside your Library. **Tools → Trash…** lists them and puts each back where it was. Nothing is erased.
 
 ## What's where
 
 | You want to… | Do this |
 | --- | --- |
 | Start writing | **+ New page** (Ctrl/Cmd+N) |
-| Start a book | **New book** (Ctrl/Cmd+Shift+N), then ⋯ → New chapter here |
+| Start a book | The ▾ beside New page → **New book** (Ctrl/Cmd+Shift+N), then ⋯ → New chapter here |
+| Format | The bar under the title: headings, bold, italic, lists, quote, link. Hide it in Settings |
+| Carry on to the next chapter | The **Next chapter** link at the end of a page |
 | Find a page or a phrase | The sidebar search, or Ctrl/Cmd+P |
 | Jump around this page | **On this page** in the sidebar |
 | Change theme, type, width, goal | **Settings** (the gear), top right |
 | Write without distraction | **Focus**: paragraph, sentence, typewriter line, Zen draft, full screen |
 | Notes, timed session, sprint ring, typography polish | **Tools** |
-| Go back to an earlier version | **History** |
-| Share | **Export**: this page or the whole book, with a real-page preview |
+| Go back to an earlier version | **History** (the clock, top right) |
+| Find on the page | The magnifier, top right (Ctrl/Cmd+F) |
+| Share | **Export** (the arrow, top right): this page or the whole book, with a real-page preview |
 
 Select text for a quick formatting bubble, or type `/` on an empty line for headings, lists and scene breaks. **Ctrl/Cmd+/** lists every shortcut.
 
@@ -78,7 +82,7 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must share one version, and a test checks it.
 
 1. Update `CHANGELOG.md` and the version in those files.
-2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md` and `RELEASE_CHECKLIST.md`.
-3. Commit, then `git tag v0.6.1 && git push origin v0.6.1`.
+2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md` and `RELEASE_CHECKLIST.md`.
+3. Commit, then `git tag v0.6.2 && git push origin v0.6.2`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).
