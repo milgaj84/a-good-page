@@ -18,6 +18,14 @@
         </div>
         <input class="side-search" id="side-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" spellcheck="false" />
         <nav class="tree" id="tree" aria-label="Projects and pages"></nav>
+        <div class="select-bar" id="select-bar" hidden>
+          <div class="select-head"><span id="sel-count" role="status">0 selected</span><button type="button" class="btn" id="sel-done">Done</button></div>
+          <div class="select-actions">
+            <button type="button" class="btn" id="sel-move">Move to…</button>
+            <button type="button" class="btn" id="sel-export">Export</button>
+            <button type="button" class="btn" id="sel-trash">Trash</button>
+          </div>
+        </div>
       </aside>
 
       <div class="main">

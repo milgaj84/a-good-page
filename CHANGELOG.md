@@ -6,6 +6,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-02
+
+Working with many pages.
+
+### Added
+
+- **Select several pages.** The tick-box icon beside *Projects* (or "Select several pages" in the go-to box) turns on selection: every row gets a tick box, a project ticks all of its pages (partly ticked shows as a dash), and a bar at the bottom of the panel offers **Move to…**, **Export**, **Trash** and **Done** for the ticked pages. Esc leaves selection. Export takes ticked pages of one project with exactly those pages pre-ticked; a mix of projects explains itself instead of guessing.
+- **Drag between projects.** A page can be dropped onto another project (added at the end), between another project's pages (placed there), or onto *Unfiled pages* to take it out; unfiled pages can be dragged into a project the same way. The target highlights while you drag.
+- **Show the welcome guide** in the go-to box recreates or reopens the Welcome page in "Getting started" and never overwrites a copy you edited. The Welcome text and Help now describe projects, Unfiled pages, selection and the Library menu.
+- **Export file names say what is inside.** A project export named after the project, or "Project - 3 of 12 pages" when only some pages are ticked.
+
+### Changed
+
+- **Restore and Undo put pages back where they were.** The trash records a page's position in its project; restoring (single or several, from Undo or the Trash view) puts it back in that place, not at the end.
+- **Search covers the whole Library**, including unfiled pages (previously only projects), keeps what it read for a minute so typing is instant, refreshes after that, and waits for a pause in typing.
+- **The pages you ticked for export are remembered across restarts**, per project.
+
+### Known limits
+
+- Selection can move, trash or export pages, but not whole projects; a project's ⋯ menu handles those. Export of pages from several projects at once is not supported.
+- Dragging inside the window may not work on Windows (a Tauri limitation); use ⋯ → Move to or selection there.
+- Verified in a headless browser against a simulated file system, not yet in an installed app; see `RELEASE_0.7.1.md`.
+
 ## [0.7.0] - 2026-10-02
 
 The Library is now organised as **Library → projects → pages**, and the left panel was rebuilt around it.

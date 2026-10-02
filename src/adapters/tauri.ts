@@ -58,10 +58,10 @@ export function renameEntry(root: string, path: string, newName: string): Promis
 export function moveEntry(root: string, path: string, to: string | null): Promise<string> {
   return invoke<string>('move_entry', { root, path, to });
 }
-export function trashEntry(root: string, path: string): Promise<string> {
-  return invoke<string>('trash_entry', { root, path });
+export function trashEntry(root: string, path: string, position?: number): Promise<string> {
+  return invoke<string>('trash_entry', { root, path, position: position ?? null });
 }
-export interface TrashItem { item: string; name: string; original: string; trashed_at: number; is_dir: boolean }
+export interface TrashItem { item: string; name: string; original: string; position?: number | null; trashed_at: number; is_dir: boolean }
 export function listTrash(root: string): Promise<TrashItem[]> { return invoke<TrashItem[]>('list_trash', { root }); }
 export function restoreEntry(root: string, path: string): Promise<string> { return invoke<string>('restore_entry', { root, path }); }
 /** A plain yes/no in the system's own dialog, for the few actions that cannot be undone from inside the app. */

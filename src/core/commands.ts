@@ -31,6 +31,8 @@ export const APP_ACTIONS = [
   'rename',
   'trash',
   'openTrash',
+  'selectPages',
+  'welcome',
   'exportPdf',
   'palette',
   'session',

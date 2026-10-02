@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ExportPicker } from '../src/ui/export-picker';
+import { ExportPicker, PICKS_KEY } from '../src/ui/export-picker';
 
 function setup() {
   document.body.innerHTML = '<details id="r"><summary id="s"></summary><button id="all"></button><button id="none"></button><div id="l"></div></details>';
@@ -56,5 +56,39 @@ describe('Export page picker', () => {
     expect(t.picker.selected()).toEqual(['a.md', 'b.md']);
     t.picker.show(false);
     expect(document.getElementById('r')!.hidden).toBe(true);
+  });
+});
+
+describe('Export page picker memory and presets', () => {
+  const store = () => { const m = new Map<string, string>(); return { m, api: { get: (k: string) => m.get(k) ?? null, set: (k: string, v: string) => { m.set(k, v); }, remove: (k: string) => { m.delete(k); } } }; };
+  const build = (s: ReturnType<typeof store>['api']) => {
+    document.body.innerHTML = '<details id="r"><summary id="s"></summary><button id="all"></button><button id="none"></button><div id="l"></div></details>';
+    return new ExportPicker({ root: document.getElementById('r')!, summary: document.getElementById('s')!, list: document.getElementById('l')!, all: document.getElementById('all')!, none: document.getElementById('none')! }, () => undefined, s);
+  };
+  const pages = [{ path: 'a.md', label: 'A', words: 1 }, { path: 'b.md', label: 'B', words: 2 }, { path: 'c.md', label: 'C', words: 3 }];
+  it('remembers a project\'s ticks across restarts', () => {
+    const s = store();
+    const first = build(s.api);
+    first.setPages('/lib/P', pages);
+    first.choose(['a.md', 'c.md']);
+    expect(JSON.parse(s.m.get(PICKS_KEY)!)['/lib/P']).toEqual(['a.md', 'c.md']);
+    const second = build(s.api);
+    second.setPages('/lib/P', pages);
+    expect(second.selected()).toEqual(['a.md', 'c.md']);
+  });
+  it('ticks exactly the pages it is told to, ignoring pages that are not there', () => {
+    const picker = build(store().api);
+    picker.setPages('P', pages);
+    picker.choose(['b.md', 'zzz.md']);
+    expect(picker.selected()).toEqual(['b.md']);
+  });
+  it('survives damaged storage and keeps only the latest projects', () => {
+    const s = store();
+    s.m.set(PICKS_KEY, '{nope');
+    const picker = build(s.api);
+    picker.setPages('P', pages);
+    expect(picker.selected()).toHaveLength(3);
+    for (let i = 0; i < 40; i++) { picker.setPages('P' + i, pages); picker.choose(['a.md']); }
+    expect(Object.keys(JSON.parse(s.m.get(PICKS_KEY)!)).length).toBeLessThanOrEqual(30);
   });
 });

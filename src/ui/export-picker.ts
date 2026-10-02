@@ -1,3 +1,8 @@
+import type { KeyValueStore } from '../core/ports';
+
+export const PICKS_KEY = 'agp.export.picks.v1';
+const MAX_REMEMBERED = 30;
+
 export interface PickerPage { path: string; label: string; words: number }
 
 export interface PickerElements {
@@ -15,7 +20,7 @@ export class ExportPicker {
   private key = '';
   private readonly memory = new Map<string, Set<string>>();
 
-  constructor(private readonly els: PickerElements, private readonly changed: () => void) {
+  constructor(private readonly els: PickerElements, private readonly changed: () => void, private readonly store?: KeyValueStore) {
     els.all.addEventListener('click', () => this.set(this.pages.map(p => p.path)));
     els.none.addEventListener('click', () => this.set([]));
     els.list.addEventListener('change', (event) => {
@@ -36,7 +41,7 @@ export class ExportPicker {
     const same = key === this.key;
     this.key = key;
     this.pages = [...pages];
-    const known = same ? this.chosen : this.memory.get(key);
+    const known = same ? this.chosen : this.memory.get(key) ?? this.stored(key);
     const present = new Set(this.pages.map(p => p.path));
     this.chosen = known ? new Set([...known].filter(p => present.has(p))) : new Set(present);
     if (known && this.chosen.size === 0 && !same) this.chosen = new Set(present);
@@ -54,7 +59,35 @@ export class ExportPicker {
     this.changed();
   }
 
-  private remember(): void { this.memory.set(this.key, new Set(this.chosen)); }
+  /** Ticks exactly these pages (for "Export these selected pages"), without asking for a new preview. */
+  choose(paths: readonly string[]): void {
+    const present = new Set(this.pages.map(p => p.path));
+    this.chosen = new Set(paths.filter(p => present.has(p)));
+    this.remember();
+    this.draw(true);
+  }
+
+  private readStore(): Record<string, string[]> {
+    try {
+      const data: unknown = JSON.parse(this.store?.get(PICKS_KEY) ?? '{}');
+      return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, string[]> : {};
+    } catch { return {}; }
+  }
+
+  private stored(key: string): Set<string> | undefined {
+    const list = this.readStore()[key];
+    return Array.isArray(list) ? new Set(list.filter(x => typeof x === 'string')) : undefined;
+  }
+
+  private remember(): void {
+    this.memory.set(this.key, new Set(this.chosen));
+    if (!this.store || !this.key) return;
+    const all = this.readStore();
+    delete all[this.key];
+    all[this.key] = [...this.chosen];
+    const keep = Object.entries(all).slice(-MAX_REMEMBERED);
+    this.store.set(PICKS_KEY, JSON.stringify(Object.fromEntries(keep)));
+  }
 
   private draw(rebuild: boolean): void {
     const chosenWords = this.pages.filter(p => this.chosen.has(p.path)).reduce((n, p) => n + p.words, 0);

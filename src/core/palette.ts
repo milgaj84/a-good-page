@@ -9,6 +9,8 @@ export const PALETTE_ITEMS: readonly PaletteItem[] = [
   { action: 'newProject', label: 'New project', group: 'Library', keywords: 'create folder book novel collection', shortcut: 'Mod+Shift+N' },
   { action: 'rename', label: 'Rename this page', group: 'Library', keywords: 'title name', shortcut: 'F2' },
   { action: 'trash', label: 'Move this page to the trash', group: 'Library', keywords: 'delete remove' },
+  { action: 'selectPages', label: 'Select several pages', group: 'Library', keywords: 'choose tick multiple move export trash checkbox' },
+  { action: 'welcome', label: 'Show the welcome guide', group: 'Help', keywords: 'getting started tour introduction how to' },
   { action: 'openTrash', label: 'Open the trash', group: 'Library', keywords: 'restore deleted recover bin undo delete' },
   { action: 'open', label: 'Open a file from elsewhere', group: 'Library', keywords: 'import browse disk', shortcut: 'Mod+O' },
   { action: 'save', label: 'Save now', group: 'Library', keywords: 'autosave', shortcut: 'Mod+S' },

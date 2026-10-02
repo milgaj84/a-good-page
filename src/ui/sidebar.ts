@@ -14,6 +14,9 @@ export interface SidebarRow {
   /** For files: the project folder and the position inside it. */
   book?: string;
   index?: number;
+  /** In selection mode: ticked, or (for a project) some of its pages ticked. */
+  selected?: boolean;
+  partial?: boolean;
 }
 
 export interface SearchHit { path: string; book: string | null; title: string; context: string }
@@ -31,6 +34,11 @@ export interface SidebarEvents {
   add(row: SidebarRow): void;
   newProject(): void;
   reorder(book: string, path: string, toIndex: number): void;
+  /** A page was dropped on another project, between its pages, or on Unfiled pages (`project` null). */
+  moveInto(from: SidebarRow, project: string | null, index?: number): void;
+  /** Selection mode: tick or untick a row. */
+  select(row: SidebarRow): void;
+  selectMode(): void;
   query(text: string): void;
   rename(row: SidebarRow, name: string): void;
   hit(hit: SearchHit): void;
@@ -44,6 +52,7 @@ export interface SidebarView {
   empty: string;
   /** True when the Library has nothing in it at all, so a welcome with one clear next step is shown. */
   blank?: boolean;
+  selecting?: boolean;
 }
 
 const SVG = (body: string): string => '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
@@ -51,6 +60,7 @@ const ICONS = {
   project: SVG('<path d="M3.5 8a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>'),
   file: SVG('<path d="M7 3.5h6.5L18 8v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8H18"/>'),
   plus: SVG('<path d="M12 5.5v13M5.5 12h13"/>'),
+  select: SVG('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>'),
   more: SVG('<circle cx="6" cy="12" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="18" cy="12" r="1.1"/>'),
 };
 function icon(name: keyof typeof ICONS, className: string): HTMLElement {
@@ -155,6 +165,22 @@ export class Sidebar {
     const label = document.createElement('span');
     label.textContent = text;
     el.append(label);
+    if (text === 'Unfiled pages') {
+      el.addEventListener('dragover', (event) => {
+        if (this.dragging?.kind !== 'file') return;
+        event.preventDefault();
+        this.clearMarks();
+        el.dataset.drop = 'into';
+      });
+      el.addEventListener('drop', (event) => {
+        const from = this.dragging;
+        if (from?.kind !== 'file') return;
+        event.preventDefault();
+        this.clearMarks();
+        this.dragging = null;
+        this.events.moveInto(from, null);
+      });
+    }
     if (withAdd) {
       const add = document.createElement('button');
       add.type = 'button';
@@ -163,7 +189,18 @@ export class Sidebar {
       add.setAttribute('aria-label', 'New project');
       add.innerHTML = ICONS.plus;
       add.addEventListener('click', () => this.events.newProject());
-      el.append(add);
+      const select = document.createElement('button');
+      select.type = 'button';
+      select.className = 'tree-add';
+      select.title = 'Select several pages';
+      select.setAttribute('aria-label', 'Select several pages');
+      select.setAttribute('aria-pressed', String(Boolean(this.view.selecting)));
+      select.innerHTML = ICONS.select;
+      select.addEventListener('click', () => this.events.selectMode());
+      const group = document.createElement('span');
+      group.className = 'tree-add-group';
+      group.append(select, add);
+      el.append(group);
     }
     return el;
   }
@@ -199,6 +236,16 @@ export class Sidebar {
       el.append(input);
       return el;
     }
+    if (this.view.selecting) {
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'row-check';
+      box.checked = Boolean(row.selected);
+      box.indeterminate = Boolean(row.partial);
+      box.setAttribute('aria-label', 'Select ' + row.label);
+      box.addEventListener('change', () => this.events.select(row));
+      el.append(box);
+    }
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'open';
@@ -221,7 +268,11 @@ export class Sidebar {
       meta.textContent = row.meta;
       open.append(meta);
     }
-    open.addEventListener('click', () => (row.kind === 'project' ? this.events.toggle(row) : this.events.open(row)));
+    open.addEventListener('click', () => {
+      if (row.kind === 'project') this.events.toggle(row);
+      else if (this.view.selecting) this.events.select(row);
+      else this.events.open(row);
+    });
     el.append(open);
     if (row.kind === 'project') {
       const add = document.createElement('button');
@@ -244,36 +295,57 @@ export class Sidebar {
     more.addEventListener('click', (event) => { event.stopPropagation(); this.events.menu(row, more); });
     el.append(more);
     el.addEventListener('contextmenu', (event) => { event.preventDefault(); this.events.menu(row, el); });
-    if (row.kind === 'file' && row.book !== undefined && !row.missing) this.makeDraggable(el, row);
+    if (!row.missing) this.wireDrag(el, row);
     return el;
   }
 
-  private makeDraggable(el: HTMLElement, row: SidebarRow): void {
-    el.draggable = true;
-    el.addEventListener('dragstart', (event) => {
-      this.dragging = row;
-      el.dataset.dragging = 'true';
-      event.dataTransfer?.setData('text/plain', row.path);
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-    });
-    el.addEventListener('dragend', () => { this.dragging = null; this.clearMarks(); });
+  /** Pages drag to reorder, into another project, or out to Unfiled pages; projects accept drops. */
+  private wireDrag(el: HTMLElement, row: SidebarRow): void {
+    if (row.kind !== 'project' && !this.view.selecting) {
+      el.draggable = true;
+      el.addEventListener('dragstart', (event) => {
+        this.dragging = row;
+        el.dataset.dragging = 'true';
+        event.dataTransfer?.setData('text/plain', row.path);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+      });
+      el.addEventListener('dragend', () => { this.dragging = null; this.clearMarks(); });
+    }
     el.addEventListener('dragover', (event) => {
       const from = this.dragging;
-      if (!from || from.book !== row.book || from.path === row.path) return;
-      event.preventDefault();
-      const box = el.getBoundingClientRect();
-      this.clearMarks();
-      el.dataset.drop = event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+      if (!from || from.path === row.path) return;
+      if (row.kind === 'project') {
+        if (from.book === row.path) return;
+        event.preventDefault();
+        this.clearMarks();
+        el.dataset.drop = 'into';
+      } else if (row.kind === 'file') {
+        event.preventDefault();
+        const box = el.getBoundingClientRect();
+        this.clearMarks();
+        el.dataset.drop = event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+      }
     });
     el.addEventListener('drop', (event) => {
       const from = this.dragging;
-      if (!from || from.book !== row.book || row.index === undefined || from.index === undefined || row.book === undefined) return;
-      event.preventDefault();
-      let to = row.index + (el.dataset.drop === 'after' ? 1 : 0);
-      if (from.index < to) to -= 1;
-      this.clearMarks();
-      this.dragging = null;
-      if (to !== from.index) this.events.reorder(row.book, from.path, to);
+      if (!from || from.path === row.path) return;
+      if (row.kind === 'project') {
+        if (from.book === row.path) return;
+        event.preventDefault();
+        this.clearMarks();
+        this.dragging = null;
+        this.events.moveInto(from, row.path);
+      } else if (row.kind === 'file' && row.book !== undefined && row.index !== undefined) {
+        event.preventDefault();
+        let to = row.index + (el.dataset.drop === 'after' ? 1 : 0);
+        this.clearMarks();
+        this.dragging = null;
+        if (from.book === row.book) {
+          if (from.index === undefined) return;
+          if (from.index < to) to -= 1;
+          if (to !== from.index) this.events.reorder(row.book, from.path, to);
+        } else this.events.moveInto(from, row.book, to);
+      }
     });
   }
 

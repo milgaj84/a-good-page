@@ -225,7 +225,7 @@ pub fn move_into(root: &str, selected: &str, to: Option<&str>) -> Result<String,
 }
 
 /// Moves a page or book into `<Library>/.trash/<stamp>/`, remembering where it came from so it can be restored.
-pub fn trash(root: &str, selected: &str) -> Result<String, String> {
+pub fn trash(root: &str, selected: &str, position: Option<u32>) -> Result<String, String> {
     let base = canonical_root(root)?;
     let item = inside_item(&base, selected)?;
     let relative = item
@@ -239,7 +239,11 @@ pub fn trash(root: &str, selected: &str) -> Result<String, String> {
     fs::create_dir_all(&stamp).map_err(|e| format!("Could not prepare the trash: {e}"))?;
     let name = item.file_name().ok_or("Cannot move that item.")?;
     let target = stamp.join(name);
-    fs::write(stamp.join(ORIGIN), &relative)
+    let note = match position {
+        Some(index) => format!("{relative}\n{index}"),
+        None => relative.clone(),
+    };
+    fs::write(stamp.join(ORIGIN), note)
         .map_err(|e| format!("Could not note where it came from: {e}"))?;
     if let Err(e) = fs::rename(&item, &target) {
         let _ = fs::remove_file(stamp.join(ORIGIN));
@@ -255,6 +259,8 @@ pub struct TrashItem {
     pub item: String,
     pub name: String,
     pub original: String,
+    /// Where the page sat in its project's order, so Restore can put it back there.
+    pub position: Option<u32>,
     pub trashed_at: u64,
     pub is_dir: bool,
 }
@@ -282,9 +288,12 @@ pub fn list_trash(root: &str) -> Result<Vec<TrashItem>, String> {
         else {
             continue;
         };
-        let Ok(original) = fs::read_to_string(dir.join(ORIGIN)) else {
+        let Ok(note) = fs::read_to_string(dir.join(ORIGIN)) else {
             continue;
         };
+        let mut lines = note.lines();
+        let original = lines.next().unwrap_or_default().to_owned();
+        let position = lines.next().and_then(|n| n.trim().parse::<u32>().ok());
         let Some(found) = fs::read_dir(&dir).ok().and_then(|rd| {
             rd.flatten()
                 .map(|e| e.path())
@@ -306,6 +315,7 @@ pub fn list_trash(root: &str) -> Result<Vec<TrashItem>, String> {
             item: path.to_owned(),
             name: name.to_owned(),
             original: original.trim().to_owned(),
+            position,
             trashed_at,
             is_dir: found.is_dir(),
         });
@@ -331,8 +341,9 @@ pub fn restore(root: &str, item_path: &str) -> Result<String, String> {
     {
         return Err("That item is not in the trash.".into());
     }
-    let original = fs::read_to_string(stamp.join(ORIGIN))
+    let note = fs::read_to_string(stamp.join(ORIGIN))
         .map_err(|_| "This item has no record of where it came from.")?;
+    let original = note.lines().next().unwrap_or_default().to_owned();
     let rel: Vec<&str> = original.trim().split('/').collect();
     if rel.is_empty()
         || rel.iter().any(|part| {
@@ -485,12 +496,12 @@ mod tests {
         let root = temp();
         let a = create(s(&root), None, "Old", "file").unwrap();
         fs::write(&a, "words").unwrap();
-        let moved = trash(s(&root), &a).unwrap();
+        let moved = trash(s(&root), &a, None).unwrap();
         assert!(!Path::new(&a).exists());
         assert_eq!(fs::read_to_string(&moved).unwrap(), "words");
         assert!(root.join(TRASH).exists());
-        assert!(trash(s(&root), s(&root)).is_err());
-        assert!(trash(s(&root), &moved).is_err());
+        assert!(trash(s(&root), s(&root), None).is_err());
+        assert!(trash(s(&root), &moved, None).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -500,11 +511,12 @@ mod tests {
         let book = create(s(&root), None, "Novel", "folder").unwrap();
         let chapter = create(s(&root), Some(&book), "Ch 1", "file").unwrap();
         fs::write(&chapter, "chapter words").unwrap();
-        let moved = trash(s(&root), &chapter).unwrap();
+        let moved = trash(s(&root), &chapter, Some(3)).unwrap();
         let listed = list_trash(s(&root)).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].name, "Ch 1.md");
         assert_eq!(listed[0].original, "Novel/Ch 1.md");
+        assert_eq!(listed[0].position, Some(3));
         assert_eq!(listed[0].item, moved);
         fs::remove_dir_all(&book).unwrap();
         let back = restore(s(&root), &moved).unwrap();
@@ -519,11 +531,11 @@ mod tests {
         let root = temp();
         let a = create(s(&root), None, "Draft", "file").unwrap();
         fs::write(&a, "old").unwrap();
-        let first = trash(s(&root), &a).unwrap();
+        let first = trash(s(&root), &a, None).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(3));
         let again = create(s(&root), None, "Draft", "file").unwrap();
         fs::write(&again, "new").unwrap();
-        trash(s(&root), &again).unwrap();
+        trash(s(&root), &again, None).unwrap();
         let fresh = create(s(&root), None, "Draft", "file").unwrap();
         fs::write(&fresh, "live").unwrap();
         let listed = list_trash(s(&root)).unwrap();
@@ -555,7 +567,7 @@ mod tests {
         fs::write(outside.join("o.md"), "x").unwrap();
         symlink(outside.join("o.md"), root.join("alias.md")).unwrap();
         symlink(&outside, root.join("door")).unwrap();
-        assert!(trash(s(&root), s(&root.join("alias.md"))).is_err());
+        assert!(trash(s(&root), s(&root.join("alias.md")), None).is_err());
         assert!(create(s(&root), Some(s(&root.join("door"))), "x", "file").is_err());
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();

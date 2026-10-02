@@ -88,17 +88,29 @@ This is your Library. Everything you write is saved here automatically, so there
 
 Click anywhere and type. Your page names itself from your first line.
 
+## Projects and pages
+
+Your Library holds **projects**. A project is a folder with one or many pages: a novel, an essay, a set of notes.
+
+- The **+** beside *Projects* starts a project with a first page. The **+** on a project adds a page to it.
+- Drag pages to reorder them, into another project, or onto *Unfiled pages*. Or use a page's **⋯** menu.
+- **Select** (the tick-box icon beside *Projects*) lets you pick several pages to move, export or trash together.
+- Click **Library** at the top to switch to another folder.
+
 ## Find your way
 
-- Your Library holds **projects**. A project is a folder with one or many pages; The **+** beside Projects starts one, and the **+** on a project adds a page to it. Drag pages to reorder them.
 - Press **Ctrl/Cmd+P** to jump to any page or run any command: type "focus", "export" or "theme".
+- The sidebar search looks inside every page of every project.
 - Select some text for quick formatting, or type **/** on an empty line for headings, lists and scene breaks.
+- The **contents** button at the top right lists the headings on this page.
 
 ## Make it yours
 
-The gear at the top right holds themes, type, goals and your Library folder. **Focus** at the bottom left gives you paragraph focus, a typewriter line, Zen draft and full screen.
+The gear at the top right holds themes, type, goals and the Library folder. **Focus** at the bottom gives you paragraph focus, a typewriter line, Zen draft and full screen.
 
 ## Share
 
-**Export** makes a PDF of this page, or of the whole project, with a preview first. Your words stay in plain Markdown files you can open anywhere.
+**Export** (the arrow) makes a PDF of this page, or of a project. Tick just the pages you want, and preview the real pages first. Your words stay in plain Markdown files you can open anywhere.
+
+To see this guide again, press Ctrl/Cmd+P and type "welcome".
 `;

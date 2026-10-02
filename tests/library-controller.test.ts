@@ -13,7 +13,7 @@ function fixture(seed: Record<string, string> = {}) {
   const views: SidebarView[] = [];
   const notes: string[] = [];
   const moves: Array<[string, string]> = [];
-  const trashed: Array<{ item: string; name: string; original: string; trashed_at: number; is_dir: boolean }> = [];
+  const trashed: Array<{ item: string; name: string; original: string; position: number | null; trashed_at: number; is_dir: boolean }> = [];
   const undos: Array<{ message: string; run: () => void }> = [];
   const doc = {
     snapshot: () => ({ path: session.path, name: session.name, state: 'saved' as const }),
@@ -50,10 +50,10 @@ function fixture(seed: Record<string, string> = {}) {
       if (files.has(to) && to !== path) throw new Error('Something with that name already exists here.');
       files.set(to, files.get(path)!); if (to !== path) files.delete(path); return to;
     },
-    trash: async (_root: string, path: string) => {
-      const item = '/lib/.trash/1/' + path.split('/').pop();
+    trash: async (_root: string, path: string, position?: number) => {
+      const item = '/lib/.trash/' + (trashed.length + 1) + '/' + path.split('/').pop();
       files.set(item, files.get(path)!); files.delete(path);
-      trashed.push({ item, name: path.split('/').pop()!, original: path.slice('/lib/'.length), trashed_at: 1, is_dir: false });
+      trashed.push({ item, name: path.split('/').pop()!, original: path.slice('/lib/'.length), position: position ?? null, trashed_at: 1, is_dir: false });
       return item;
     },
     listTrash: async () => [...trashed],
@@ -370,6 +370,126 @@ describe('exporting from the panel', () => {
     expect(info?.title).toBe('B');
     expect(info?.service.chapters.map(c => c.path)).toEqual(['01.md', '02.md']);
     expect((await t.controller.bookForExport())?.title).toBe('A');
+  });
+});
+
+describe('restoring and moving to the right place', () => {
+  it('puts a restored page back at the position it had', async () => {
+    const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two', '/lib/Novel/03.md': '# Three' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/Novel');
+    await t.controller.trash('/lib/Novel/02.md', 'file', '02');
+    expect((await t.controller.trashItems())[0].position).toBe(1);
+    t.undos[0].run();
+    await new Promise(r => setTimeout(r, 0));
+    expect(JSON.parse(t.files.get('/lib/Novel/.a-good-page.json')!).chapters).toEqual(['01.md', '02.md', '03.md']);
+  });
+
+  it('drops a page into a project at a chosen place, and onto a project at the end', async () => {
+    const t = fixture({ '/lib/A/01.md': '# a1', '/lib/A/02.md': '# a2', '/lib/B/x.md': '# x', '/lib/Loose.md': 'words' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/A');
+    await t.controller.toggleBook('/lib/B');
+    const row = t.last().rows.find(r => r.label === 'x')!;
+    await t.controller.moveInto(row, '/lib/A', 1);
+    expect(JSON.parse(t.files.get('/lib/A/.a-good-page.json')!).chapters).toEqual(['01.md', 'x.md', '02.md']);
+    const loose = t.last().rows.find(r => r.kind === 'loose')!;
+    await t.controller.moveInto(loose, '/lib/A');
+    expect(JSON.parse(t.files.get('/lib/A/.a-good-page.json')!).chapters.at(-1)).toBe('Loose.md');
+  });
+});
+
+describe('selecting several pages', () => {
+  const setupSel = async () => {
+    const t = fixture({ '/lib/A/01.md': '# a1', '/lib/A/02.md': '# a2', '/lib/A/03.md': '# a3', '/lib/B/x.md': '# x', '/lib/Loose.md': 'words' });
+    const bars: Array<[number, boolean]> = [];
+    (t.controller as unknown as { d: { selectionChanged: (n: number, s: boolean) => void } }).d.selectionChanged = (n, s) => { bars.push([n, s]); };
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/A');
+    await t.controller.toggleBook('/lib/B');
+    return { t, bars };
+  };
+
+  it('ticks single pages and whole projects, and shows partial ticks', async () => {
+    const { t, bars } = await setupSel();
+    t.controller.toggleSelectMode();
+    expect(t.last().selecting).toBe(true);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '01')!);
+    expect(t.last().rows.find(r => r.kind === 'project' && r.label === 'A')).toMatchObject({ partial: true, selected: false });
+    await t.controller.toggleSelected(t.last().rows.find(r => r.kind === 'project' && r.label === 'A')!);
+    expect(t.last().rows.find(r => r.kind === 'project' && r.label === 'A')).toMatchObject({ selected: true, partial: false });
+    expect(t.controller.selectionCount).toBe(3);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.kind === 'project' && r.label === 'A')!);
+    expect(t.controller.selectionCount).toBe(0);
+    expect(bars.at(-1)).toEqual([0, true]);
+    expect(t.controller.endSelect()).toBe(true);
+    expect(t.controller.endSelect()).toBe(false);
+  });
+
+  it('moves the ticked pages into a project in one go', async () => {
+    const { t } = await setupSel();
+    t.controller.toggleSelectMode();
+    await t.controller.toggleSelected(t.last().rows.find(r => r.kind === 'loose')!);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === 'x')!);
+    await t.controller.moveSelected('/lib/A');
+    expect(t.files.has('/lib/A/Loose.md')).toBe(true);
+    expect(t.files.has('/lib/A/x.md')).toBe(true);
+    expect(t.controller.selectionCount).toBe(0);
+  });
+
+  it('trashes the ticked pages together with one Undo that restores them in place', async () => {
+    const { t } = await setupSel();
+    t.controller.toggleSelectMode();
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '01')!);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '03')!);
+    await t.controller.trashSelected();
+    expect(t.files.has('/lib/A/01.md')).toBe(false);
+    expect(t.files.has('/lib/A/03.md')).toBe(false);
+    expect(t.undos).toHaveLength(1);
+    expect(t.undos[0].message).toBe('Moved 2 pages to the trash.');
+    t.undos[0].run();
+    await new Promise(r => setTimeout(r, 20));
+    expect(JSON.parse(t.files.get('/lib/A/.a-good-page.json')!).chapters).toEqual(['01.md', '02.md', '03.md']);
+  });
+
+  it('hands pages of one project to Export, and refuses a mix', async () => {
+    const { t } = await setupSel();
+    const calls: Array<[string, string[]]> = [];
+    (t.controller as unknown as { d: { exportSelection: (p: string, pages: string[]) => void } }).d.exportSelection = (p, pages) => { calls.push([p, pages]); };
+    t.controller.toggleSelectMode();
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '01')!);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '03')!);
+    t.controller.exportSelected();
+    expect(calls).toEqual([['/lib/A', ['01.md', '03.md']]]);
+    expect(t.controller.isSelecting).toBe(false);
+    t.controller.toggleSelectMode();
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === '01')!);
+    await t.controller.toggleSelected(t.last().rows.find(r => r.label === 'x')!);
+    t.controller.exportSelected();
+    expect(calls).toHaveLength(1);
+    expect(t.notes.at(-1)).toContain('one project');
+  });
+});
+
+describe('Library-wide search and the welcome guide', () => {
+  it('finds text in unfiled pages as well as in projects', async () => {
+    const t = fixture({ '/lib/A/01.md': '# One\n\nThe fog came in.', '/lib/Loose.md': '# Loose\n\nFog on the hill.' });
+    await t.controller.start();
+    await t.controller.search('fog');
+    expect(t.last().hits.map(h => h.title).sort()).toEqual(['01', 'Loose']);
+    expect(t.last().hits.find(h => h.title === 'Loose')?.book).toBeNull();
+  });
+
+  it('shows the welcome guide again, reusing an existing one and never overwriting your edits', async () => {
+    const t = fixture();
+    await t.controller.start();
+    await t.controller.openWelcome();
+    expect(t.session.path).toBe('/lib/Getting started/Welcome to A Good Page.md');
+    expect(t.files.get(t.session.path!)).toContain('Projects and pages');
+    t.files.set(t.session.path!, 'my own notes');
+    await t.controller.openWelcome();
+    expect(t.files.get('/lib/Getting started/Welcome to A Good Page.md')).toBe('my own notes');
+    expect([...t.dirs].filter(d => d.includes('Getting started'))).toHaveLength(1);
   });
 });
 

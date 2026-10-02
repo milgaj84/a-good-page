@@ -112,8 +112,8 @@ pub fn rename_entry(root: String, path: String, new_name: String) -> Result<Stri
 }
 
 #[tauri::command]
-pub fn trash_entry(root: String, path: String) -> Result<String, String> {
-    crate::library::trash(&root, &path)
+pub fn trash_entry(root: String, path: String, position: Option<u32>) -> Result<String, String> {
+    crate::library::trash(&root, &path, position)
 }
 
 #[tauri::command]

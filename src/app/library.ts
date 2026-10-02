@@ -3,7 +3,7 @@ import type { KeyValueStore } from '../core/ports';
 import type { FolderListing } from '../core/quick-switch';
 import type { PaletteEntry } from '../core/palette';
 import { ProjectService, type ProjectPorts } from '../core/project-service';
-import { searchProject, type ProjectFile } from '../core/project';
+import { chapterInfo, searchProject, type ProjectFile } from '../core/project';
 import { nameFromPath } from '../core/paths';
 import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
 import type { Menu, MenuItem } from '../ui/menu';
@@ -28,7 +28,7 @@ export interface LibraryDeps {
     saveOrder: ProjectPorts['saveOrder'];
     create(root: string, parent: string | null, name: string, kind: 'file' | 'folder'): Promise<string>;
     rename(root: string, path: string, name: string): Promise<string>;
-    trash(root: string, path: string): Promise<string>;
+    trash(root: string, path: string, position?: number): Promise<string>;
     write(path: string, content: string): Promise<unknown>;
     pickFolder(): Promise<string | null>;
     move(root: string, path: string, to: string | null): Promise<string>;
@@ -50,6 +50,10 @@ export interface LibraryDeps {
   /** Opens the PDF preview for a whole project, or for one page (opening it first). */
   exportProject?(path: string): void;
   exportPage?(path: string): void;
+  /** Export only these pages (paths inside the project) of one project. */
+  exportSelection?(project: string, pages: string[]): void;
+  /** Selection mode on or off, and how many pages are ticked, so the action bar can follow. */
+  selectionChanged?(count: number, selecting: boolean): void;
   /** Called after every redraw of the tree, so things that depend on it (the next-chapter link) can follow. */
   rendered?(): void;
 }
@@ -65,6 +69,10 @@ export class LibraryController {
   private expanded: Set<string>;
   private renaming: string | null = null;
   private query = '';
+  private selecting = false;
+  private readonly selected = new Set<string>();
+  private readonly looseText = new Map<string, string>();
+  private searchStamp = 0;
   private renamingBusy = false;
   private focusAfterRename = false;
 
@@ -129,6 +137,23 @@ export class LibraryController {
   }
 
   /** Asks for a folder and makes it the Library. */
+  /** Shows the Welcome guide again, creating it (and its project) if it is gone. Never overwrites a page you edited. */
+  async openWelcome(): Promise<void> {
+    if (!this.root) return;
+    try {
+      let project = this.rows.find(r => r.kind === 'project' && r.name === 'Getting started')?.path;
+      if (!project) project = await this.d.io.create(this.root, null, 'Getting started', 'folder');
+      const service = this.books.get(project) ?? await this.loadBook(project);
+      const entry = service?.chapters.find(c => stem(c.path) === WELCOME_TITLE);
+      let path: string;
+      if (entry) path = this.chapterPath(project, entry.path);
+      else { path = await this.d.io.create(this.root, project, WELCOME_TITLE, 'file'); await this.d.io.write(path, WELCOME_TEXT); }
+      this.expanded.add(project);
+      await this.refresh();
+      await this.open(path);
+    } catch (error) { this.d.notify('Could not open the guide: ' + message(error)); }
+  }
+
   async changeFolder(): Promise<void> {
     const picked = await this.d.io.pickFolder();
     if (picked) await this.useFolder(picked);
@@ -230,7 +255,11 @@ export class LibraryController {
       const nameHit = rows.some(r => r.path === row.path);
       const chapterHits = chapters.filter(c => !q || (stem(c.path) + ' ' + (c.file?.title ?? '')).toLocaleLowerCase().includes(q.toLocaleLowerCase()));
       if (q && !nameHit && !chapterHits.length) continue;
+      const projectPages = chapters.filter(c => c.file).map(c => this.chapterPath(row.path, c.path));
+      const picked = projectPages.filter(x => this.selected.has(x)).length;
       out.push({
+        selected: row.kind === 'loose' ? this.selected.has(row.path) : projectPages.length > 0 && picked === projectPages.length,
+        partial: row.kind === 'project' && picked > 0 && picked < projectPages.length,
         path: row.path, kind: row.kind, label: row.name, current: row.kind === 'loose' && row.path === current,
         expanded: opened, meta: row.kind === 'project' && service ? service.chapters.length + (service.chapters.length === 1 ? ' page' : ' pages') : undefined,
       });
@@ -241,7 +270,7 @@ export class LibraryController {
         const isCurrent = full === current;
         out.push({
           path: full, kind: 'file', label: displayName(stem(entry.path), entry.file?.title), fileName: stem(entry.path),
-          current: isCurrent, missing: entry.issue !== null,
+          current: isCurrent, missing: entry.issue !== null, selected: this.selected.has(full),
           meta: entry.issue ? 'missing' : (isCurrent ? live : entry.file!.words).toLocaleString(), book: row.path, index,
         });
       });
@@ -252,6 +281,7 @@ export class LibraryController {
       rows: out, hits: q.length >= 2 ? this.textHits(q) : [], renaming: this.renaming,
       empty: q ? 'Nothing here matches “' + q + '”.' : '',
       blank: !q && this.rows.length === 0,
+      selecting: this.selecting,
     });
     this.d.rendered?.();
   }
@@ -265,13 +295,30 @@ export class LibraryController {
         if (hits.length >= 30) return hits;
       }
     }
+    for (const [path, text] of this.looseText) {
+      const name = path.split(/[\\/]/).pop() ?? path;
+      for (const hit of searchProject([chapterInfo(name, text)], q).slice(0, 3)) {
+        hits.push({ path, book: null, title: displayName(stem(path), hit.title), context: hit.context });
+        if (hits.length >= 30) return hits;
+      }
+    }
     return hits;
   }
 
+  /** Searches names and the text of every project and unfiled page. Everything read is kept for a minute, so typing is instant. */
   async search(text: string): Promise<void> {
     this.query = text;
-    if (text.trim().length >= 2) {
-      for (const row of this.rows) if (row.kind === 'project' && !this.books.has(row.path)) await this.loadBook(row.path);
+    if (text.trim().length >= 2 && this.root) {
+      const stale = Date.now() - this.searchStamp > 60_000;
+      if (stale) { this.looseText.clear(); for (const key of [...this.books.keys()]) await this.loadBook(key); }
+      this.searchStamp = Date.now();
+      for (const row of this.rows) {
+        if (row.kind === 'project' && !this.books.has(row.path)) await this.loadBook(row.path);
+        else if (row.kind === 'loose' && !this.looseText.has(row.path) && this.looseText.size < 200) {
+          try { this.looseText.set(row.path, (await this.d.io.open(this.root, row.path)).content); } catch { /* unreadable pages are simply not searched */ }
+        }
+      }
+      if (this.query !== text) return; // the writer kept typing; the newer search will draw
     }
     this.render();
   }
@@ -401,7 +448,7 @@ export class LibraryController {
 
   // ---------- moving between projects ----------
   /** Moves a page into a project (or out to the Library when `dest` is null). Never overwrites; Rust numbers a clash. */
-  async moveTo(path: string, kind: SidebarRow['kind'], dest: string | null, label: string): Promise<void> {
+  async moveTo(path: string, kind: SidebarRow['kind'], dest: string | null, label: string, index?: number, quiet = false): Promise<void> {
     if (!this.root || kind === 'project') return;
     try {
       const current = this.d.doc.snapshot().path;
@@ -422,8 +469,113 @@ export class LibraryController {
       if (touchesCurrent) this.d.doc.adoptRenamedPath(next);
       if (dest) { this.expanded.add(dest); this.books.delete(dest); }
       await this.refresh();
-      this.d.notify('Moved “' + label + '” ' + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
+      if (dest && index !== undefined) {
+        const target = this.books.get(dest);
+        const rel = target ? relativeTo(target.path ?? dest, next) : null;
+        if (target && rel) { await target.moveTo(rel, index).catch(() => undefined); this.render(); }
+      }
+      if (!quiet) this.d.notify('Moved “' + label + '” ' + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
     } catch (error) { this.d.notify('Could not move it: ' + message(error)); }
+  }
+
+  /** A page dropped on a project, between its pages, or on Unfiled pages. */
+  async moveInto(from: SidebarRow, project: string | null, index?: number): Promise<void> {
+    await this.moveTo(from.path, from.kind, project, from.label, index);
+  }
+
+  /** The projects, for "Move to…" lists. */
+  projectList(): Array<{ name: string; path: string }> {
+    return this.rows.filter(r => r.kind === 'project').map(r => ({ name: r.name, path: r.path }));
+  }
+
+  // ---------- selecting several pages ----------
+  get selectionCount(): number { return this.selected.size; }
+  get isSelecting(): boolean { return this.selecting; }
+
+  private announceSelection(): void { this.d.selectionChanged?.(this.selected.size, this.selecting); }
+
+  toggleSelectMode(): void {
+    this.selecting = !this.selecting;
+    if (!this.selecting) this.selected.clear();
+    this.announceSelection();
+    this.render();
+  }
+
+  /** Leaves selection mode; false when it was not on. */
+  endSelect(): boolean {
+    if (!this.selecting) return false;
+    this.selecting = false;
+    this.selected.clear();
+    this.announceSelection();
+    this.render();
+    return true;
+  }
+
+  /** Ticks or unticks a page; a project ticks or unticks all of its pages. */
+  async toggleSelected(row: SidebarRow): Promise<void> {
+    if (row.kind === 'project') {
+      const service = this.books.get(row.path) ?? await this.loadBook(row.path);
+      const pages = (service?.chapters ?? []).filter(c => c.file).map(c => this.chapterPath(row.path, c.path));
+      const all = pages.length > 0 && pages.every(p => this.selected.has(p));
+      for (const page of pages) { if (all) this.selected.delete(page); else this.selected.add(page); }
+    } else if (this.selected.has(row.path)) this.selected.delete(row.path);
+    else this.selected.add(row.path);
+    this.announceSelection();
+    this.render();
+  }
+
+  private selectedPaths(): string[] { return [...this.selected]; }
+  private kindOf(path: string): SidebarRow['kind'] { return this.root && bookOf(this.root, path) ? 'file' : 'loose'; }
+
+  async moveSelected(dest: string | null): Promise<void> {
+    const paths = this.selectedPaths();
+    for (const path of paths) await this.moveTo(path, this.kindOf(path), dest, stem(path), undefined, true);
+    this.selected.clear();
+    this.announceSelection();
+    this.render();
+    if (paths.length) this.d.notify('Moved ' + paths.length + (paths.length === 1 ? ' page ' : ' pages ') + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
+  }
+
+  async trashSelected(): Promise<void> {
+    const paths = this.selectedPaths();
+    if (!paths.length) return;
+    // Positions are read first, because each page removed shifts the ones after it.
+    const positions = new Map(paths.map(p => [p, this.positionOf(p)] as const));
+    const items: TrashItem[] = [];
+    for (const path of paths) {
+      const item = await this.trashOne(path, this.kindOf(path), stem(path), positions.get(path));
+      if (item) items.push(item);
+    }
+    this.selected.clear();
+    this.announceSelection();
+    this.render();
+    if (!items.length) return;
+    const ordered = [...items].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
+    this.d.offerUndo('Moved ' + items.length + (items.length === 1 ? ' page' : ' pages') + ' to the trash.', 'Undo', () => void (async () => { for (const item of ordered) await this.restore(item); })());
+  }
+
+  /** Hands the ticked pages of one project to Export; pages from several places cannot be exported together. */
+  exportSelected(): void {
+    const paths = this.selectedPaths();
+    if (!paths.length || !this.root) return;
+    const books = new Set(paths.map(p => bookOf(this.root!, p)));
+    const [book] = [...books];
+    if (books.size !== 1 || !book) {
+      this.d.notify(books.size > 1 ? 'Choose pages from one project to export them together.' : 'Unfiled pages are exported one at a time: ⋯ → Export this page.');
+      return;
+    }
+    const base = this.books.get(book)?.path ?? book;
+    this.d.exportSelection?.(book, paths.flatMap(p => relativeTo(base, p) ?? []));
+    this.endSelect();
+  }
+
+  /** Where a page sits in its project's order, or undefined for an unfiled page. */
+  private positionOf(path: string): number | undefined {
+    const book = this.root ? bookOf(this.root, path) : null;
+    const service = book ? this.books.get(book) : undefined;
+    const rel = service ? relativeTo(service.path ?? book!, path) : null;
+    const at = service && rel ? service.chapters.findIndex(c => c.path === rel) : -1;
+    return at >= 0 ? at : undefined;
   }
 
   // ---------- the trash ----------
@@ -434,6 +586,13 @@ export class LibraryController {
     if (!this.root) return;
     try {
       const path = await this.d.io.restore(this.root, item.item);
+      const home = item.is_dir ? null : bookOf(this.root, path);
+      if (home && typeof item.position === 'number') {
+        // A fresh read adds the restored page at the end; put it back where it was.
+        const service = await this.loadBook(home);
+        const rel = service ? relativeTo(service.path ?? home, path) : null;
+        if (service && rel) { await service.moveTo(rel, item.position).catch(() => undefined); this.expanded.add(home); }
+      }
       await this.refresh();
       if (!item.is_dir) await this.open(path);
       else { this.expanded.add(path); await this.refresh(); }
@@ -457,7 +616,13 @@ export class LibraryController {
 
   /** Moves to the trash at once and offers Undo; nothing is erased and the trash view can restore it later. */
   async trash(path: string, kind: SidebarRow['kind'], label: string): Promise<void> {
-    if (!this.root) return;
+    const item = await this.trashOne(path, kind, label, this.positionOf(path));
+    if (item) this.d.offerUndo('Moved “' + label + '” to the trash.', 'Undo', () => void this.restore(item));
+  }
+
+  /** Does the move and the bookkeeping, without any announcement. Returns what is now in the trash, or null on failure. */
+  private async trashOne(path: string, kind: SidebarRow['kind'], label: string, position?: number): Promise<TrashItem | null> {
+    if (!this.root) return null;
     try {
       const current = this.d.doc.snapshot().path;
       const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && current.startsWith(path))));
@@ -465,7 +630,7 @@ export class LibraryController {
       const book = kind === 'file' ? bookOf(this.root, path) : null;
       const neighbour = touchesCurrent && book ? await this.neighbourOf(book, path) : null;
       const original = relativeTo(this.root, path) ?? label;
-      const trashed = await this.d.io.trash(this.root, path);
+      const trashed = await this.d.io.trash(this.root, path, position);
       if (kind === 'project') { this.books.delete(path); this.expanded.delete(path); }
       if (kind === 'file' && book) {
         const service = this.books.get(book);
@@ -474,9 +639,8 @@ export class LibraryController {
       }
       await this.refresh();
       if (touchesCurrent) { if (neighbour) await this.open(neighbour); else await this.openSomething(path); }
-      const item: TrashItem = { item: trashed, name: nameFromPath(path), original, trashed_at: Date.now(), is_dir: kind === 'project' };
-      this.d.offerUndo('Moved “' + label + '” to the trash.', 'Undo', () => void this.restore(item));
-    } catch (error) { this.d.notify('Could not move to the trash: ' + message(error)); }
+      return { item: trashed, name: nameFromPath(path), original, position: position ?? null, trashed_at: Date.now(), is_dir: kind === 'project' };
+    } catch (error) { this.d.notify('Could not move to the trash: ' + message(error)); return null; }
   }
 
   /** The chapter after the open one, for the "next chapter" link at the end of a page. */

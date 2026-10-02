@@ -266,6 +266,7 @@ document.addEventListener('mousedown', (event) => {
   if (!contentsPop.contains(target) && !contentsButton.contains(target)) closeContents();
 });
 
+let searchTimer = 0;
 // ---------- the sidebar ----------
 const sidebar = new Sidebar({ tree: el('tree'), search: el<HTMLInputElement>('side-search') }, {
   open: (row) => { void library?.open(row.path).then(() => { if (SMALL()) setSidebar(false); }); },
@@ -274,7 +275,10 @@ const sidebar = new Sidebar({ tree: el('tree'), search: el<HTMLInputElement>('si
   add: (row) => void library?.newPage(row.path),
   newProject: () => APP.newProject(),
   reorder: (book, path, to) => void library?.reorder(book, path, to),
-  query: (text) => void library?.search(text),
+  query: (text) => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void library?.search(text), 160); },
+  moveInto: (from, project, index) => void library?.moveInto(from, project, index),
+  select: (row) => void library?.toggleSelected(row),
+  selectMode: () => library?.toggleSelectMode(),
   rename: (row, name) => void library?.commitRename(row, name),
   hit: (hit) => { void library?.open(hit.path, sidebar.query.trim()); if (SMALL()) setSidebar(false); },
 });
@@ -427,6 +431,8 @@ library = new LibraryController({
   moved: (from, to) => { projects?.historyMoved(from, to); views.move(from, to); },
   rendered: () => updateNext(),
   exportProject: (path) => void exportPdf(path),
+  exportSelection: (project, pages) => void exportPdf(project, pages),
+  selectionChanged: (count, selecting) => updateSelectBar(count, selecting),
   exportPage: (path) => void lib.open(path).then(ok => { if (ok) return exportPdf(); }),
 });
 const lib = library;
@@ -436,15 +442,37 @@ const trashDialog = new TrashDialog(
   () => lib.trashItems(), (item) => lib.restore(item), () => Date.now(),
 );
 
+// ---------- selecting several pages ----------
+const selectBar = el('select-bar');
+function updateSelectBar(count: number, selecting: boolean): void {
+  selectBar.hidden = !selecting;
+  el('sel-count').textContent = count === 0 ? 'Tick pages to choose them' : count + (count === 1 ? ' page selected' : ' pages selected');
+  for (const id of ['sel-move', 'sel-export', 'sel-trash']) (el(id) as HTMLButtonElement).disabled = count === 0;
+}
+el('sel-done').addEventListener('click', () => lib.endSelect());
+el('sel-export').addEventListener('click', () => lib.exportSelected());
+el('sel-trash').addEventListener('click', () => void lib.trashSelected());
+el('sel-move').addEventListener('click', () => {
+  const button = el('sel-move');
+  menu.open([
+    { heading: true, label: 'Move to' },
+    ...lib.projectList().map(project => ({ label: project.name, run: () => void lib.moveSelected(project.path) })),
+    { label: 'Unfiled pages', run: () => void lib.moveSelected(null) },
+  ], button.getBoundingClientRect(), button, true);
+});
+updateSelectBar(0, false);
+
 // ---------- export ----------
 const previewScope = el<HTMLSelectElement>('preview-scope');
 const previewLayout = el<HTMLSelectElement>('preview-layout');
 const picker = new ExportPicker(
   { root: el('export-pick'), summary: el('pick-summary'), list: el('pick-list'), all: el('pick-all'), none: el('pick-none') },
   () => previewLayout.dispatchEvent(new Event('change')),
+  store,
 );
 let exportProjectPath: string | null = null;
-let bookExport: { service: ProjectService; snapshot: ProjectSnapshot; title: string } | null = null;
+let exportPreset: string[] | null = null;
+let bookExport: { service: ProjectService; snapshot: ProjectSnapshot; title: string; fileName: string } | null = null;
 const preview = new ExportPreview({
   root: el('export-preview'), canvas: el<HTMLCanvasElement>('preview-canvas'),
   title: el('preview-title'), status: el('preview-status'), layout: previewLayout,
@@ -459,10 +487,13 @@ const preview = new ExportPreview({
     if (!readable.length) throw new Error('This project has no readable pages yet.');
     picker.setPages(info.service.path ?? info.title, readable.map(c => ({
       path: c.path, label: displayName(nameFromPath(c.path), c.file!.title), words: c.file!.words })));
+    if (exportPreset) { picker.choose(exportPreset); exportPreset = null; }
     const chosen = picker.selected();
     if (!chosen.length) throw new Error('Tick at least one page to export.');
     const snapshot = await info.service.previewVerified(chosen);
-    bookExport = { service: info.service, snapshot, title: info.title };
+    // A partial export says so in the file name, so it is never mistaken for the whole project.
+    const fileName = chosen.length < readable.length ? info.title + ' - ' + chosen.length + ' of ' + readable.length + ' pages' : info.title;
+    bookExport = { service: info.service, snapshot, title: info.title, fileName };
     return renderProjectPdf(snapshot.chapters, info.title, layout);
   }
   bookExport = null;
@@ -472,7 +503,7 @@ async bytes => {
   if (previewScope.value === 'book' && bookExport) {
     const book = bookExport;
     await book.service.verify(book.snapshot);
-    return (await exportPdfFile(book.title, bytes, () => book.service.verify(book.snapshot))) !== null;
+    return (await exportPdfFile(book.fileName, bytes, () => book.service.verify(book.snapshot))) !== null;
   }
   return (await exportPdfFile(doc.snapshot().name, bytes)) !== null;
 },
@@ -485,12 +516,13 @@ editor.instance.on('update', () => {
     chrome.toast('Preview closed because the page changed. Open Export again.');
 });
 /** Opens the PDF preview: the open page by default, or a whole project when one is named. */
-async function exportPdf(project: string | null = null): Promise<void> {
+async function exportPdf(project: string | null = null, pages: string[] | null = null): Promise<void> {
   autosave.cancel();
   if (doc.isDirty && !(await doc.save())) { chrome.toast('Save failed, so nothing was exported.'); return; }
   const path = doc.snapshot().path;
   const here = path && lib.root ? bookOf(lib.root, path) : null;
   exportProjectPath = project;
+  exportPreset = pages;
   const target = project ?? here;
   previewScope.value = project ? 'book' : 'page';
   (previewScope.querySelector('option[value="book"]') as HTMLOptionElement).disabled = !target;
@@ -557,6 +589,7 @@ function openTools(): void {
 function closeLayers(): boolean {
   if (menu.close()) return true;
   if (closeContents()) return true;
+  if (lib.endSelect()) return true;
   if (recoveryDialog.isOpen) { recoveryDialog.close(); return true; }
   if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;
@@ -585,6 +618,8 @@ const APP: Record<AppAction, () => void> = {
   rename,
   trash: trashCurrent,
   openTrash: () => void trashDialog.open(),
+  selectPages: () => { setSidebar(true); lib.toggleSelectMode(); },
+  welcome: () => { setSidebar(true); void lib.openWelcome(); },
   exportPdf: () => void exportPdf(null),
   palette: () => { if (sessionPanel.isOpen) sessionPanel.close(); palette.toggle(); },
   session: () => { if (palette.isOpen) palette.close(); sessionPanel.toggle(); },

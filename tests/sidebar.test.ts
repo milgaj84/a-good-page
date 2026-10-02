@@ -3,7 +3,7 @@ import { Sidebar, type SidebarEvents, type SidebarRow } from '../src/ui/sidebar'
 
 function setup(rows: SidebarRow[], renaming: string | null = null) {
   document.body.innerHTML = '<nav id="tree"></nav><input id="q" type="search" />';
-  const events: SidebarEvents = { open: vi.fn(), toggle: vi.fn(), menu: vi.fn(), add: vi.fn(), newProject: vi.fn(), reorder: vi.fn(), query: vi.fn(), rename: vi.fn(), hit: vi.fn() };
+  const events: SidebarEvents = { open: vi.fn(), toggle: vi.fn(), menu: vi.fn(), add: vi.fn(), newProject: vi.fn(), moveInto: vi.fn(), select: vi.fn(), selectMode: vi.fn(), reorder: vi.fn(), query: vi.fn(), rename: vi.fn(), hit: vi.fn() };
   const bar = new Sidebar({ tree: document.getElementById('tree')!, search: document.getElementById('q') as HTMLInputElement }, events);
   bar.render({ rows, hits: [], renaming, empty: 'Nothing yet.', blank: false });
   return { bar, events, tree: document.getElementById('tree')! };
@@ -52,13 +52,13 @@ describe('Sidebar sections', () => {
     const t = setup(rows);
     (t.tree.querySelector('.row[data-kind="project"] .row-btn.add') as HTMLElement).click();
     expect(t.events.add).toHaveBeenCalledWith(rows[0]);
-    (t.tree.querySelector('.tree-add') as HTMLElement).click();
+    (t.tree.querySelector('.tree-add[aria-label="New project"]') as HTMLElement).click();
     expect(t.events.newProject).toHaveBeenCalled();
     expect(t.tree.querySelector('.row[data-kind="file"] .row-btn.add')).toBeNull();
   });
   it('shows a welcome with one clear next step when the Library is empty', () => {
     document.body.innerHTML = '<nav id="tree"></nav><input id="q" type="search" />';
-    const events = { open: vi.fn(), toggle: vi.fn(), menu: vi.fn(), add: vi.fn(), newProject: vi.fn(), reorder: vi.fn(), query: vi.fn(), rename: vi.fn(), hit: vi.fn() } as SidebarEvents;
+    const events = { open: vi.fn(), toggle: vi.fn(), menu: vi.fn(), add: vi.fn(), newProject: vi.fn(), moveInto: vi.fn(), select: vi.fn(), selectMode: vi.fn(), reorder: vi.fn(), query: vi.fn(), rename: vi.fn(), hit: vi.fn() } as unknown as SidebarEvents;
     const bar = new Sidebar({ tree: document.getElementById('tree')!, search: document.getElementById('q') as HTMLInputElement }, events);
     bar.render({ rows: [], hits: [], renaming: null, empty: '', blank: true });
     const button = document.querySelector('.tree-welcome button') as HTMLElement;
@@ -127,5 +127,70 @@ describe('Sidebar', () => {
     els[2].dispatchEvent(over);
     els[2].dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
     expect(t.events.reorder).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sidebar selection and cross-project drops', () => {
+  const rows: SidebarRow[] = [
+    { path: '/lib/P', kind: 'project', label: 'P', current: false, expanded: true },
+    { path: '/lib/P/a.md', kind: 'file', label: 'a', current: false, book: '/lib/P', index: 0 },
+    { path: '/lib/P/b.md', kind: 'file', label: 'b', current: false, book: '/lib/P', index: 1 },
+    { path: '/lib/Q', kind: 'project', label: 'Q', current: false, expanded: true },
+    { path: '/lib/Q/x.md', kind: 'file', label: 'x', current: false, book: '/lib/Q', index: 0 },
+    { path: '/lib/loose.md', kind: 'loose', label: 'loose', current: false },
+  ];
+  const el = (t: ReturnType<typeof setup>, label: string) => Array.from(t.tree.querySelectorAll<HTMLElement>('.row')).find(r => r.textContent?.includes(label))!;
+  const box = { top: 0, height: 20, bottom: 20, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) };
+  const over = (target: HTMLElement, y = 3) => { target.getBoundingClientRect = () => box; const e = new Event('dragover', { bubbles: true, cancelable: true }) as Event & { clientY: number }; e.clientY = y; target.dispatchEvent(e); };
+
+  it('shows a tick box on every row in selection mode, and a click ticks instead of opening', () => {
+    const t = setup(rows);
+    t.bar.render({ rows: rows.map(r => ({ ...r, selected: r.path === '/lib/P/a.md', partial: r.path === '/lib/P' })), hits: [], renaming: null, empty: '', selecting: true });
+    expect(t.tree.querySelectorAll('.row-check')).toHaveLength(6);
+    expect((t.tree.querySelector('.row[data-path="/lib/P"] .row-check') as HTMLInputElement).indeterminate).toBe(true);
+    (el(t, 'b').querySelector('.open') as HTMLElement).click();
+    expect(t.events.select).toHaveBeenCalledTimes(1);
+    expect(t.events.open).not.toHaveBeenCalled();
+  });
+  it('has no tick boxes, and a tick-box button beside Projects, when not selecting', () => {
+    const t = setup(rows);
+    expect(t.tree.querySelector('.row-check')).toBeNull();
+    (t.tree.querySelector('.tree-add[aria-label="Select several pages"]') as HTMLElement).click();
+    expect(t.events.selectMode).toHaveBeenCalled();
+  });
+  it('drops a page from another project between pages, with the right index', () => {
+    const t = setup(rows);
+    el(t, 'x').dispatchEvent(new Event('dragstart', { bubbles: true }));
+    const target = el(t, 'b');
+    over(target, 15);
+    target.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+    expect(t.events.moveInto).toHaveBeenCalledWith(rows[4], '/lib/P', 2);
+    expect(t.events.reorder).not.toHaveBeenCalled();
+  });
+  it('drops a page on a project row, an unfiled page into a project, and a page onto Unfiled pages', () => {
+    const t = setup(rows);
+    el(t, 'a').dispatchEvent(new Event('dragstart', { bubbles: true }));
+    const project = t.tree.querySelector('.row[data-path="/lib/Q"]') as HTMLElement;
+    over(project);
+    project.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+    expect(t.events.moveInto).toHaveBeenLastCalledWith(rows[1], '/lib/Q');
+    el(t, 'loose').dispatchEvent(new Event('dragstart', { bubbles: true }));
+    const same = t.tree.querySelector('.row[data-path="/lib/P"]') as HTMLElement;
+    over(same);
+    same.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+    expect(t.events.moveInto).toHaveBeenLastCalledWith(rows[5], '/lib/P');
+    el(t, 'b').dispatchEvent(new Event('dragstart', { bubbles: true }));
+    const heading = Array.from(t.tree.querySelectorAll<HTMLElement>('.tree-heading')).find(h => h.textContent?.includes('Unfiled'))!;
+    over(heading);
+    heading.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+    expect(t.events.moveInto).toHaveBeenLastCalledWith(rows[2], null);
+  });
+  it('does not drop a page onto its own project', () => {
+    const t = setup(rows);
+    el(t, 'a').dispatchEvent(new Event('dragstart', { bubbles: true }));
+    const own = t.tree.querySelector('.row[data-path="/lib/P"]') as HTMLElement;
+    over(own);
+    own.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+    expect(t.events.moveInto).not.toHaveBeenCalled();
   });
 });
