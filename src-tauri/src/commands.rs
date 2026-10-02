@@ -55,6 +55,12 @@ pub fn export_pdf(
     state.pdf.export(&path, &bytes)
 }
 
+/// Saves a finished export in any supported format (`kind` is "pdf", "docx" or "md").
+#[tauri::command]
+pub fn export_document(path: String, bytes: Vec<u8>, kind: String) -> Result<String, String> {
+    crate::export::export_document(&path, &bytes, &kind)
+}
+
 #[tauri::command]
 pub fn open_workspace_file(root: String, path: String) -> Result<Document, String> {
     crate::workspace::open_file(&root, &path)

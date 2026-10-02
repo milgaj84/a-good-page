@@ -136,3 +136,16 @@
 .pick-row input { flex: none; margin: 0; accent-color: var(--accent); }
 .pick-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-row small { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Export options: format, title page, contents, page numbers */
+.export-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; margin: 0 24px 12px; }
+.export-options .check { padding: 4px 0; font-size: 13px; }
+.opt-field { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-soft); font: 12px var(--sans); }
+.opt-field select { min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--bg-soft); color: var(--ink); font: 13px var(--sans); }
+.export-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; flex-basis: 100%; }
+.export-meta .text-input { height: 34px; font-size: 13px; }
+.export-hint { flex-basis: 100%; margin: 0; color: var(--muted); font: 12px/1.5 var(--sans); }
+.export-hint:empty { display: none; }
+@media (max-width: 640px) { .export-meta { grid-template-columns: 1fr; } .export-options { margin: 0 12px 10px; } }
+/* The controls scroll on their own, so the preview always keeps room on a short window. */
+.preview-controls { max-height: 40vh; overflow-y: auto; }

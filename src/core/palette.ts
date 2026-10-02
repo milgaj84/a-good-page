@@ -15,7 +15,7 @@ export const PALETTE_ITEMS: readonly PaletteItem[] = [
   { action: 'open', label: 'Open a file from elsewhere', group: 'Library', keywords: 'import browse disk', shortcut: 'Mod+O' },
   { action: 'save', label: 'Save now', group: 'Library', keywords: 'autosave', shortcut: 'Mod+S' },
   { action: 'saveAs', label: 'Save a copy somewhere else', group: 'Library', keywords: 'save as duplicate', shortcut: 'Mod+Shift+S' },
-  { action: 'exportPdf', label: 'Export PDF', group: 'Share', keywords: 'print pages project book whole manuscript share', shortcut: 'Mod+Shift+E' },
+  { action: 'exportPdf', label: 'Export (PDF, Word, Markdown)', group: 'Share', keywords: 'pdf word docx markdown md print pages project book whole manuscript share title page contents', shortcut: 'Mod+Shift+E' },
   { action: 'paragraph', label: 'Body text', group: 'Style', keywords: 'normal paragraph', shortcut: 'Mod+Alt+0' },
   { action: 'h1', label: 'Title', group: 'Style', keywords: 'heading 1', shortcut: 'Mod+Alt+1' },
   { action: 'h2', label: 'Heading', group: 'Style', keywords: 'heading 2', shortcut: 'Mod+Alt+2' },

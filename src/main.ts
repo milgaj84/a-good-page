@@ -4,7 +4,7 @@ import { Debouncer, browserScheduler } from './core/debounce';
 import { ThemeManager, type Theme } from './core/theme';
 import { countWords, formatCount, formatSelection, formatStats } from './core/stats';
 import { renderPdf } from './export/pdf';
-import { renderProjectPdf } from './export/project-pdf';
+import { compiledMarkdown, parseChapter, renderProjectPdf } from './export/project-pdf';
 import { ExportPreview } from './ui/export-preview';
 import { DEFAULT_PREFS, PreferencesStore, type Preferences } from './core/prefs';
 import { applyTypography, typographyActions } from './core/typography';
@@ -30,7 +30,7 @@ import { bindAutoscroll } from './ui/autoscroll';
 import {
   chooseWorkingDirectory, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
-  tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
+  exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -52,6 +52,9 @@ import { Sidebar } from './ui/sidebar';
 import { Menu } from './ui/menu';
 import { TrashDialog } from './ui/trash';
 import { ExportPicker } from './ui/export-picker';
+import { ExportOptionsStore, FORMAT_INFO, effectiveTitle, sanitizeExportOptions, type ExportOptions } from './core/export-options';
+import { docxBytes } from './export/docx';
+import { markdownDocument } from './export/markdown';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
@@ -473,6 +476,55 @@ const picker = new ExportPicker(
 let exportProjectPath: string | null = null;
 let exportPreset: string[] | null = null;
 let bookExport: { service: ProjectService; snapshot: ProjectSnapshot; title: string; fileName: string } | null = null;
+// ---------- export options: format, title page, contents, page numbers ----------
+const optionsStore = new ExportOptionsStore(store);
+let exportOpts: ExportOptions = optionsStore.load();
+const optEls = {
+  format: el<HTMLSelectElement>('export-format'), titlePage: el<HTMLInputElement>('opt-titlepage'), contents: el<HTMLInputElement>('opt-contents'),
+  pages: el<HTMLInputElement>('opt-pages'), title: el<HTMLInputElement>('opt-title'), subtitle: el<HTMLInputElement>('opt-subtitle'),
+  author: el<HTMLInputElement>('opt-author'), meta: el('export-meta'), hint: el('export-hint'),
+};
+const HINTS = {
+  pdf: '',
+  docx: 'The preview shows the PDF layout. The Word file keeps headings, emphasis, lists and links; its contents lists titles, and page numbers are live.',
+  md: 'The preview shows the PDF layout. The Markdown file keeps your words exactly as written.',
+} as const;
+function optionsToUi(o: ExportOptions): void {
+  optEls.format.value = o.format; optEls.titlePage.checked = o.titlePage; optEls.contents.checked = o.contents; optEls.pages.checked = o.pageNumbers;
+  optEls.title.value = o.title; optEls.subtitle.value = o.subtitle; optEls.author.value = o.author;
+  optionsChrome();
+}
+function optionsFromUi(): ExportOptions {
+  return sanitizeExportOptions({ format: optEls.format.value, titlePage: optEls.titlePage.checked, contents: optEls.contents.checked,
+    pageNumbers: optEls.pages.checked, title: optEls.title.value, subtitle: optEls.subtitle.value, author: optEls.author.value });
+}
+function optionsChrome(): void {
+  const o = exportOpts;
+  optEls.meta.hidden = !o.titlePage;
+  optEls.pages.disabled = o.format === 'md';
+  optEls.pages.closest('label')?.classList.toggle('is-disabled', o.format === 'md');
+  previewLayout.disabled = o.format !== 'pdf';
+  el('preview-export').textContent = FORMAT_INFO[o.format].button;
+  optEls.hint.textContent = HINTS[o.format];
+}
+let optionsTimer = 0;
+function optionsChanged(delay = 0): void {
+  exportOpts = optionsFromUi();
+  optionsStore.save(exportOpts);
+  optionsChrome();
+  window.clearTimeout(optionsTimer);
+  optionsTimer = window.setTimeout(() => previewLayout.dispatchEvent(new Event('change')), delay);
+}
+for (const input of [optEls.format, optEls.titlePage, optEls.contents, optEls.pages]) input.addEventListener('change', () => optionsChanged());
+for (const input of [optEls.title, optEls.subtitle, optEls.author]) input.addEventListener('input', () => optionsChanged(400));
+function pdfOptions(o: ExportOptions) {
+  return { titlePage: o.titlePage, contents: o.contents, pageNumbers: o.pageNumbers, subtitle: o.subtitle, author: o.author };
+}
+/** What this export is called by default: the typed title, else the page or project name. */
+let exportDefaultTitle = '';
+const exportTitle = (): string => effectiveTitle(exportOpts, exportDefaultTitle);
+optionsToUi(exportOpts);
+
 const preview = new ExportPreview({
   root: el('export-preview'), canvas: el<HTMLCanvasElement>('preview-canvas'),
   title: el('preview-title'), status: el('preview-status'), layout: previewLayout,
@@ -494,20 +546,37 @@ const preview = new ExportPreview({
     // A partial export says so in the file name, so it is never mistaken for the whole project.
     const fileName = chosen.length < readable.length ? info.title + ' - ' + chosen.length + ' of ' + readable.length + ' pages' : info.title;
     bookExport = { service: info.service, snapshot, title: info.title, fileName };
-    return renderProjectPdf(snapshot.chapters, info.title, layout);
+    exportDefaultTitle = info.title;
+    optEls.title.placeholder = info.title;
+    return renderProjectPdf(snapshot.chapters, exportTitle(), layout, pdfOptions(exportOpts));
   }
   bookExport = null;
-  return renderPdf(editor.getJSON(), doc.snapshot().name, layout);
+  exportDefaultTitle = doc.snapshot().name;
+  optEls.title.placeholder = exportDefaultTitle;
+  return renderPdf(editor.getJSON(), exportTitle(), layout, pdfOptions(exportOpts));
 },
 async bytes => {
+  const o = exportOpts;
+  const base = { title: exportTitle(), subtitle: o.subtitle, author: o.author, titlePage: o.titlePage, contents: o.contents };
   if (previewScope.value === 'book' && bookExport) {
     const book = bookExport;
-    await book.service.verify(book.snapshot);
-    return (await exportPdfFile(book.fileName, bytes, () => book.service.verify(book.snapshot))) !== null;
+    const recheck = (): Promise<void> => book.service.verify(book.snapshot);
+    await recheck();
+    if (o.format === 'pdf') return (await exportPdfFile(book.fileName, bytes, recheck)) !== null;
+    const files = book.snapshot.chapters;
+    const out = o.format === 'docx'
+      ? docxBytes(files.map(f => ({ title: f.title, doc: parseChapter(f) })), { ...base, pageNumbers: o.pageNumbers })
+      : new TextEncoder().encode(markdownDocument(base, compiledMarkdown(files), files.map(f => ({ level: 1, text: f.title }))));
+    return (await exportDocumentFile(book.fileName, out, o.format, recheck)) !== null;
   }
-  return (await exportPdfFile(doc.snapshot().name, bytes)) !== null;
+  const name = doc.snapshot().name;
+  if (o.format === 'pdf') return (await exportPdfFile(name, bytes)) !== null;
+  const out = o.format === 'docx'
+    ? docxBytes([{ doc: editor.getJSON() }], { ...base, pageNumbers: o.pageNumbers })
+    : new TextEncoder().encode(markdownDocument(base, editor.getMarkdown(), editor.headings().filter(h => h.level <= 2).map(h => ({ level: h.level, text: h.text }))));
+  return (await exportDocumentFile(name, out, o.format)) !== null;
 },
-() => chrome.toast(preview.changedDuringSave ? 'PDF exported from an earlier snapshot; later edits are not included.' : 'PDF exported. Your pages are unchanged.'),
+() => chrome.toast(preview.changedDuringSave ? 'Exported from an earlier snapshot; later edits are not included.' : FORMAT_INFO[exportOpts.format].label.replace(/ \(.*/, '') + ' exported. Your pages are unchanged.'),
 () => editor.restoreFocus(),
 error => chrome.toast(error.message + ' Close and reopen Export to refresh.', 5200));
 previewScope.addEventListener('change', () => { picker.show(previewScope.value === 'book'); previewLayout.dispatchEvent(new Event('change')); });
@@ -523,6 +592,11 @@ async function exportPdf(project: string | null = null, pages: string[] | null =
   const here = path && lib.root ? bookOf(lib.root, path) : null;
   exportProjectPath = project;
   exportPreset = pages;
+  // The title and subtitle belong to one export; a new export starts from the page or project name again.
+  optEls.title.value = '';
+  optEls.subtitle.value = '';
+  exportOpts = optionsFromUi();
+  optionsChrome();
   const target = project ?? here;
   previewScope.value = project ? 'book' : 'page';
   (previewScope.querySelector('option[value="book"]') as HTMLOptionElement).disabled = !target;

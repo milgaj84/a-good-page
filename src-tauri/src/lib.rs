@@ -2,6 +2,7 @@ mod commands;
 mod conflict;
 mod disk_probe;
 pub mod document;
+mod export;
 mod library;
 mod pdf;
 mod project;
@@ -20,6 +21,7 @@ pub fn run() {
             commands::read_project_order,
             commands::write_project_order,
             commands::export_pdf,
+            commands::export_document,
             commands::list_workspace,
             commands::open_workspace_file,
             commands::default_library,

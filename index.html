@@ -45,7 +45,7 @@
             <button type="button" class="icon-btn" id="btn-history" aria-label="History: earlier versions" title="History: earlier versions (Ctrl+Shift+I)">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>
             </button>
-            <button type="button" class="icon-btn" id="btn-pdf" aria-label="Export a PDF" title="Export a PDF (Ctrl+Shift+E)">
+            <button type="button" class="icon-btn" id="btn-pdf" aria-label="Export as PDF, Word or Markdown" title="Export as PDF, Word or Markdown (Ctrl+Shift+E)">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
             </button>
             <button type="button" class="icon-btn" id="btn-settings" aria-label="Settings" title="Settings" aria-haspopup="dialog" aria-expanded="false">
@@ -283,6 +283,18 @@
             <label for="preview-scope">Export</label><select id="preview-scope"><option value="page">This page</option><option value="book">The whole project</option></select>
             <label for="preview-layout">Layout</label><select id="preview-layout"><option value="reading">Reading copy</option><option value="manuscript">Manuscript</option></select>
             <span id="preview-status" role="status">Preparing pages…</span>
+          </div>
+          <div class="export-options" id="export-options">
+            <label class="opt-field" for="export-format">Format<select id="export-format"><option value="pdf">PDF</option><option value="docx">Word (.docx)</option><option value="md">Markdown (.md)</option></select></label>
+            <label class="check"><input type="checkbox" id="opt-titlepage" /> Title page</label>
+            <label class="check"><input type="checkbox" id="opt-contents" /> Contents</label>
+            <label class="check"><input type="checkbox" id="opt-pages" /> Page numbers</label>
+            <div class="export-meta" id="export-meta" hidden>
+              <input class="text-input" id="opt-title" type="text" placeholder="Title" aria-label="Title for the title page" maxlength="200" />
+              <input class="text-input" id="opt-subtitle" type="text" placeholder="Subtitle (optional)" aria-label="Subtitle" maxlength="200" />
+              <input class="text-input" id="opt-author" type="text" placeholder="Author (optional)" aria-label="Author" maxlength="200" />
+            </div>
+            <p class="export-hint" id="export-hint"></p>
           </div>
           <details class="export-pick" id="export-pick" open hidden>
             <summary id="pick-summary">Pages</summary>

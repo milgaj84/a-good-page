@@ -40,6 +40,16 @@ export async function exportPdfFile(suggestedName: string, bytes: Uint8Array, re
   return invoke<string>('export_pdf', { path: target, bytes: Array.from(bytes) });
 }
 
+/** Saves a Word or Markdown export through the same guarded write as PDF. Returns the path, or null when the dialog was cancelled. */
+export async function exportDocumentFile(suggestedName: string, bytes: Uint8Array, format: 'docx' | 'md', recheck?: () => Promise<void>): Promise<string | null> {
+  const info = format === 'docx' ? { label: 'Word document', extension: 'docx' } : { label: 'Markdown', extension: 'md' };
+  const path = await save({ defaultPath: suggestedName + '.' + info.extension, filters: [{ name: info.label, extensions: [info.extension] }] });
+  if (!path) return null;
+  const target = new RegExp('\\.' + info.extension + '$', 'i').test(path) ? path : path + '.' + info.extension;
+  if (recheck) await recheck();
+  return invoke<string>('export_document', { path: target, bytes: Array.from(bytes), kind: format });
+}
+
 /** Save a selected historic version separately. A cancelled dialog never changes the open document. */
 export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {
   return exportRecoveryCopyWith(name, content, livePath, navigator.userAgent.includes('Windows'),

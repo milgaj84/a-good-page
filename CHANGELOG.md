@@ -6,6 +6,31 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-02
+
+Better exports.
+
+### Added
+
+- **Word export (.docx).** Export → Format → Word. Headings, bold, italic, strikethrough, links, bullet, numbered and task lists, quotes, scene breaks and code keep their meaning, using real Word styles (Title, Heading 1-3, Quote, List Paragraph), so the file works with Word's navigation pane and styles. Each ordered list restarts at 1; every chapter of a project starts on a new page; the footer has live page numbers. The file is built without any third-party package and was checked by opening it with an independent reader (python-docx).
+- **Markdown export (.md).** A single file with your words exactly as written. A project is compiled in order, with a linked contents when asked.
+- **Title page.** Title, subtitle and author on a page of their own, for PDF, Word and Markdown. The title defaults to the page or project name; the author is remembered, the title and subtitle are not (each export starts fresh). The author also fills the document's properties.
+- **Contents.** In PDF, a real contents with page numbers (chapters and their headings); in Word, a contents list of the titles (Word cannot know page numbers until it lays out the document); in Markdown, a linked list.
+- **Page numbers on or off**, and the title page carries none.
+- Rust command `export_document`: saves any export through the same atomic write as PDF, and checks the bytes really are a PDF, a Word zip or valid UTF-8 for the extension chosen.
+
+### Changed
+
+- The Export dialog groups its choices: scope and layout, then format, title page, contents and page numbers, then which pages. The preview always shows the PDF layout, with a note when you choose Word or Markdown. The controls scroll on their own so the preview keeps its room on a short window. Your format and toggles are remembered.
+- A partial export is still named "Project - 3 of 12 pages" in every format.
+
+### Known limits
+
+- The Word contents has no page numbers (a Word limitation without a layout engine); the PDF contents does.
+- The Word and Markdown exports are not previewed as such; the preview is the PDF.
+- Images are not part of the editor yet, so none are exported.
+- Verified in a headless browser against a simulated file system, not yet in an installed app, and the .docx has not yet been opened in Word itself (only in python-docx); see `RELEASE_0.7.2.md`.
+
 ## [0.7.1] - 2026-10-02
 
 Working with many pages.

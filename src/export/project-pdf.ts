@@ -5,7 +5,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Markdown } from 'tiptap-markdown';
 import type { Content } from 'pdfmake/interfaces';
-import { pdfDocument, renderPdfDefinition, type ProseNode } from './pdf';
+import { frontMatter, pdfDocument, proseBlocks, renderPdfDefinition, type PdfOptions, type ProseNode } from './pdf';
 import type { ExportLayout } from './layout';
 import type { ProjectFile } from '../core/project';
 
@@ -24,6 +24,9 @@ export function compiledMarkdown(chapters: readonly ProjectFile[]): string {
     return '# ' + title + String.fromCharCode(10,10) + body;
   }).join(String.fromCharCode(10,10) + '---' + String.fromCharCode(10,10));
 }
+/** Chapter text as prose, the same way for PDF and Word. */
+export function parseChapter(file: ProjectFile): ProseNode { return parse(chapterBody(file), /\.txt$/i.test(file.path)); }
+
 function parse(text: string, plain: boolean): ProseNode {
   const element = document.createElement('div');
   const editor = new Editor({ element, editable: false, extensions: [StarterKit, Link, TaskList,
@@ -36,20 +39,17 @@ function parse(text: string, plain: boolean): ProseNode {
     return editor.getJSON();
   } finally { editor.destroy(); }
 }
-export function projectPdfDocument(chapters: readonly ProjectFile[], title: string, layout: ExportLayout) {
+export function projectPdfDocument(chapters: readonly ProjectFile[], title: string, layout: ExportLayout, options: PdfOptions = {}) {
   if (!chapters.length) throw Error('Select at least one chapter.');
-  const definition = pdfDocument({ type: 'doc', content: [] }, title, layout);
-  const content: Content[] = [];
+  const definition = pdfDocument({ type: 'doc', content: [] }, title, layout, options);
+  const content: Content[] = [...frontMatter(title, options)];
   chapters.forEach((file, i) => {
-    content.push({ text: file.title, style: 'title', ...(i ? { pageBreak: 'before' as const } : {}) });
-    const body = chapterBody(file);
-    const doc = parse(body, /\.txt$/i.test(file.path));
-    const pages = pdfDocument(doc, title, layout).content as Content[];
-    content.push(...pages);
+    content.push({ text: file.title, style: 'title', ...(options.contents ? { tocItem: true } : {}), ...(i ? { pageBreak: 'before' as const } : {}) } as Content);
+    content.push(...proseBlocks(parseChapter(file), Boolean(options.contents)));
   });
   definition.content = content;
   return definition;
 }
-export function renderProjectPdf(chapters: readonly ProjectFile[], title: string, layout: ExportLayout): Promise<Uint8Array> {
-  return renderPdfDefinition(projectPdfDocument(chapters, title, layout));
+export function renderProjectPdf(chapters: readonly ProjectFile[], title: string, layout: ExportLayout, options: PdfOptions = {}): Promise<Uint8Array> {
+  return renderPdfDefinition(projectPdfDocument(chapters, title, layout, options));
 }

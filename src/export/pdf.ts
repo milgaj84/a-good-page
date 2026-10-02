@@ -31,13 +31,22 @@ function inline(node: ProseNode): Content[] {
   return (node.content ?? []).flatMap(inline);
 }
 
-function blocks(nodes: ProseNode[]): Content[] {
+export interface PdfOptions {
+  subtitle?: string;
+  author?: string;
+  titlePage?: boolean;
+  contents?: boolean;
+  /** Defaults to true, as before. */
+  pageNumbers?: boolean;
+}
+
+function blocks(nodes: ProseNode[], toc = false): Content[] {
   const result: Content[] = [];
   for (const node of nodes) {
     const children = node.content ?? [];
     if (node.type === 'heading') {
       const level = Number(node.attrs?.level);
-      result.push({ text: children.flatMap(inline), style: level === 1 ? 'title' : level === 2 ? 'heading' : 'subheading' });
+      result.push({ text: children.flatMap(inline), style: level === 1 ? 'title' : level === 2 ? 'heading' : 'subheading', ...(toc && level <= 2 ? { tocItem: true } : {}) } as Content);
     } else if (node.type === 'paragraph') {
       const text = children.flatMap(inline);
       result.push({ text: text.length ? text : ' ', margin: [0, 0, 0, 9] });
@@ -54,24 +63,44 @@ function blocks(nodes: ProseNode[]): Content[] {
       result.push({ text: '* * *', alignment: 'center', color: '#9a8674', margin: [0, 12, 0, 18] });
     } else if (node.type === 'codeBlock') {
       result.push({ text: node.text ?? children.map((c) => c.text ?? '').join(''), fontSize: 10, margin: [12, 8, 12, 16] });
-    } else if (children.length) result.push(...blocks(children));
+    } else if (children.length) result.push(...blocks(children, toc));
   }
   return result;
 }
 
-export function pdfDocument(doc: ProseNode, title: string, layout: ExportLayout = 'reading'): TDocumentDefinitions {
+/** The body of a page as PDF content; `toc` marks headings for the table of contents. */
+export function proseBlocks(doc: ProseNode, toc = false): Content[] { return blocks(doc.content ?? [], toc); }
+
+/** The title page and the contents, each ending its page, in front of the writing. */
+export function frontMatter(title: string, options: PdfOptions = {}): Content[] {
+  const front: Content[] = [];
+  if (options.titlePage) {
+    front.push({ text: title, style: 'coverTitle', alignment: 'center', margin: [0, 170, 0, 14] } as Content);
+    if (options.subtitle?.trim()) front.push({ text: options.subtitle.trim(), style: 'coverSubtitle', alignment: 'center' } as Content);
+    if (options.author?.trim()) front.push({ text: options.author.trim(), alignment: 'center', fontSize: 14, margin: [0, 40, 0, 0] } as Content);
+    front.push({ text: '', pageBreak: 'after' } as Content);
+  }
+  if (options.contents) front.push({ toc: { title: { text: 'Contents', style: 'heading', margin: [0, 0, 0, 12] } }, pageBreak: 'after' } as Content);
+  return front;
+}
+
+export function pdfDocument(doc: ProseNode, title: string, layout: ExportLayout = 'reading', options: PdfOptions = {}): TDocumentDefinitions {
   const spec = layoutSpec(layout);
+  const numbers = options.pageNumbers !== false;
   return {
-    info: { title }, pageSize: spec.pageSize, pageMargins: spec.margins,
-    content: blocks(doc.content ?? []),
+    info: { title, ...(options.author?.trim() ? { author: options.author.trim() } : {}) }, pageSize: spec.pageSize, pageMargins: spec.margins,
+    content: [...frontMatter(title, options), ...blocks(doc.content ?? [], Boolean(options.contents))],
     defaultStyle: { font: 'Roboto', fontSize: spec.fontSize, lineHeight: spec.lineHeight, color: spec.color },
     styles: {
       title: { fontSize: spec.title, bold: true, margin: [0, 0, 0, 19], color: '#29221e' },
       heading: { fontSize: spec.heading, bold: true, margin: [0, 19, 0, 9] },
       subheading: { fontSize: 13, bold: true, margin: [0, 14, 0, 7] },
       quote: { italics: true, color: '#685d51', margin: [18, 8, 0, 18] },
+      coverTitle: { fontSize: 34, bold: true, color: '#29221e' },
+      coverSubtitle: { fontSize: 17, italics: true, color: '#685d51' },
     },
-    footer: (page, pages) => spec.footer ? { text: page + ' / ' + pages, alignment: 'center', color: '#9a9086', fontSize: 9, margin: [0, 18, 0, 0] } : { text: String(page), alignment: 'right', color: '#aaaaaa', fontSize: 9, margin: [0, 18, 68, 0] },
+    // The title page carries no number; a writer who turns numbers off gets a clean page.
+    footer: !numbers ? undefined : (page, pages) => options.titlePage && page === 1 ? { text: '' } : spec.footer ? { text: page + ' / ' + pages, alignment: 'center', color: '#9a9086', fontSize: 9, margin: [0, 18, 0, 0] } : { text: String(page), alignment: 'right', color: '#aaaaaa', fontSize: 9, margin: [0, 18, 68, 0] },
   };
 }
 
@@ -81,6 +110,6 @@ export function renderPdfDefinition(definition: TDocumentDefinitions): Promise<U
     catch (error) { reject(error); }
   });
 }
-export function renderPdf(doc: ProseNode, title: string, layout: ExportLayout = 'reading'): Promise<Uint8Array> {
-  return renderPdfDefinition(pdfDocument(doc, title, layout));
+export function renderPdf(doc: ProseNode, title: string, layout: ExportLayout = 'reading', options: PdfOptions = {}): Promise<Uint8Array> {
+  return renderPdfDefinition(pdfDocument(doc, title, layout, options));
 }
