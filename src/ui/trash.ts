@@ -50,7 +50,7 @@ export class TrashDialog {
       name.textContent = item.name.replace(/\.(md|markdown|txt)$/i, '');
       const where = document.createElement('small');
       const folder = item.original.includes('/') ? item.original.slice(0, item.original.lastIndexOf('/')) : 'Library';
-      where.textContent = (item.is_dir ? 'Book · ' : '') + 'from ' + folder + ' · ' + relativeLabel(item.trashed_at, this.now());
+      where.textContent = (item.is_dir ? 'Project · ' : '') + 'from ' + folder + ' · ' + relativeLabel(item.trashed_at, this.now());
       text.append(name, where);
       const button = document.createElement('button');
       button.type = 'button';

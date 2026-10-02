@@ -125,3 +125,8 @@ pub fn list_trash(root: String) -> Result<Vec<crate::library::TrashItem>, String
 pub fn restore_entry(root: String, path: String) -> Result<String, String> {
     crate::library::restore(&root, &path)
 }
+
+#[tauri::command]
+pub fn move_entry(root: String, path: String, to: Option<String>) -> Result<String, String> {
+    crate::library::move_into(&root, &path, to.as_deref())
+}

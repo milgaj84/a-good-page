@@ -24,7 +24,7 @@ export type TextStyle = (typeof TEXT_STYLES)[number];
 /** Application-level actions (files, panels, display). */
 export const APP_ACTIONS = [
   'new',
-  'newBook',
+  'newProject',
   'open',
   'save',
   'saveAs',

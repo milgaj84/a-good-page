@@ -20,7 +20,7 @@ describe('command search', () => {
     expect(searchPalette('curly quotes')[0].action).toBe('polish');
     expect(searchPalette('pin notes')[0].action).toBe('reference');
     expect(searchPalette('ring').map(x => x.action)).toContain('sprint');
-    expect(searchPalette('create folder')[0].action).toBe('newBook');
+    expect(searchPalette('create folder')[0].action).toBe('newProject');
     expect(searchPalette('whole book pdf')[0].action).toBe('exportPdf');
     expect(searchPalette('delete')[0].action).toBe('trash');
     expect(searchPalette('title name')[0].action).toBe('rename');

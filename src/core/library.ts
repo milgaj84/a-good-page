@@ -65,13 +65,13 @@ export function bookOf(root: string, path: string): string | null {
   return joinPath(root, rel.split('/')[0]);
 }
 
-export interface TreeRow { kind: 'book' | 'page'; name: string; path: string }
+export interface TreeRow { kind: 'project' | 'loose'; name: string; path: string }
 
-/** Pages typed in the Library root and books (folders), folders first; hidden items never appear. */
+/** Projects (folders) first, then unfiled pages that sit directly in the Library; hidden items never appear. */
 export function rootRows(entries: readonly { name: string; path: string; is_dir: boolean }[]): TreeRow[] {
   return entries
     .filter(e => !e.name.startsWith('.'))
-    .map<TreeRow>(e => ({ kind: e.is_dir ? 'book' : 'page', name: e.is_dir ? e.name : nameFromPath(e.path), path: e.path }));
+    .map<TreeRow>(e => ({ kind: e.is_dir ? 'project' : 'loose', name: e.is_dir ? e.name : nameFromPath(e.path), path: e.path }));
 }
 
 export function filterRows<T extends { name: string }>(rows: readonly T[], query: string): T[] {
@@ -90,7 +90,7 @@ Click anywhere and type. Your page names itself from your first line.
 
 ## Find your way
 
-- **New page** and **New book** are at the top of the left sidebar. A book is a folder of chapters; drag chapters to reorder them.
+- Your Library holds **projects**. A project is a folder with one or many pages; The **+** beside Projects starts one, and the **+** on a project adds a page to it. Drag pages to reorder them.
 - Press **Ctrl/Cmd+P** to jump to any page or run any command: type "focus", "export" or "theme".
 - Select some text for quick formatting, or type **/** on an empty line for headings, lists and scene breaks.
 
@@ -100,5 +100,5 @@ The gear at the top right holds themes, type, goals and your Library folder. **F
 
 ## Share
 
-**Export** makes a PDF of this page, or of the whole book, with a preview first. Your words stay in plain Markdown files you can open anywhere.
+**Export** makes a PDF of this page, or of the whole project, with a preview first. Your words stay in plain Markdown files you can open anywhere.
 `;

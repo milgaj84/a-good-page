@@ -5,15 +5,15 @@ export interface PaletteItem { action: Action; label: string; group: string; key
 export interface PaletteEntry { label: string; group: string; keywords?: string; shortcut?: string; action?: Action; run?: () => void }
 /** Every command points to the same action used by toolbar and keyboard. */
 export const PALETTE_ITEMS: readonly PaletteItem[] = [
-  { action: 'new', label: 'New page', group: 'Library', keywords: 'create document chapter write', shortcut: 'Mod+N' },
-  { action: 'newBook', label: 'New book', group: 'Library', keywords: 'create folder project novel collection', shortcut: 'Mod+Shift+N' },
+  { action: 'new', label: 'New page', group: 'Library', keywords: 'create document file chapter write', shortcut: 'Mod+N' },
+  { action: 'newProject', label: 'New project', group: 'Library', keywords: 'create folder book novel collection', shortcut: 'Mod+Shift+N' },
   { action: 'rename', label: 'Rename this page', group: 'Library', keywords: 'title name', shortcut: 'F2' },
   { action: 'trash', label: 'Move this page to the trash', group: 'Library', keywords: 'delete remove' },
   { action: 'openTrash', label: 'Open the trash', group: 'Library', keywords: 'restore deleted recover bin undo delete' },
   { action: 'open', label: 'Open a file from elsewhere', group: 'Library', keywords: 'import browse disk', shortcut: 'Mod+O' },
   { action: 'save', label: 'Save now', group: 'Library', keywords: 'autosave', shortcut: 'Mod+S' },
   { action: 'saveAs', label: 'Save a copy somewhere else', group: 'Library', keywords: 'save as duplicate', shortcut: 'Mod+Shift+S' },
-  { action: 'exportPdf', label: 'Export PDF', group: 'Share', keywords: 'print pages book whole manuscript share', shortcut: 'Mod+Shift+E' },
+  { action: 'exportPdf', label: 'Export PDF', group: 'Share', keywords: 'print pages project book whole manuscript share', shortcut: 'Mod+Shift+E' },
   { action: 'paragraph', label: 'Body text', group: 'Style', keywords: 'normal paragraph', shortcut: 'Mod+Alt+0' },
   { action: 'h1', label: 'Title', group: 'Style', keywords: 'heading 1', shortcut: 'Mod+Alt+1' },
   { action: 'h2', label: 'Heading', group: 'Style', keywords: 'heading 2', shortcut: 'Mod+Alt+2' },

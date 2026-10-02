@@ -27,7 +27,8 @@ pub fn run() {
             commands::rename_entry,
             commands::trash_entry,
             commands::list_trash,
-            commands::restore_entry
+            commands::restore_entry,
+            commands::move_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running A Good Page");

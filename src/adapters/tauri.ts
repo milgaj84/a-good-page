@@ -55,6 +55,9 @@ export function createEntry(root: string, parent: string | null, name: string, k
 export function renameEntry(root: string, path: string, newName: string): Promise<string> {
   return invoke<string>('rename_entry', { root, path, newName });
 }
+export function moveEntry(root: string, path: string, to: string | null): Promise<string> {
+  return invoke<string>('move_entry', { root, path, to });
+}
 export function trashEntry(root: string, path: string): Promise<string> {
   return invoke<string>('trash_entry', { root, path });
 }

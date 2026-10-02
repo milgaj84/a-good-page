@@ -3,6 +3,8 @@ export interface MenuItem {
   hint?: string;
   danger?: boolean;
   separator?: boolean;
+  /** A small, unclickable label above a group of items. */
+  heading?: boolean;
   run?: () => void;
 }
 
@@ -30,6 +32,13 @@ export class Menu {
     el.setAttribute('role', 'menu');
     for (const item of items) {
       if (item.separator) { el.append(document.createElement('hr')); continue; }
+      if (item.heading) {
+        const heading = document.createElement('div');
+        heading.className = 'menu-heading';
+        heading.textContent = item.label;
+        el.append(heading);
+        continue;
+      }
       const button = document.createElement('button');
       button.type = 'button';
       button.setAttribute('role', 'menuitem');

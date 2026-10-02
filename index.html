@@ -9,6 +9,7 @@
   <body>
     <div class="app" id="app">
       <aside class="sidebar" id="sidebar" aria-label="Library">
+        <button type="button" class="side-library" id="library-menu" aria-haspopup="menu" aria-expanded="false" title="Your Library folder: click to change it"><span class="side-library-label">Library</span><small id="library-name"></small><span class="side-caret" aria-hidden="true">▾</span></button>
         <div class="side-top">
           <div class="split">
             <button type="button" class="btn-primary" id="btn-new" title="New page (Ctrl+N)">+ New page</button>
@@ -16,14 +17,7 @@
           </div>
         </div>
         <input class="side-search" id="side-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" spellcheck="false" />
-        <nav class="tree" id="tree" aria-label="Pages and books"></nav>
-        <details class="onpage" id="onpage" open>
-          <summary>On this page</summary>
-          <div id="outline">
-            <nav id="outline-list" aria-label="Headings on this page"></nav>
-            <p class="outline-empty" id="outline-empty">Headings you write will gather here.</p>
-          </div>
-        </details>
+        <nav class="tree" id="tree" aria-label="Projects and pages"></nav>
       </aside>
 
       <div class="main">
@@ -34,6 +28,9 @@
           <input class="title-input" id="doc-title" type="text" aria-label="Page title" spellcheck="false" autocomplete="off" value="" />
           <span class="save-state" id="save-state" data-state="saved" role="status"><span class="save-dot" aria-hidden="true"></span><span id="save-text">Saved</span></span>
           <div class="top-actions">
+            <button type="button" class="icon-btn" id="btn-contents" hidden aria-label="Contents: headings on this page" title="Contents: headings on this page (Ctrl+Shift+O)" aria-haspopup="dialog" aria-expanded="false">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 7h10M9.5 12h10M9.5 17h10"/><path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01" stroke-width="2.4"/></svg>
+            </button>
             <button type="button" class="icon-btn" id="btn-find" aria-label="Find on this page" title="Find on this page (Ctrl+F)">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
             </button>
@@ -109,6 +106,13 @@
       <span class="bubble-sep"></span>
       <button data-cmd="hr" title="Scene break">Scene break</button>
       <button data-cmd="link" title="Link (Ctrl+K)">Link</button>
+    </div>
+
+    <div class="popover outline-pop" id="outline-pop" role="dialog" aria-label="Contents of this page" aria-hidden="true">
+      <div id="outline">
+        <nav id="outline-list" aria-label="Headings on this page"></nav>
+        <p class="outline-empty" id="outline-empty">Headings you write will gather here.</p>
+      </div>
     </div>
 
     <div class="popover focus-choices" id="focus-choices" role="dialog" aria-label="Focus modes">
@@ -205,8 +209,8 @@
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <h2 id="help-title">Shortcuts and tips</h2>
         <div class="help-guide">
-          <p><strong>Your Library:</strong> everything you write is kept in one folder and saves by itself. Pages sit in the sidebar; a book is a folder of chapters you can drag into order.</p>
-          <p><strong>Go anywhere:</strong> press Ctrl/Cmd+P and type. It finds pages, chapters and every command.</p>
+          <p><strong>Your Library:</strong> everything you write is kept in one folder and saves by itself. The Library holds projects; a project holds one or many pages that you can drag into order. Pages outside any project sit under Unfiled pages.</p>
+          <p><strong>Go anywhere:</strong> press Ctrl/Cmd+P and type. It finds pages and every command.</p>
           <p><strong>Formatting:</strong> select text for a quick bar, or type / on an empty line. Markdown shortcuts such as # and - also work.</p>
           <p><strong>Quiet screen:</strong> the bars fade while you type. Move the mouse or press Esc to bring them back.</p>
           <p><strong>Safety:</strong> if a file changes outside the app, saving pauses and you choose what to keep. History keeps earlier versions of every page.</p>
@@ -266,10 +270,18 @@
       <div class="preview-sheet" role="dialog" aria-modal="true" aria-labelledby="preview-heading">
         <header class="preview-top"><div><small>Export preview</small><h2 id="preview-heading">Your pages</h2><p id="preview-title"></p></div>
           <button id="preview-close" type="button" class="btn" aria-label="Close preview">✕</button></header>
-        <div class="preview-tools">
-          <label for="preview-scope">Export</label><select id="preview-scope"><option value="page">This page</option><option value="book">The whole book</option></select>
-          <label for="preview-layout">Layout</label><select id="preview-layout"><option value="reading">Reading copy</option><option value="manuscript">Manuscript</option></select>
-          <span id="preview-status" role="status">Preparing pages…</span></div>
+        <div class="preview-controls">
+          <div class="preview-tools">
+            <label for="preview-scope">Export</label><select id="preview-scope"><option value="page">This page</option><option value="book">The whole project</option></select>
+            <label for="preview-layout">Layout</label><select id="preview-layout"><option value="reading">Reading copy</option><option value="manuscript">Manuscript</option></select>
+            <span id="preview-status" role="status">Preparing pages…</span>
+          </div>
+          <details class="export-pick" id="export-pick" open hidden>
+            <summary id="pick-summary">Pages</summary>
+            <div class="pick-tools"><button type="button" class="btn" id="pick-all">All</button><button type="button" class="btn" id="pick-none">None</button></div>
+            <div class="pick-list" id="pick-list"></div>
+          </details>
+        </div>
         <div class="preview-pages"><canvas id="preview-canvas" aria-label="PDF page preview"></canvas></div>
         <footer class="preview-bottom"><button id="preview-prev" type="button">← Previous</button><span id="preview-page">Page —</span><button id="preview-next" type="button">Next →</button><button id="preview-export" class="preview-primary" type="button" disabled>Export PDF</button></footer>
       </div>

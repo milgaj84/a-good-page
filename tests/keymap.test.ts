@@ -121,7 +121,7 @@ describe('resolveShortcut', () => {
 
   it('maps new page, new book and rename', () => {
     expect(resolveShortcut(press('n', 'KeyN', ctrl))).toBe('new');
-    expect(resolveShortcut(press('N', 'KeyN', ctrlShift))).toBe('newBook');
+    expect(resolveShortcut(press('N', 'KeyN', ctrlShift))).toBe('newProject');
     expect(resolveShortcut(press('F2', 'F2', {}))).toBe('rename');
     expect(resolveShortcut(press('P', 'KeyP', ctrlShift))).toBe('palette');
     expect(resolveShortcut(press('F2', 'F2', { shiftKey: true }))).toBeNull();

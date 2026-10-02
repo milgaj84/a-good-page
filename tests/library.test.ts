@@ -50,8 +50,8 @@ describe('library paths', () => {
       { name: 'Loose.md', path: '/lib/Loose.md', is_dir: false },
     ]);
     expect(rows).toEqual([
-      { kind: 'book', name: 'Novel', path: '/lib/Novel' },
-      { kind: 'page', name: 'Loose', path: '/lib/Loose.md' },
+      { kind: 'project', name: 'Novel', path: '/lib/Novel' },
+      { kind: 'loose', name: 'Loose', path: '/lib/Loose.md' },
     ]);
     expect(filterRows(rows, 'LOO').map(r => r.name)).toEqual(['Loose']);
   });

@@ -39,7 +39,7 @@ const PLAIN_CODES = new Map<string, Action>([
 
 const SHIFT_KEYS = new Map<string, Action>([
   ['s', 'saveAs'],
-  ['n', 'newBook'],
+  ['n', 'newProject'],
   ['e', 'exportPdf'],
   ['p', 'palette'],
   ['f', 'focus'],
@@ -107,7 +107,7 @@ export interface ShortcutHelp {
 
 export const SHORTCUTS: readonly ShortcutHelp[] = [
   { keys: ['Mod', 'N'], label: 'New page' },
-  { keys: ['Mod', 'Shift', 'N'], label: 'New book' },
+  { keys: ['Mod', 'Shift', 'N'], label: 'New project' },
   { keys: ['F2'], label: 'Rename this page' },
   { keys: ['Mod', 'O'], label: 'Open a file from elsewhere' },
   { keys: ['Mod', 'S'], label: 'Save now (it also saves by itself)' },

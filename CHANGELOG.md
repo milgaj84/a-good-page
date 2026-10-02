@@ -6,6 +6,36 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-02
+
+The Library is now organised as **Library → projects → pages**, and the left panel was rebuilt around it.
+
+### Changed
+
+- **A real structure.** The Library is your working folder. A **project** is a folder in it with one or many `.md` or `.txt` pages. Writing, word counts, search, History, the go-to box and Export all follow the same structure. "Book" and "chapter" are now "project" and "page" everywhere.
+- **A friendlier left panel.** Clear sections (Projects, Unfiled pages), folder and page icons, a **+** beside Projects to start a project and a **+** on each project to add a page, project page counts, and names that are no longer squeezed by hidden controls (the actions replace the count while a row is hovered). An empty Library shows one clear next step: Create your first project. The Library's folder name is shown at the top.
+- **"New project" starts with a page.** It creates the folder and its first page, opens it, and puts the project name in an editable field; Enter keeps the name and returns you to writing.
+- **"On this page" left the sidebar.** The headings now live behind a **Contents** button (top right, Ctrl/Cmd+Shift+O) that appears once a page has headings, so the sidebar is only about your work.
+- **First launch** creates a "Getting started" project holding the Welcome page.
+- Export reads "This page" or "The whole project"; the whole project is every readable page in order.
+
+### Added
+
+- **Choose which pages to export.** Export → "The whole project" shows every page with a checkbox, **All** and **None** buttons, and a live "3 of 12 pages · 6,229 words" summary; the preview and page count update as you tick. Your choice is remembered per project while the app runs. The project's ⋯ menu has **Export project…** and a page's ⋯ menu has **Export this page…**, so you can export without opening the thing first.
+- **Change your Library folder from the sidebar.** Click **Library** at the top of the panel (it shows the current folder name) to choose another folder, jump to a recent one, or return to the default `Documents/A Good Page`. Switching saves what is open, opens the first page of the new folder, and never creates a page in an empty one. Settings → More options → Library folder still works.
+- **Move to a project.** A page's ⋯ menu lists your projects (and Unfiled pages for a page inside one). Moving keeps History and your place, never overwrites (a clash is numbered), and works for the open page. Rust command `move_entry`, confined to the Library: projects cannot nest or move into the trash, and nothing leaves the Library.
+- Pages in the Library root are kept as **Unfiled pages** instead of being hidden, so nothing from earlier versions disappears.
+
+### Fixed
+
+- Starting a project no longer loses its name field: a redraw (or the editor taking focus a moment after a page opens) used to cancel the rename. Redraws now keep the field, its text and caret.
+
+### Known limits
+
+- Projects cannot be nested: pages live in the Library or directly in a project. Subfolders inside a project (from other tools) are still read, flattened, but cannot be created here.
+- A moved page is added at the end of its new project's order.
+- Verified in a headless browser against a simulated file system, not yet in an installed app; see `RELEASE_0.7.0.md`.
+
 ## [0.6.2] - 2026-10-02
 
 Simpler, with fewer decisions between you and the page.

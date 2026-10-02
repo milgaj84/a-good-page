@@ -13,6 +13,7 @@ import type { SearchHit, Sidebar, SidebarRow } from '../ui/sidebar';
 export const LIBRARY_KEY = 'agp.library.v1';
 const EXPANDED_KEY = 'agp.library.open.v1';
 const WELCOMED_KEY = 'agp.welcomed.v1';
+const RECENT_KEY = 'agp.library.recent.v1';
 
 export interface LibraryDeps {
   store: KeyValueStore;
@@ -30,6 +31,7 @@ export interface LibraryDeps {
     trash(root: string, path: string): Promise<string>;
     write(path: string, content: string): Promise<unknown>;
     pickFolder(): Promise<string | null>;
+    move(root: string, path: string, to: string | null): Promise<string>;
     listTrash(root: string): Promise<TrashItem[]>;
     restore(root: string, path: string): Promise<string>;
   };
@@ -45,6 +47,9 @@ export interface LibraryDeps {
   changed(): void;
   /** A page or book changed path (rename), so anything keyed by path can follow. */
   moved(from: string, to: string): void;
+  /** Opens the PDF preview for a whole project, or for one page (opening it first). */
+  exportProject?(path: string): void;
+  exportPage?(path: string): void;
   /** Called after every redraw of the tree, so things that depend on it (the next-chapter link) can follow. */
   rendered?(): void;
 }
@@ -61,6 +66,7 @@ export class LibraryController {
   private renaming: string | null = null;
   private query = '';
   private renamingBusy = false;
+  private focusAfterRename = false;
 
   constructor(private readonly d: LibraryDeps) {
     let saved: string[] = [];
@@ -84,6 +90,7 @@ export class LibraryController {
     }
     this.root = root;
     this.d.store.set(LIBRARY_KEY, root);
+    this.rememberFolder(root);
     await this.refresh();
     this.d.changed();
   }
@@ -92,8 +99,10 @@ export class LibraryController {
   async welcomeIfNew(): Promise<string | null> {
     if (!this.root || this.d.store.get(WELCOMED_KEY) || this.rows.length) return null;
     this.d.store.set(WELCOMED_KEY, '1');
-    const path = await this.d.io.create(this.root, null, WELCOME_TITLE, 'file');
+    const project = await this.d.io.create(this.root, null, 'Getting started', 'folder');
+    const path = await this.d.io.create(this.root, project, WELCOME_TITLE, 'file');
     await this.d.io.write(path, WELCOME_TEXT);
+    this.expanded.add(project);
     await this.refresh();
     return path;
   }
@@ -107,15 +116,68 @@ export class LibraryController {
     return path;
   }
 
+  /** Libraries used before, newest first, for quick switching. */
+  recentFolders(): string[] {
+    try {
+      const data: unknown = JSON.parse(this.d.store.get(RECENT_KEY) ?? '[]');
+      return Array.isArray(data) ? data.filter((x): x is string => typeof x === 'string' && x.length > 0).slice(0, 6) : [];
+    } catch { return []; }
+  }
+
+  private rememberFolder(path: string): void {
+    this.d.store.set(RECENT_KEY, JSON.stringify([path, ...this.recentFolders().filter(p => p !== path)].slice(0, 6)));
+  }
+
+  /** Asks for a folder and makes it the Library. */
   async changeFolder(): Promise<void> {
     const picked = await this.d.io.pickFolder();
-    if (!picked) return;
-    if (this.d.doc.isDirty) { this.d.flushAutosave(); await this.d.doc.settleWrites(); }
+    if (picked) await this.useFolder(picked);
+  }
+
+  /** Makes a folder the Library: saves what is open, shows the new folder, and opens its first page if it has one. */
+  async useFolder(picked: string): Promise<void> {
+    if (picked === this.root) return;
+    this.d.flushAutosave();
+    if (this.d.doc.isDirty) { await this.d.doc.save(); await this.d.doc.settleWrites(); }
     this.d.store.set(LIBRARY_KEY, picked);
     this.books.clear();
     this.expanded.clear();
+    this.renaming = null;
+    this.query = '';
     await this.start();
     this.d.notify('Library is now ' + this.root);
+    await this.openFirstIfAny();
+  }
+
+  /** The default Library folder (Documents/A Good Page), created if needed. */
+  async useDefaultFolder(): Promise<void> { await this.useFolder(await this.d.io.defaultLibrary()); }
+
+  /** After switching Library: open a page from it rather than leaving the old one on screen. Never creates anything. */
+  async openFirstIfAny(): Promise<boolean> {
+    const loose = this.rows.find(r => r.kind === 'loose');
+    for (const row of this.rows) {
+      if (row.kind !== 'project') continue;
+      const service = this.books.get(row.path) ?? await this.loadBook(row.path);
+      const entry = service?.chapters.find(c => c.file);
+      if (service && entry) return this.open(this.chapterPath(row.path, entry.path));
+    }
+    return loose ? this.open(loose.path) : false;
+  }
+
+  /** The menu on the Library heading: where your writing lives, and a quick way to change it. */
+  libraryMenu(anchor: HTMLElement): void {
+    const short = (path: string): string => path.split(/[\\/]/).filter(Boolean).slice(-2).join('/');
+    const items: MenuItem[] = [
+      { heading: true, label: this.root ? 'In ' + short(this.root) : 'No Library yet' },
+      { label: 'Choose another folder…', run: () => void this.changeFolder() },
+    ];
+    const others = this.recentFolders().filter(p => p !== this.root).slice(0, 4);
+    if (others.length) {
+      items.push({ separator: true, label: '' }, { heading: true, label: 'Recent' });
+      for (const path of others) items.push({ label: short(path), run: () => void this.useFolder(path).catch(error => this.d.notify('Could not open that folder: ' + message(error))) });
+    }
+    items.push({ separator: true, label: '' }, { label: 'Use the default folder', run: () => void this.useDefaultFolder() });
+    this.d.menu.open(items, anchor.getBoundingClientRect(), anchor);
   }
 
   // ---------- reading ----------
@@ -131,7 +193,7 @@ export class LibraryController {
     const home = current && this.root ? bookOf(this.root, current) : null;
     if (home) this.expanded.add(home);
     for (const key of [...this.books.keys()]) if (!this.rows.some(r => r.path === key)) this.books.delete(key);
-    for (const row of this.rows) if (row.kind === 'book' && this.expanded.has(row.path)) await this.loadBook(row.path);
+    for (const row of this.rows) if (row.kind === 'project' && this.expanded.has(row.path)) await this.loadBook(row.path);
     this.render();
   }
 
@@ -142,7 +204,7 @@ export class LibraryController {
       this.books.set(path, service);
       return service;
     } catch (error) {
-      this.d.notify('Could not open that book: ' + message(error));
+      this.d.notify('Could not open that project: ' + message(error));
       return null;
     }
   }
@@ -162,15 +224,15 @@ export class LibraryController {
     const out: SidebarRow[] = [];
     const rows = q ? filterRows(this.rows, q) : this.rows;
     for (const row of this.rows) {
-      const service = row.kind === 'book' ? this.books.get(row.path) : undefined;
+      const service = row.kind === 'project' ? this.books.get(row.path) : undefined;
       const chapters = service ? service.chapters : [];
-      const opened = row.kind === 'book' && (this.expanded.has(row.path) || Boolean(q));
+      const opened = row.kind === 'project' && (this.expanded.has(row.path) || Boolean(q));
       const nameHit = rows.some(r => r.path === row.path);
       const chapterHits = chapters.filter(c => !q || (stem(c.path) + ' ' + (c.file?.title ?? '')).toLocaleLowerCase().includes(q.toLocaleLowerCase()));
       if (q && !nameHit && !chapterHits.length) continue;
       out.push({
-        path: row.path, kind: row.kind, label: row.name, current: row.kind === 'page' && row.path === current,
-        expanded: opened, meta: row.kind === 'book' && service ? service.chapters.length + (service.chapters.length === 1 ? ' chapter' : ' chapters') : undefined,
+        path: row.path, kind: row.kind, label: row.name, current: row.kind === 'loose' && row.path === current,
+        expanded: opened, meta: row.kind === 'project' && service ? service.chapters.length + (service.chapters.length === 1 ? ' page' : ' pages') : undefined,
       });
       if (!opened) continue;
       chapters.forEach((entry, index) => {
@@ -178,17 +240,18 @@ export class LibraryController {
         const full = this.chapterPath(row.path, entry.path);
         const isCurrent = full === current;
         out.push({
-          path: full, kind: 'chapter', label: displayName(stem(entry.path), entry.file?.title), fileName: stem(entry.path),
+          path: full, kind: 'file', label: displayName(stem(entry.path), entry.file?.title), fileName: stem(entry.path),
           current: isCurrent, missing: entry.issue !== null,
           meta: entry.issue ? 'missing' : (isCurrent ? live : entry.file!.words).toLocaleString(), book: row.path, index,
         });
       });
     }
     // Current page's live word count for loose pages too.
-    for (const r of out) if (r.kind === 'page' && r.current) r.meta = live.toLocaleString();
+    for (const r of out) if (r.kind === 'loose' && r.current) r.meta = live.toLocaleString();
     this.d.sidebar.render({
       rows: out, hits: q.length >= 2 ? this.textHits(q) : [], renaming: this.renaming,
-      empty: q ? 'Nothing here matches “' + q + '”.' : 'Your Library is empty. Press New page to begin.',
+      empty: q ? 'Nothing here matches “' + q + '”.' : '',
+      blank: !q && this.rows.length === 0,
     });
     this.d.rendered?.();
   }
@@ -208,7 +271,7 @@ export class LibraryController {
   async search(text: string): Promise<void> {
     this.query = text;
     if (text.trim().length >= 2) {
-      for (const row of this.rows) if (row.kind === 'book' && !this.books.has(row.path)) await this.loadBook(row.path);
+      for (const row of this.rows) if (row.kind === 'project' && !this.books.has(row.path)) await this.loadBook(row.path);
     }
     this.render();
   }
@@ -251,14 +314,22 @@ export class LibraryController {
     } catch (error) { this.d.notify('Could not create a page: ' + message(error)); }
   }
 
-  async newBook(): Promise<void> {
+  /** A project starts with one page, so there is something to write in at once; its name is ready to type over. */
+  async newProject(): Promise<void> {
     if (!this.root) return;
     try {
-      const path = await this.d.io.create(this.root, null, 'New book', 'folder');
-      this.expanded.add(path);
-      this.renaming = path;
+      this.d.flushAutosave();
+      const folder = await this.d.io.create(this.root, null, 'New project', 'folder');
+      const first = await this.d.io.create(this.root, folder, 'Untitled', 'file');
+      this.expanded.add(folder);
       await this.refresh();
-    } catch (error) { this.d.notify('Could not create a book: ' + message(error)); }
+      await this.open(first);
+      // The editor takes focus a frame after a page opens; let it, so it cannot steal focus from the name field.
+      await new Promise(resolve => setTimeout(resolve, 120));
+      this.renaming = folder;
+      this.focusAfterRename = true;
+      this.render();
+    } catch (error) { this.d.notify('Could not create a project: ' + message(error)); }
   }
 
   // ---------- renaming ----------
@@ -267,14 +338,17 @@ export class LibraryController {
   /** Sidebar rename commit; an empty name means "cancel". */
   async commitRename(row: SidebarRow, name: string): Promise<void> {
     this.renaming = null;
-    if (!name) { this.render(); return; }
-    await this.renamePath(row.path, row.kind, name);
+    const focus = this.focusAfterRename;
+    this.focusAfterRename = false;
+    if (name) await this.renamePath(row.path, row.kind, name);
+    else this.render();
+    if (focus) this.d.focusEditor();
   }
 
   async renameCurrent(name: string): Promise<void> {
     const path = this.d.doc.snapshot().path;
     if (!path || !this.root) return;
-    await this.renamePath(path, 'page', name);
+    await this.renamePath(path, 'file', name);
   }
 
   private async renamePath(path: string, kind: SidebarRow['kind'], name: string): Promise<boolean> {
@@ -282,13 +356,13 @@ export class LibraryController {
     this.renamingBusy = true;
     try {
       const current = this.d.doc.snapshot().path;
-      const touchesCurrent = Boolean(current && (current === path || (kind === 'book' && current.startsWith(path))));
+      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && current.startsWith(path))));
       if (touchesCurrent) {
         this.d.flushAutosave();
         if (this.d.doc.isDirty && !(await this.d.doc.save())) { this.d.notify('Save failed, so the rename was not done.'); return false; }
         await this.d.doc.settleWrites();
       }
-      const bookPath = kind === 'book' ? null : bookOf(this.root, path);
+      const bookPath = kind === 'project' ? null : bookOf(this.root, path);
       const next = await this.d.io.rename(this.root, path, name);
       if (bookPath) {
         const service = this.books.get(bookPath);
@@ -296,7 +370,7 @@ export class LibraryController {
         const from = relativeTo(base, path), to = relativeTo(base, next);
         if (service && from && to) await service.renameChapter(from, to).catch(() => undefined);
       }
-      if (kind === 'book') {
+      if (kind === 'project') {
         this.books.delete(path);
         if (this.expanded.delete(path)) this.expanded.add(next);
       }
@@ -322,7 +396,34 @@ export class LibraryController {
     if (!(await this.d.doc.save())) return;
     const still = this.d.doc.snapshot();
     if (still.path !== snap.path || autoRenameTarget(still.name, this.d.markdown()) === null) return;
-    await this.renamePath(snap.path, 'page', title);
+    await this.renamePath(snap.path, 'file', title);
+  }
+
+  // ---------- moving between projects ----------
+  /** Moves a page into a project (or out to the Library when `dest` is null). Never overwrites; Rust numbers a clash. */
+  async moveTo(path: string, kind: SidebarRow['kind'], dest: string | null, label: string): Promise<void> {
+    if (!this.root || kind === 'project') return;
+    try {
+      const current = this.d.doc.snapshot().path;
+      const touchesCurrent = current === path;
+      if (touchesCurrent) {
+        this.d.flushAutosave();
+        if (this.d.doc.isDirty && !(await this.d.doc.save())) { this.d.notify('Save failed, so the page was not moved.'); return; }
+        await this.d.doc.settleWrites();
+      }
+      const from = kind === 'file' ? bookOf(this.root, path) : null;
+      const next = await this.d.io.move(this.root, path, dest);
+      if (from) {
+        const service = this.books.get(from);
+        const rel = service ? relativeTo(service.path ?? from, path) : null;
+        if (service && rel) await service.dropChapter(rel).catch(() => undefined);
+      }
+      this.d.moved(path, next);
+      if (touchesCurrent) this.d.doc.adoptRenamedPath(next);
+      if (dest) { this.expanded.add(dest); this.books.delete(dest); }
+      await this.refresh();
+      this.d.notify('Moved “' + label + '” ' + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
+    } catch (error) { this.d.notify('Could not move it: ' + message(error)); }
   }
 
   // ---------- the trash ----------
@@ -350,7 +451,7 @@ export class LibraryController {
   }
 
   async nudge(row: SidebarRow, direction: -1 | 1): Promise<void> {
-    if (row.kind !== 'chapter' || row.book === undefined || row.index === undefined) return;
+    if (row.kind !== 'file' || row.book === undefined || row.index === undefined) return;
     await this.reorder(row.book, row.path, row.index + direction);
   }
 
@@ -359,21 +460,21 @@ export class LibraryController {
     if (!this.root) return;
     try {
       const current = this.d.doc.snapshot().path;
-      const touchesCurrent = Boolean(current && (current === path || (kind === 'book' && current.startsWith(path))));
+      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && current.startsWith(path))));
       if (touchesCurrent) { this.d.flushAutosave(); await this.d.doc.settleWrites(); }
-      const book = kind === 'chapter' ? bookOf(this.root, path) : null;
+      const book = kind === 'file' ? bookOf(this.root, path) : null;
       const neighbour = touchesCurrent && book ? await this.neighbourOf(book, path) : null;
       const original = relativeTo(this.root, path) ?? label;
       const trashed = await this.d.io.trash(this.root, path);
-      if (kind === 'book') { this.books.delete(path); this.expanded.delete(path); }
-      if (kind === 'chapter' && book) {
+      if (kind === 'project') { this.books.delete(path); this.expanded.delete(path); }
+      if (kind === 'file' && book) {
         const service = this.books.get(book);
         const rel = relativeTo(service?.path ?? book, path);
         if (service && rel) await service.dropChapter(rel).catch(() => undefined);
       }
       await this.refresh();
       if (touchesCurrent) { if (neighbour) await this.open(neighbour); else await this.openSomething(path); }
-      const item: TrashItem = { item: trashed, name: nameFromPath(path), original, trashed_at: Date.now(), is_dir: kind === 'book' };
+      const item: TrashItem = { item: trashed, name: nameFromPath(path), original, trashed_at: Date.now(), is_dir: kind === 'project' };
       this.d.offerUndo('Moved “' + label + '” to the trash.', 'Undo', () => void this.restore(item));
     } catch (error) { this.d.notify('Could not move to the trash: ' + message(error)); }
   }
@@ -401,10 +502,10 @@ export class LibraryController {
 
   /** After the open page is removed: open another one, or start a fresh page. Never leaves a dead editor. */
   async openSomething(avoid: string | null = null): Promise<void> {
-    const page = this.rows.find(r => r.kind === 'page' && r.path !== avoid);
+    const page = this.rows.find(r => r.kind === 'loose' && r.path !== avoid);
     if (page) { await this.open(page.path); return; }
     for (const row of this.rows) {
-      if (row.kind !== 'book') continue;
+      if (row.kind !== 'project') continue;
       const service = this.books.get(row.path) ?? await this.loadBook(row.path);
       const entry = service?.chapters.find(c => c.file);
       if (service && entry) { await this.open(this.chapterPath(row.path, entry.path)); return; }
@@ -413,7 +514,7 @@ export class LibraryController {
   }
 
   async removeMissing(row: SidebarRow): Promise<void> {
-    if (row.kind !== 'chapter' || !row.book) return;
+    if (row.kind !== 'file' || !row.book) return;
     const service = this.books.get(row.book);
     const rel = service ? relativeTo(service.path ?? row.book, row.path) : null;
     if (!service || !rel) return;
@@ -425,15 +526,25 @@ export class LibraryController {
   rowMenu(row: SidebarRow, anchor: HTMLElement): void {
     const items: MenuItem[] = [];
     if (row.missing) {
-      items.push({ label: 'Remove from this book', run: () => void this.removeMissing(row) });
+      items.push({ label: 'Remove from this project', run: () => void this.removeMissing(row) });
     } else {
-      if (row.kind === 'book') items.push({ label: 'New chapter here', run: () => void this.newPage(row.path) });
+      if (row.kind === 'project') items.push({ label: 'Add a page', run: () => void this.newPage(row.path) }, { label: 'Export project…', run: () => this.d.exportProject?.(row.path) });
+      else items.push({ label: 'Export this page…', run: () => this.d.exportPage?.(row.path) });
       items.push({ label: 'Rename', hint: row.current ? 'F2' : undefined, run: () => this.startRename(row.path) });
-      if (row.kind === 'chapter') {
+      if (row.kind === 'file') {
         const service = row.book ? this.books.get(row.book) : undefined;
         const last = service ? service.chapters.length - 1 : 0;
         if ((row.index ?? 0) > 0) items.push({ label: 'Move up', run: () => void this.nudge(row, -1) });
         if ((row.index ?? 0) < last) items.push({ label: 'Move down', run: () => void this.nudge(row, 1) });
+      }
+      if (row.kind !== 'project') {
+        const projects = this.rows.filter(r => r.kind === 'project' && r.path !== row.book);
+        if (projects.length || row.kind === 'file') {
+          items.push({ separator: true, label: '' });
+          items.push({ heading: true, label: 'Move to' });
+          for (const project of projects.slice(0, 12)) items.push({ label: project.name, run: () => void this.moveTo(row.path, row.kind, project.path, row.label) });
+          if (row.kind === 'file') items.push({ label: 'Unfiled pages', run: () => void this.moveTo(row.path, row.kind, null, row.label) });
+        }
       }
       items.push({ separator: true, label: '' });
       items.push({ label: 'Move to trash', danger: true, run: () => void this.trash(row.path, row.kind, row.label) });
@@ -447,14 +558,14 @@ export class LibraryController {
     const current = this.d.doc.snapshot().path;
     const entries: PaletteEntry[] = [];
     for (const row of this.rows) {
-      if (row.kind === 'page') {
-        entries.push({ label: row.name, group: row.path === current ? 'Open now' : 'Page', keywords: 'go open', run: () => void this.open(row.path) });
+      if (row.kind === 'loose') {
+        entries.push({ label: row.name, group: row.path === current ? 'Open now' : 'Unfiled', keywords: 'go open page', run: () => void this.open(row.path) });
       } else {
         const service = this.books.get(row.path);
         for (const entry of service?.chapters ?? []) {
           if (entry.issue) continue;
           const full = this.chapterPath(row.path, entry.path);
-          entries.push({ label: displayName(stem(entry.path), entry.file?.title), group: full === current ? 'Open now' : row.name, keywords: 'chapter go open ' + stem(entry.path), run: () => void this.open(full) });
+          entries.push({ label: displayName(stem(entry.path), entry.file?.title), group: full === current ? 'Open now' : row.name, keywords: 'page file go open ' + stem(entry.path), run: () => void this.open(full) });
         }
       }
     }
@@ -465,8 +576,8 @@ export class LibraryController {
   }
 
   /** The book that holds the open page, with every readable chapter in order; null for a loose page. */
-  async bookForExport(): Promise<{ service: ProjectService; title: string } | null> {
-    const book = this.currentBook();
+  async bookForExport(project: string | null = null): Promise<{ service: ProjectService; title: string } | null> {
+    const book = project ?? this.currentBook();
     if (!book) return null;
     const service = this.books.get(book) ?? await this.loadBook(book);
     if (!service) return null;

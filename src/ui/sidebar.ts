@@ -1,4 +1,5 @@
-export type RowKind = 'book' | 'page' | 'chapter';
+/** A project is a folder in the Library; a file is a page inside one; a loose page sits directly in the Library. */
+export type RowKind = 'project' | 'file' | 'loose';
 
 export interface SidebarRow {
   path: string;
@@ -10,7 +11,7 @@ export interface SidebarRow {
   current: boolean;
   expanded?: boolean;
   missing?: boolean;
-  /** For chapters: the book folder and the position inside it. */
+  /** For files: the project folder and the position inside it. */
   book?: string;
   index?: number;
 }
@@ -26,6 +27,9 @@ export interface SidebarEvents {
   open(row: SidebarRow): void;
   toggle(row: SidebarRow): void;
   menu(row: SidebarRow, anchor: HTMLElement): void;
+  /** The + on a project: add a page to it. */
+  add(row: SidebarRow): void;
+  newProject(): void;
   reorder(book: string, path: string, toIndex: number): void;
   query(text: string): void;
   rename(row: SidebarRow, name: string): void;
@@ -36,13 +40,30 @@ export interface SidebarView {
   rows: readonly SidebarRow[];
   hits: readonly SearchHit[];
   renaming: string | null;
-  /** Shown when there is nothing to list. */
+  /** Shown when searching finds nothing. */
   empty: string;
+  /** True when the Library has nothing in it at all, so a welcome with one clear next step is shown. */
+  blank?: boolean;
 }
 
-/** The Library tree: pages and books, with chapters nested under an open book. Dumb on purpose; the controller owns the data. */
+const SVG = (body: string): string => '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
+const ICONS = {
+  project: SVG('<path d="M3.5 8a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>'),
+  file: SVG('<path d="M7 3.5h6.5L18 8v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8H18"/>'),
+  plus: SVG('<path d="M12 5.5v13M5.5 12h13"/>'),
+  more: SVG('<circle cx="6" cy="12" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="18" cy="12" r="1.1"/>'),
+};
+function icon(name: keyof typeof ICONS, className: string): HTMLElement {
+  const span = document.createElement('span');
+  span.className = className;
+  span.innerHTML = ICONS[name]; // constant markup above, never user text
+  return span;
+}
+
+/** The Library tree: projects with their pages, and any unfiled pages. Dumb on purpose; the controller owns the data. */
 export class Sidebar {
   private dragging: SidebarRow | null = null;
+  private rebuilding = false;
   private view: SidebarView = { rows: [], hits: [], renaming: null, empty: '' };
 
   constructor(private readonly els: SidebarElements, private readonly events: SidebarEvents) {
@@ -53,6 +74,7 @@ export class Sidebar {
   }
 
   get query(): string { return this.els.search.value; }
+
   /** Live word count for the open page without rebuilding the tree. */
   setCurrentMeta(text: string): void {
     const meta = this.els.tree.querySelector<HTMLElement>('.row[aria-current="true"] .meta');
@@ -64,20 +86,31 @@ export class Sidebar {
     this.view = view;
     const tree = this.els.tree;
     const scroll = tree.scrollTop;
+    // A redraw while a name is being typed must not lose the field, its text or its caret.
+    const old = tree.querySelector<HTMLInputElement>('.row-input');
+    const carry = old && view.renaming !== null && old.closest('.row')?.getAttribute('data-path') === view.renaming
+      ? { value: old.value, start: old.selectionStart, end: old.selectionEnd } : null;
     const parts: Node[] = [];
-    const pages = view.rows.filter(r => r.kind === 'page');
-    const books = view.rows.filter(r => r.kind !== 'page');
-    if (!view.rows.length && !view.hits.length) {
-      const empty = document.createElement('p');
-      empty.className = 'tree-empty';
-      empty.textContent = view.empty;
-      parts.push(empty);
+    const loose = view.rows.filter(r => r.kind === 'loose');
+    const projects = view.rows.filter(r => r.kind !== 'loose');
+    if (view.blank) {
+      parts.push(this.welcome());
+    } else {
+      if (!view.rows.length && !view.hits.length) {
+        const empty = document.createElement('p');
+        empty.className = 'tree-empty';
+        empty.textContent = view.empty;
+        parts.push(empty);
+      }
+      if (projects.length || (!view.hits.length && !this.query.trim())) parts.push(this.heading('Projects', true));
+      for (const row of projects) parts.push(this.row(row));
+      if (loose.length) {
+        parts.push(this.heading('Unfiled pages', false));
+        for (const row of loose) parts.push(this.row(row));
+      }
     }
-    for (const row of books) parts.push(this.row(row));
-    if (books.length && pages.length) parts.push(this.heading('Pages'));
-    for (const row of pages) parts.push(this.row(row));
     if (view.hits.length) {
-      parts.push(this.heading('In your text'));
+      parts.push(this.heading('In your text', false));
       for (const hit of view.hits) {
         const button = document.createElement('button');
         button.type = 'button';
@@ -89,16 +122,49 @@ export class Sidebar {
         parts.push(button);
       }
     }
+    this.rebuilding = true;
     tree.replaceChildren(...parts);
+    this.rebuilding = false;
     tree.scrollTop = scroll;
-    tree.querySelector<HTMLInputElement>('.row-input')?.focus();
-    tree.querySelector<HTMLInputElement>('.row-input')?.select();
+    const input = tree.querySelector<HTMLInputElement>('.row-input');
+    if (input) {
+      if (carry) { input.value = carry.value; input.focus(); input.setSelectionRange(carry.start ?? carry.value.length, carry.end ?? carry.value.length); }
+      else { input.focus(); input.select(); }
+    }
   }
 
-  private heading(text: string): HTMLElement {
+  private welcome(): HTMLElement {
+    const box = document.createElement('div');
+    box.className = 'tree-welcome';
+    const title = document.createElement('strong');
+    title.textContent = 'Your Library is empty';
+    const text = document.createElement('p');
+    text.textContent = 'A project holds the pages of one piece of writing: a novel, an essay, a set of notes. Start with a project, or just write a page.';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn-primary';
+    button.textContent = 'Create your first project';
+    button.addEventListener('click', () => this.events.newProject());
+    box.append(title, text, button);
+    return box;
+  }
+
+  private heading(text: string, withAdd: boolean): HTMLElement {
     const el = document.createElement('div');
     el.className = 'tree-heading';
-    el.textContent = text;
+    const label = document.createElement('span');
+    label.textContent = text;
+    el.append(label);
+    if (withAdd) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'tree-add';
+      add.title = 'New project (Ctrl+Shift+N)';
+      add.setAttribute('aria-label', 'New project');
+      add.innerHTML = ICONS.plus;
+      add.addEventListener('click', () => this.events.newProject());
+      el.append(add);
+    }
     return el;
   }
 
@@ -106,10 +172,12 @@ export class Sidebar {
     const el = document.createElement('div');
     el.className = 'row';
     el.dataset.path = row.path;
-    el.dataset.depth = row.kind === 'chapter' ? '1' : '0';
+    el.dataset.kind = row.kind;
+    el.dataset.depth = row.kind === 'file' ? '1' : '0';
     if (row.missing) el.dataset.missing = 'true';
     if (row.current) el.setAttribute('aria-current', 'true');
     if (this.view.renaming === row.path) {
+      el.append(icon(row.kind === 'project' ? 'project' : 'file', 'row-icon'));
       const input = document.createElement('input');
       input.className = 'row-input';
       const current = row.fileName ?? row.label;
@@ -127,20 +195,21 @@ export class Sidebar {
         if (event.key === 'Enter') { event.preventDefault(); finish(true); }
         else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
       });
-      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('blur', () => { if (!this.rebuilding) finish(true); });
       el.append(input);
       return el;
     }
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'open';
-    if (row.kind === 'book') {
+    if (row.kind === 'project') {
       const chev = document.createElement('span');
       chev.className = 'chev';
       chev.textContent = row.expanded ? '▾' : '▸';
       open.append(chev);
       open.setAttribute('aria-expanded', String(Boolean(row.expanded)));
     }
+    open.append(icon(row.kind === 'project' ? 'project' : 'file', 'row-icon'));
     const label = document.createElement('span');
     label.className = 'label';
     label.textContent = row.label;
@@ -152,30 +221,30 @@ export class Sidebar {
       meta.textContent = row.meta;
       open.append(meta);
     }
-    open.addEventListener('click', () => (row.kind === 'book' ? this.events.toggle(row) : this.events.open(row)));
+    open.addEventListener('click', () => (row.kind === 'project' ? this.events.toggle(row) : this.events.open(row)));
     el.append(open);
-    if (!row.missing) {
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'more';
-      more.textContent = '⋯';
-      more.setAttribute('aria-label', 'Actions for ' + row.label);
-      more.setAttribute('aria-haspopup', 'menu');
-      more.setAttribute('aria-expanded', 'false');
-      more.addEventListener('click', (event) => { event.stopPropagation(); this.events.menu(row, more); });
-      el.append(more);
-    } else {
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'more';
-      more.textContent = '⋯';
-      more.setAttribute('aria-label', 'Actions for missing chapter ' + row.label);
-      more.setAttribute('aria-expanded', 'false');
-      more.addEventListener('click', (event) => { event.stopPropagation(); this.events.menu(row, more); });
-      el.append(more);
+    if (row.kind === 'project') {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'row-btn add';
+      add.title = 'Add a page to ' + row.label;
+      add.setAttribute('aria-label', 'Add a page to ' + row.label);
+      add.innerHTML = ICONS.plus;
+      add.addEventListener('click', (event) => { event.stopPropagation(); this.events.add(row); });
+      el.append(add);
     }
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'row-btn more';
+    more.title = 'More actions';
+    more.innerHTML = ICONS.more;
+    more.setAttribute('aria-label', 'Actions for ' + row.label);
+    more.setAttribute('aria-haspopup', 'menu');
+    more.setAttribute('aria-expanded', 'false');
+    more.addEventListener('click', (event) => { event.stopPropagation(); this.events.menu(row, more); });
+    el.append(more);
     el.addEventListener('contextmenu', (event) => { event.preventDefault(); this.events.menu(row, el); });
-    if (row.kind === 'chapter' && row.book !== undefined && !row.missing) this.makeDraggable(el, row);
+    if (row.kind === 'file' && row.book !== undefined && !row.missing) this.makeDraggable(el, row);
     return el;
   }
 

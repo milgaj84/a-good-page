@@ -191,6 +191,39 @@ pub fn rename(root: &str, selected: &str, new_name: &str) -> Result<String, Stri
     to_string(&target)
 }
 
+/// Moves a page into another project (a folder in the Library), or back to the Library itself (`to` = None).
+/// Never overwrites: a name clash gets a number. A project cannot be moved into itself or into another project.
+pub fn move_into(root: &str, selected: &str, to: Option<&str>) -> Result<String, String> {
+    let base = canonical_root(root)?;
+    let item = inside_item(&base, selected)?;
+    let destination = inside_dir(&base, to)?;
+    if destination.starts_with(base.join(TRASH)) {
+        return Err("Use the trash to remove things.".into());
+    }
+    if item.is_dir() {
+        if destination != base {
+            return Err("A project can only live directly in the Library.".into());
+        }
+    } else if destination != base && destination.parent() != Some(base.as_path()) {
+        return Err("Pages can live in the Library or directly in a project.".into());
+    }
+    if item.parent() == Some(destination.as_path()) {
+        return to_string(&item);
+    }
+    let name = item
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Cannot move that item.")?;
+    let (stem, ext) = if item.is_dir() {
+        (name.to_owned(), String::new())
+    } else {
+        split_extension(name)
+    };
+    let target = unique(&destination, &stem, &ext);
+    fs::rename(&item, &target).map_err(|e| format!("Could not move it: {e}"))?;
+    to_string(&target)
+}
+
 /// Moves a page or book into `<Library>/.trash/<stamp>/`, remembering where it came from so it can be restored.
 pub fn trash(root: &str, selected: &str) -> Result<String, String> {
     let base = canonical_root(root)?;
@@ -408,6 +441,43 @@ mod tests {
         let again = rename(s(&root), &renamed, "opening").unwrap();
         assert!(again.ends_with("opening.md"));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn moves_pages_into_a_project_and_back_without_overwriting() {
+        let root = temp();
+        let project = create(s(&root), None, "Novel", "folder").unwrap();
+        let other = create(s(&root), None, "Poems", "folder").unwrap();
+        let loose = create(s(&root), None, "Draft", "file").unwrap();
+        fs::write(&loose, "words").unwrap();
+        let clash = create(s(&root), Some(&project), "Draft", "file").unwrap();
+        let moved = move_into(s(&root), &loose, Some(&project)).unwrap();
+        assert!(moved.ends_with("Novel/Draft 2.md") || moved.ends_with("Novel\\Draft 2.md"));
+        assert_eq!(fs::read_to_string(&moved).unwrap(), "words");
+        assert!(Path::new(&clash).exists());
+        let over = move_into(s(&root), &moved, Some(&other)).unwrap();
+        assert!(over.contains("Poems"));
+        let home = move_into(s(&root), &over, None).unwrap();
+        assert_eq!(Path::new(&home).parent().unwrap(), root.as_path());
+        assert_eq!(move_into(s(&root), &home, None).unwrap(), home);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn projects_cannot_nest_and_nothing_moves_outside_the_library() {
+        let root = temp();
+        let outside = temp();
+        let a = create(s(&root), None, "A", "folder").unwrap();
+        let b = create(s(&root), None, "B", "folder").unwrap();
+        assert!(move_into(s(&root), &a, Some(&b)).is_err());
+        assert!(move_into(s(&root), &a, Some(&a)).is_err());
+        let page = create(s(&root), None, "P", "file").unwrap();
+        assert!(move_into(s(&root), &page, Some(s(&outside))).is_err());
+        assert!(move_into(s(&root), s(&root), Some(&a)).is_err());
+        fs::create_dir_all(root.join(TRASH)).unwrap();
+        assert!(move_into(s(&root), &page, Some(s(&root.join(TRASH)))).is_err());
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]

@@ -66,6 +66,11 @@ function fixture(seed: Record<string, string> = {}) {
     },
     write: async (path: string, content: string) => { files.set(path, content); },
     pickFolder: async () => null,
+    move: async (_root: string, path: string, to: string | null) => {
+      const dest = to ?? '/lib'; const name = path.split('/').pop()!; let target = `${dest}/${name}`; let i = 2;
+      while (files.has(target)) target = `${dest}/${name.replace(/\.md$/, '')} ${i++}.md`;
+      files.set(target, files.get(path)!); files.delete(path); if (dest !== '/lib') dirs.add(dest); return target;
+    },
   };
   const deps = {
     store: { get: (k: string) => kv.get(k) ?? null, set: (k: string, v: string) => { kv.set(k, v); }, remove: (k: string) => { kv.delete(k); } },
@@ -89,7 +94,7 @@ describe('Library controller', () => {
     expect(t.last().rows.map(r => r.label)).toEqual(['Novel', 'Loose']);
     await t.controller.toggleBook('/lib/Novel');
     expect(t.last().rows.map(r => r.label)).toEqual(['Novel', '01', '02', 'Loose']);
-    expect(t.last().rows[1]).toMatchObject({ kind: 'chapter', book: '/lib/Novel', index: 0 });
+    expect(t.last().rows[1]).toMatchObject({ kind: 'file', book: '/lib/Novel', index: 0 });
   });
 
   it('creates a page in the book that is open, otherwise in the Library', async () => {
@@ -145,7 +150,7 @@ describe('Library controller', () => {
     const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two', '/lib/Novel/03.md': '# Three' });
     await t.controller.start();
     await t.controller.open('/lib/Novel/02.md');
-    await t.controller.trash('/lib/Novel/02.md', 'chapter', '02');
+    await t.controller.trash('/lib/Novel/02.md', 'file', '02');
     expect(t.files.has('/lib/Novel/02.md')).toBe(false);
     expect(t.files.has('/lib/.trash/1/02.md')).toBe(true);
     expect(t.session.path).toBe('/lib/Novel/03.md');
@@ -163,7 +168,7 @@ describe('Library controller', () => {
     await t.controller.start();
     await t.controller.toggleBook('/lib/Novel');
     await t.controller.reorder('/lib/Novel', '/lib/Novel/03.md', 0);
-    expect(t.last().rows.filter(r => r.kind === 'chapter').map(r => r.label)).toEqual(['03', '01', '02']);
+    expect(t.last().rows.filter(r => r.kind === 'file').map(r => r.label)).toEqual(['03', '01', '02']);
     expect(JSON.parse(t.files.get('/lib/Novel/.a-good-page.json')!).chapters).toEqual(['03.md', '01.md', '02.md']);
   });
 
@@ -201,7 +206,7 @@ describe('names and the next chapter', () => {
     const t = fixture({ '/lib/Novel/03-a-letter-unsent.md': '# A Letter Unsent\n\nx', '/lib/Novel/02.md': '# Two\n\nx' });
     await t.controller.start();
     await t.controller.toggleBook('/lib/Novel');
-    const rows = t.last().rows.filter(r => r.kind === 'chapter');
+    const rows = t.last().rows.filter(r => r.kind === 'file');
     expect(rows.map(r => r.label)).toEqual(['02', 'A Letter Unsent']);
     expect(rows.map(r => r.fileName)).toEqual(['02', '03-a-letter-unsent']);
   });
@@ -246,13 +251,125 @@ describe('history and the trash', () => {
     const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two' });
     await t.controller.start();
     await t.controller.open('/lib/Novel/01.md');
-    await t.controller.trash('/lib/Novel/02.md', 'chapter', '02');
+    await t.controller.trash('/lib/Novel/02.md', 'file', '02');
     const items = await t.controller.trashItems();
     expect(items.map(i => i.original)).toEqual(['Novel/02.md']);
     await t.controller.restore(items[0]);
     expect(t.files.get('/lib/Novel/02.md')).toBe('# Two');
     expect(t.session.path).toBe('/lib/Novel/02.md');
     expect(await t.controller.trashItems()).toEqual([]);
+  });
+});
+
+describe('projects', () => {
+  it('starts a project with one page and opens it, ready to name', async () => {
+    const t = fixture();
+    await t.controller.start();
+    expect(t.last().blank).toBe(true);
+    await t.controller.newProject();
+    expect([...t.dirs]).toContain('/lib/New project');
+    expect(t.files.has('/lib/New project/Untitled.md')).toBe(true);
+    expect(t.session.path).toBe('/lib/New project/Untitled.md');
+    expect(t.last().blank).toBe(false);
+    expect(t.views.length).toBeGreaterThan(0);
+    expect(t.last().renaming).toBe('/lib/New project');
+  });
+
+  it('puts the first-run Welcome page inside a Getting started project', async () => {
+    const t = fixture();
+    await t.controller.start();
+    const path = await t.controller.welcomeIfNew();
+    expect(path).toBe('/lib/Getting started/Welcome to A Good Page.md');
+  });
+
+  it('moves a page into a project, out again, and keeps the open page open', async () => {
+    const t = fixture({ '/lib/Draft.md': 'words', '/lib/Novel/01.md': '# One' });
+    await t.controller.start();
+    await t.controller.open('/lib/Draft.md');
+    await t.controller.moveTo('/lib/Draft.md', 'loose', '/lib/Novel', 'Draft');
+    expect(t.files.get('/lib/Novel/Draft.md')).toBe('words');
+    expect(t.session.path).toBe('/lib/Novel/Draft.md');
+    expect(t.moves).toContainEqual(['/lib/Draft.md', '/lib/Novel/Draft.md']);
+    await t.controller.moveTo('/lib/Novel/Draft.md', 'file', null, 'Draft');
+    expect(t.files.get('/lib/Draft.md')).toBe('words');
+    expect(t.session.path).toBe('/lib/Draft.md');
+  });
+
+  it('offers other projects, and Unfiled for a page that is in one, in a page\'s menu', async () => {
+    const t = fixture({ '/lib/A/01.md': '# a', '/lib/B/01.md': '# b', '/lib/Loose.md': 'x' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/A');
+    const open = (t as unknown as { controller: { d: { menu: { open: ReturnType<typeof vi.fn> } } } }).controller.d.menu.open;
+    const row = t.last().rows.find(r => r.kind === 'file')!;
+    t.controller.rowMenu(row, document.createElement('button'));
+    const labels = (open.mock.calls[0][0] as Array<{ label: string }>).map(i => i.label);
+    expect(labels).toContain('B');
+    expect(labels).not.toContain('A');
+    expect(labels).toContain('Unfiled pages');
+  });
+});
+
+describe('choosing the Library folder', () => {
+  it('remembers folders used before, newest first, and switches to one', async () => {
+    const t = fixture({ '/lib/A.md': 'a' });
+    await t.controller.start();
+    expect(t.controller.recentFolders()).toEqual(['/lib']);
+    t.files.set('/lib2/Novel/01.md', '# One');
+    t.dirs.add('/lib2'); t.dirs.add('/lib2/Novel');
+    await t.controller.useFolder('/lib2');
+    expect(t.controller.root).toBe('/lib2');
+    expect(t.controller.recentFolders()).toEqual(['/lib2', '/lib']);
+    expect(t.last().rows.map(r => r.label)).toContain('Novel');
+    expect(t.session.path).toBe('/lib2/Novel/01.md');
+  });
+
+  it('does nothing when asked for the folder it already uses, and never creates a page when the new folder is empty', async () => {
+    const t = fixture({ '/lib/A.md': 'a' });
+    await t.controller.start();
+    await t.controller.useFolder('/lib');
+    expect(t.views).toHaveLength(1);
+    t.dirs.add('/empty');
+    await t.controller.useFolder('/empty');
+    expect(t.controller.root).toBe('/empty');
+    expect(t.last().blank).toBe(true);
+    expect([...t.files.keys()].filter(k => k.startsWith('/empty'))).toEqual([]);
+  });
+
+  it('opens a menu offering another folder, recent ones and the default', async () => {
+    const t = fixture();
+    await t.controller.start();
+    t.files.set('/other/x.md', 'x'); t.dirs.add('/other');
+    await t.controller.useFolder('/other');
+    const open = (t as unknown as { controller: { d: { menu: { open: ReturnType<typeof vi.fn> } } } }).controller.d.menu.open;
+    t.controller.libraryMenu(document.createElement('button'));
+    const labels = (open.mock.calls.at(-1)![0] as Array<{ label: string }>).map(i => i.label);
+    expect(labels).toContain('Choose another folder…');
+    expect(labels).toContain('lib');
+    expect(labels).toContain('Use the default folder');
+    expect(labels).not.toContain('other');
+  });
+});
+
+describe('exporting from the panel', () => {
+  it('offers Export project on a project and Export this page on a page', async () => {
+    const t = fixture({ '/lib/A/01.md': '# a', '/lib/Loose.md': 'x' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/A');
+    const open = (t as unknown as { controller: { d: { menu: { open: ReturnType<typeof vi.fn> } } } }).controller.d.menu.open;
+    const labelsFor = (row: SidebarRow) => { t.controller.rowMenu(row, document.createElement('button')); return (open.mock.calls.at(-1)![0] as Array<{ label: string }>).map(i => i.label); };
+    expect(labelsFor(t.last().rows.find(r => r.kind === 'project')!)).toContain('Export project…');
+    expect(labelsFor(t.last().rows.find(r => r.kind === 'file')!)).toContain('Export this page…');
+    expect(labelsFor(t.last().rows.find(r => r.kind === 'loose')!)).toContain('Export this page…');
+  });
+
+  it('prepares any project for export, not only the one that is open', async () => {
+    const t = fixture({ '/lib/A/01.md': '# a', '/lib/B/01.md': '# b\n\nbee', '/lib/B/02.md': '# b2' });
+    await t.controller.start();
+    await t.controller.open('/lib/A/01.md');
+    const info = await t.controller.bookForExport('/lib/B');
+    expect(info?.title).toBe('B');
+    expect(info?.service.chapters.map(c => c.path)).toEqual(['01.md', '02.md']);
+    expect((await t.controller.bookForExport())?.title).toBe('A');
   });
 });
 

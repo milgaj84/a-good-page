@@ -23,14 +23,14 @@ import { protectReload } from './core/file-conflict';
 import { snapshotBackend } from './adapters/snapshot-store';
 import { createReader } from './editor/reader';
 import { isEditorCommand, type Action, type AppAction } from './core/commands';
-import { isPlainTextPath, isWritingFile } from './core/paths';
+import { isPlainTextPath, isWritingFile, nameFromPath } from './core/paths';
 import { DebouncedDraftStore, LocalDraftStore, SafeStore, browserStorage } from './adapters/storage';
 import { ChangeLatch, FrameTask, browserFrames } from './core/frame';
 import { bindAutoscroll } from './ui/autoscroll';
 import {
   chooseWorkingDirectory, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
-  tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry,
+  tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -51,6 +51,7 @@ import { bindGhostInterface } from './ui/ghost-interface';
 import { Sidebar } from './ui/sidebar';
 import { Menu } from './ui/menu';
 import { TrashDialog } from './ui/trash';
+import { ExportPicker } from './ui/export-picker';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
@@ -100,7 +101,7 @@ const bubble = new CommandButtons(el('bubble'), commandState, dispatch);
 const toolbar = new CommandButtons(el('toolbar'), commandState, dispatch);
 const outline = new OutlinePanel(
   { root: el('outline'), list: el('outline-list'), empty: el('outline-empty') },
-  (pos) => { editor.jumpTo(pos); centerCaret(0.3); if (SMALL()) setSidebar(false); },
+  (pos) => { closeContents(); editor.jumpTo(pos); centerCaret(0.3); },
 );
 const settings = new SettingsPanel(
   { root: el('settings'), close: el('settings-close'), themeChoice: el('theme-choice'), fontChoice: el('font-choice'),
@@ -216,8 +217,9 @@ function refreshStats(): void {
 }
 function refreshOutline(): void {
   outline.update(editor.headings(), editor.caretPos());
-  // "On this page" appears only once there is something to show.
-  el('onpage').hidden = outline.count === 0;
+  // The Contents button appears only once the page has headings.
+  el('btn-contents').hidden = outline.count === 0;
+  if (outline.count === 0) closeContents();
   chrome.setName(shownName());
 }
 
@@ -240,11 +242,37 @@ function applyPrefs(next: Preferences): void {
   refreshStats();
 }
 
+// ---------- contents (headings on this page) ----------
+const contentsPop = el('outline-pop');
+const contentsButton = el('btn-contents');
+function closeContents(): boolean {
+  if (!contentsPop.classList.contains('is-open')) return false;
+  contentsPop.classList.remove('is-open');
+  contentsPop.setAttribute('aria-hidden', 'true');
+  contentsButton.setAttribute('aria-expanded', 'false');
+  return true;
+}
+function toggleContents(): void {
+  if (closeContents()) return;
+  if (outline.count === 0) { chrome.toast('Headings you write will gather here.'); return; }
+  contentsPop.classList.add('is-open');
+  contentsPop.setAttribute('aria-hidden', 'false');
+  contentsButton.setAttribute('aria-expanded', 'true');
+  outline.highlight(editor.caretPos());
+}
+contentsButton.addEventListener('click', toggleContents);
+document.addEventListener('mousedown', (event) => {
+  const target = event.target as Node;
+  if (!contentsPop.contains(target) && !contentsButton.contains(target)) closeContents();
+});
+
 // ---------- the sidebar ----------
 const sidebar = new Sidebar({ tree: el('tree'), search: el<HTMLInputElement>('side-search') }, {
   open: (row) => { void library?.open(row.path).then(() => { if (SMALL()) setSidebar(false); }); },
   toggle: (row) => void library?.toggleBook(row.path),
   menu: (row, anchor) => library?.rowMenu(row, anchor),
+  add: (row) => void library?.newPage(row.path),
+  newProject: () => APP.newProject(),
   reorder: (book, path, to) => void library?.reorder(book, path, to),
   query: (text) => void library?.search(text),
   rename: (row, name) => void library?.commitRename(row, name),
@@ -374,7 +402,7 @@ library = new LibraryController({
     create: createEntry, rename: renameEntry, trash: trashEntry,
     write: (path, content) => tauriFiles.write(path, content),
     pickFolder: chooseWorkingDirectory,
-    listTrash, restore: restoreEntry,
+    listTrash, restore: restoreEntry, move: moveEntry,
   },
   offerUndo: (message, label, run) => chrome.toastAction(message, label, run),
   notify: (message) => chrome.toast(message, 4200),
@@ -390,9 +418,16 @@ library = new LibraryController({
   focusEditor: () => editor.focus(),
   flushAutosave: () => autosave.flush(),
   words: () => countWords(editor.getText()),
-  changed: () => settings.render(prefs, themes.theme, library?.root ?? null),
+  changed: () => {
+    settings.render(prefs, themes.theme, library?.root ?? null);
+    const folder = library?.root ? nameFromPath(library.root) : '';
+    el('library-name').textContent = folder === 'Untitled' ? '' : folder;
+    el('library-menu').title = library?.root ? library.root + ' — click to change your Library folder' : 'Choose your Library folder';
+  },
   moved: (from, to) => { projects?.historyMoved(from, to); views.move(from, to); },
   rendered: () => updateNext(),
+  exportProject: (path) => void exportPdf(path),
+  exportPage: (path) => void lib.open(path).then(ok => { if (ok) return exportPdf(); }),
 });
 const lib = library;
 
@@ -404,6 +439,11 @@ const trashDialog = new TrashDialog(
 // ---------- export ----------
 const previewScope = el<HTMLSelectElement>('preview-scope');
 const previewLayout = el<HTMLSelectElement>('preview-layout');
+const picker = new ExportPicker(
+  { root: el('export-pick'), summary: el('pick-summary'), list: el('pick-list'), all: el('pick-all'), none: el('pick-none') },
+  () => previewLayout.dispatchEvent(new Event('change')),
+);
+let exportProjectPath: string | null = null;
 let bookExport: { service: ProjectService; snapshot: ProjectSnapshot; title: string } | null = null;
 const preview = new ExportPreview({
   root: el('export-preview'), canvas: el<HTMLCanvasElement>('preview-canvas'),
@@ -413,11 +453,15 @@ const preview = new ExportPreview({
   close: el<HTMLButtonElement>('preview-close'),
 }, async layout => {
   if (previewScope.value === 'book') {
-    const info = await lib.bookForExport();
-    if (!info) throw new Error('This page is not inside a book.');
-    const readable = info.service.chapters.filter(c => c.file).map(c => c.path);
-    if (!readable.length) throw new Error('This book has no readable chapters yet.');
-    const snapshot = await info.service.previewVerified(readable);
+    const info = await lib.bookForExport(exportProjectPath);
+    if (!info) throw new Error('This page is not inside a project.');
+    const readable = info.service.chapters.filter(c => c.file);
+    if (!readable.length) throw new Error('This project has no readable pages yet.');
+    picker.setPages(info.service.path ?? info.title, readable.map(c => ({
+      path: c.path, label: displayName(nameFromPath(c.path), c.file!.title), words: c.file!.words })));
+    const chosen = picker.selected();
+    if (!chosen.length) throw new Error('Tick at least one page to export.');
+    const snapshot = await info.service.previewVerified(chosen);
     bookExport = { service: info.service, snapshot, title: info.title };
     return renderProjectPdf(snapshot.chapters, info.title, layout);
   }
@@ -435,19 +479,24 @@ async bytes => {
 () => chrome.toast(preview.changedDuringSave ? 'PDF exported from an earlier snapshot; later edits are not included.' : 'PDF exported. Your pages are unchanged.'),
 () => editor.restoreFocus(),
 error => chrome.toast(error.message + ' Close and reopen Export to refresh.', 5200));
-previewScope.addEventListener('change', () => previewLayout.dispatchEvent(new Event('change')));
+previewScope.addEventListener('change', () => { picker.show(previewScope.value === 'book'); previewLayout.dispatchEvent(new Event('change')); });
 editor.instance.on('update', () => {
   if (preview.isOpen && previewScope.value === 'page' && preview.manuscriptEdited() === 'close')
     chrome.toast('Preview closed because the page changed. Open Export again.');
 });
-async function exportPdf(): Promise<void> {
+/** Opens the PDF preview: the open page by default, or a whole project when one is named. */
+async function exportPdf(project: string | null = null): Promise<void> {
   autosave.cancel();
   if (doc.isDirty && !(await doc.save())) { chrome.toast('Save failed, so nothing was exported.'); return; }
   const path = doc.snapshot().path;
-  const inBook = Boolean(path && lib.root && bookOf(lib.root, path));
-  previewScope.value = 'page';
-  (previewScope.querySelector('option[value="book"]') as HTMLOptionElement).disabled = !inBook;
-  await preview.open(doc.snapshot().name);
+  const here = path && lib.root ? bookOf(lib.root, path) : null;
+  exportProjectPath = project;
+  const target = project ?? here;
+  previewScope.value = project ? 'book' : 'page';
+  (previewScope.querySelector('option[value="book"]') as HTMLOptionElement).disabled = !target;
+  (previewScope.querySelector('option[value="page"]') as HTMLOptionElement).disabled = Boolean(project && project !== here);
+  picker.show(previewScope.value === 'book');
+  await preview.open(project ? nameFromPath(project) : doc.snapshot().name);
 }
 
 const longProjects = createLongProjects({
@@ -486,7 +535,7 @@ function trashCurrent(): void {
   const path = doc.snapshot().path;
   if (!path || !lib.root) return;
   if (relativeTo(lib.root, path) === null) { chrome.toast('This file is outside your Library, so the app will not move it.'); return; }
-  const kind = bookOf(lib.root, path) ? 'chapter' : 'page';
+  const kind = bookOf(lib.root, path) ? 'file' : 'loose';
   void lib.trash(path, kind, doc.snapshot().name);
 }
 function openTools(): void {
@@ -507,6 +556,7 @@ function openTools(): void {
 /** Closes the top-most layer; returns false when there was nothing to close. */
 function closeLayers(): boolean {
   if (menu.close()) return true;
+  if (closeContents()) return true;
   if (recoveryDialog.isOpen) { recoveryDialog.close(); return true; }
   if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;
@@ -528,14 +578,14 @@ function closeLayers(): boolean {
 
 const APP: Record<AppAction, () => void> = {
   new: () => void lib.newPage(),
-  newBook: () => { setSidebar(true); void lib.newBook(); },
+  newProject: () => { setSidebar(true); void lib.newProject(); },
   open: () => void doc.open(),
   save: () => void saveWith(() => doc.save()),
   saveAs: () => void saveWith(() => doc.saveAs()),
   rename,
   trash: trashCurrent,
   openTrash: () => void trashDialog.open(),
-  exportPdf: () => void exportPdf(),
+  exportPdf: () => void exportPdf(null),
   palette: () => { if (sessionPanel.isOpen) sessionPanel.close(); palette.toggle(); },
   session: () => { if (palette.isOpen) palette.close(); sessionPanel.toggle(); },
   find: () => finder.open(),
@@ -544,7 +594,7 @@ const APP: Record<AppAction, () => void> = {
   sentenceFocus: () => void focusUI.choose(focusUI.choices.mode === 'sentence' ? 'off' : 'sentence'),
   fullScreen: () => void focusUI.choose(focusUI.choices.mode === 'fullscreen' ? 'off' : 'fullscreen'),
   theme: () => setTheme(themes.next()),
-  outline: () => { setSidebar(true); const d = el<HTMLDetailsElement>('onpage'); d.open = !d.open; },
+  outline: toggleContents,
   sidebar: () => setSidebar(!sidebarShown()),
   toolbar: () => { const next = prefsStore.update({ toolbar: !prefs.toolbar }); applyPrefs(next); chrome.toast(next.toolbar ? 'Formatting bar shown.' : 'Formatting bar hidden. Turn it back on in Settings.'); },
   ghost: () => togglePref('ghost', 'The bars will fade while you type.', 'The bars stay visible.'),
@@ -569,12 +619,13 @@ function dispatch(action: Action): void {
 bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
 el('btn-sidebar').addEventListener('click', () => APP.sidebar());
+el('library-menu').addEventListener('click', () => lib.libraryMenu(el('library-menu')));
 el('btn-tools').addEventListener('click', openTools);
 el('btn-new-more').addEventListener('click', () => {
   const more = el('btn-new-more');
   menu.open([
     { label: 'New page', hint: IS_MAC ? '⌘N' : 'Ctrl+N', run: () => APP.new() },
-    { label: 'New book', hint: IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N', run: () => APP.newBook() },
+    { label: 'New project', hint: IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N', run: () => APP.newProject() },
   ], more.getBoundingClientRect(), more);
 });
 el('btn-history').addEventListener('click', () => APP.timeMachine());
