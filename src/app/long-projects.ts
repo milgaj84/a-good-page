@@ -1,18 +1,15 @@
 import type { AppAction } from '../core/commands';
 import type { KeyValueStore } from '../core/ports';
-import type { HeadingLike, ListFolder, CollectedFiles } from '../core/quick-switch';
-import { collectWorkspaceFiles } from '../core/quick-switch';
 import { ReferencePin } from '../core/reference-pin';
 import { SnapshotStore, snapshotDocKey, type AsyncKeyValue } from '../core/snapshots';
 import { SprintStore } from '../core/sprint';
 import { recoveryFileName } from '../core/recovery';
 import type { ReaderView } from '../editor/reader';
-import { QuickSwitcher } from '../ui/quick-switcher';
 import { ReferencePanel } from '../ui/reference-panel';
 import { SprintRing } from '../ui/sprint-ring';
 import { TimeMachine } from '../ui/time-machine';
 
-export type LongProjectAction = Extract<AppAction, 'switcher' | 'reference' | 'timeMachine' | 'sprint' | 'polish'>;
+export type LongProjectAction = Extract<AppAction, 'reference' | 'timeMachine' | 'sprint' | 'polish'>;
 
 export interface LongProjectDeps {
   host: HTMLElement;
@@ -24,14 +21,9 @@ export interface LongProjectDeps {
   current(): { path: string | null; name: string; plain: boolean };
   content(): string;
   words(): number;
-  headings(): readonly HeadingLike[];
-  jump(pos: number): void;
   restoreFocus(): void;
   polish(): number;
   replaceContent(content: string): void;
-  workspaceRoot(): string | null;
-  listFolder: ListFolder;
-  openWorkspaceFile(root: string, path: string): void;
   readFile(path: string): Promise<{ content: string }>;
   pickFile(): Promise<string | null>;
   exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean>;
@@ -39,14 +31,12 @@ export interface LongProjectDeps {
   notify(message: string): void;
 }
 
-const FILE_CACHE_MS = 30_000;
 const SNAPSHOT_EVERY_MS = 10 * 60_000;
 
-/** Quick switcher, pinned notes, sprint ring, version history and typography polish, wired to the app by injection. */
+/** Pinned notes, sprint ring, version history and typography polish, wired to the app by injection. */
 export function createLongProjects(deps: LongProjectDeps) {
   const snapshots = new SnapshotStore(deps.snapshotBackend, deps.now);
   const docKey = () => snapshotDocKey(deps.current().path);
-  let cache: { root: string; at: number; files: Promise<CollectedFiles> } | null = null;
 
   const capture = async (): Promise<string> => {
     const content = deps.content();
@@ -57,24 +47,6 @@ export function createLongProjects(deps: LongProjectDeps) {
     }
     return content;
   };
-
-  const switcher = new QuickSwitcher(deps.host, {
-    headings: deps.headings,
-    currentPath: () => deps.current().path,
-    files: async () => {
-      const root = deps.workspaceRoot();
-      if (!root) return null;
-      if (!cache || cache.root !== root || deps.now() - cache.at > FILE_CACHE_MS) {
-        const files = collectWorkspaceFiles(deps.listFolder, root);
-        cache = { root, at: deps.now(), files };
-        files.catch(() => { if (cache?.files === files) cache = null; });
-      }
-      return cache.files;
-    },
-    jump: deps.jump,
-    openDocument: (path) => { const root = deps.workspaceRoot(); if (root) deps.openWorkspaceFile(root, path); },
-    restoreFocus: deps.restoreFocus,
-  });
 
   const reference = new ReferencePanel(deps.host, {
     pin: new ReferencePin(deps.store), read: deps.readFile, pickPath: deps.pickFile,
@@ -103,7 +75,6 @@ export function createLongProjects(deps: LongProjectDeps) {
   reference.restore();
 
   const actions: Record<LongProjectAction, () => void> = {
-    switcher: () => switcher.toggle(),
     reference: () => reference.toggle(),
     timeMachine: () => timeMachine.toggle(),
     sprint: () => sprint.toggleForm(),
@@ -123,7 +94,6 @@ export function createLongProjects(deps: LongProjectDeps) {
     /** Closes the top-most long-project layer; false when none was open. */
     closeLayer(): boolean {
       if (timeMachine.isOpen) { timeMachine.close(); return true; }
-      if (switcher.isOpen) { switcher.close(); return true; }
       if (sprint.isOpen) { sprint.closeForm(); return true; }
       return false;
     },
@@ -133,7 +103,11 @@ export function createLongProjects(deps: LongProjectDeps) {
       sprint.update();
       void capture();
     },
-    saved(): void { cache = null; void capture(); },
+    saved(): void { void capture(); },
+    /** A page or book was renamed: its history moves with it. */
+    historyMoved(from: string, to: string): void {
+      void snapshots.rekey(from, to).then(() => timeMachine.documentChanged()).catch(error => deps.notify('History could not follow the rename: ' + String(error)));
+    },
     statsChanged(): void { sprint.update(); },
   };
 }

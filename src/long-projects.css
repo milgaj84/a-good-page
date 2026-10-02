@@ -1,16 +1,6 @@
-/* Quick switcher, pinned notes, sprint ring and Time Machine. Loaded last; muted by design. */
-.switcher-input {
-  display: block; width: 100%; height: 64px; padding: 0 22px;
-  border: none; border-bottom: 1px solid var(--line); outline: none;
-  background: transparent; color: var(--ink); font: 400 19px var(--sans);
-}
-.switcher-input::placeholder { color: var(--muted); }
-.switcher-results { max-height: min(49vh, 410px); overflow-y: auto; padding: 8px; }
-.switcher-result[data-kind="document"] .command-label { font-family: var(--serif); font-style: italic; }
-
 /* Pinned notes: a slim, read-only slide-out beside the manuscript. */
 .reference-panel {
-  position: fixed; top: 118px; bottom: 72px; right: 14px; z-index: 7;
+  position: fixed; top: 64px; bottom: 56px; right: 14px; z-index: 7;
   width: min(300px, 34vw); display: flex; flex-direction: column;
   background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: var(--shadow); font-family: var(--sans);
@@ -49,7 +39,7 @@
 }
 
 /* Sprint ring: quiet in the lower-left corner until a goal is set, then a soft glow once it is reached. */
-.sprint { position: fixed; left: 18px; bottom: 64px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-family: var(--sans); }
+.sprint { position: fixed; left: calc(var(--sidebar-w, 0px) + 18px); bottom: 54px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-family: var(--sans); }
 .sprint-ring {
   position: relative; width: 40px; height: 40px; padding: 0; border: none; border-radius: 50%;
   background: transparent; color: var(--muted); cursor: pointer; opacity: .45;
@@ -100,9 +90,8 @@
 /* Full-screen writing hides every extra; the quiet screen dims them with the chrome. */
 body:has(.fullscreen-writing) :is(.reference-panel, .sprint) { display: none; }
 body:has(.app.is-typing) .sprint:not(.is-editing):not(.is-glowing) { opacity: .25; transition: opacity .7s var(--ease) .12s; }
-@media (max-width: 640px) { .sprint { left: 12px; bottom: 73px; } .reference-panel { width: calc(100vw - 28px); } }
+@media (max-width: 760px) { .sprint { left: 12px; bottom: 56px; } .reference-panel { width: calc(100vw - 28px); } }
 @media (prefers-reduced-motion: reduce) {
   .reference-panel, .sprint-ring, .sprint-arc, .time-sheet { transition-duration: .01ms; }
   .sprint.is-glowing .sprint-ring { animation: none; }
 }
-body:has(.outline.is-open) .sprint { left: 266px; }

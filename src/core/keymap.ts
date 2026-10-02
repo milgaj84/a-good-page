@@ -13,7 +13,7 @@ export interface KeyLike {
 const PLAIN_KEYS = new Map<string, Action>([
   ['n', 'new'],
   ['o', 'open'],
-  ['p', 'switcher'],
+  ['p', 'palette'],
   ['s', 'save'],
   ['k', 'link'],
   ['f', 'find'],
@@ -34,11 +34,12 @@ const PLAIN_CODES = new Map<string, Action>([
   ['Digit0', 'resetSize'],
   ['Numpad0', 'resetSize'],
   ['Slash', 'help'],
-  ['Backslash', 'toolbar'],
+  ['Backslash', 'sidebar'],
 ]);
 
 const SHIFT_KEYS = new Map<string, Action>([
   ['s', 'saveAs'],
+  ['n', 'newBook'],
   ['e', 'exportPdf'],
   ['p', 'palette'],
   ['f', 'focus'],
@@ -89,7 +90,10 @@ export function resolveShortcut(event: KeyLike): Action | null {
   const key = (event.key ?? '').toLowerCase();
   const code = event.code ?? '';
   const mod = event.ctrlKey || event.metaKey;
-  if (!mod) return key === 'escape' && !event.shiftKey && !event.altKey ? 'escape' : null;
+  if (!mod) {
+    if (event.shiftKey || event.altKey) return null;
+    return key === 'escape' ? 'escape' : key === 'f2' ? 'rename' : null;
+  }
   if (event.altKey) return event.shiftKey ? null : ALT_CODES.get(code) ?? null;
   const letter = letterOf(key, code);
   if (event.shiftKey) return SHIFT_CODES.get(code) ?? SHIFT_KEYS.get(letter) ?? null;
@@ -102,10 +106,12 @@ export interface ShortcutHelp {
 }
 
 export const SHORTCUTS: readonly ShortcutHelp[] = [
-  { keys: ['Mod', 'N'], label: 'New document' },
-  { keys: ['Mod', 'O'], label: 'Open' },
-  { keys: ['Mod', 'S'], label: 'Save' },
-  { keys: ['Mod', 'Shift', 'S'], label: 'Save as' },
+  { keys: ['Mod', 'N'], label: 'New page' },
+  { keys: ['Mod', 'Shift', 'N'], label: 'New book' },
+  { keys: ['F2'], label: 'Rename this page' },
+  { keys: ['Mod', 'O'], label: 'Open a file from elsewhere' },
+  { keys: ['Mod', 'S'], label: 'Save now (it also saves by itself)' },
+  { keys: ['Mod', 'Shift', 'S'], label: 'Save a copy somewhere else' },
   { keys: ['Mod', 'B'], label: 'Bold' },
   { keys: ['Mod', 'I'], label: 'Italic' },
   { keys: ['Mod', 'Shift', 'X'], label: 'Strikethrough' },
@@ -121,11 +127,8 @@ export const SHORTCUTS: readonly ShortcutHelp[] = [
   { keys: ['Mod', 'Shift', 'B'], label: 'Quote' },
   { keys: ['Mod', 'Shift', 'H'], label: 'Scene break' },
   { keys: ['Mod', 'Shift', 'E'], label: 'Export PDF' },
-  { keys: ['Mod', 'Shift', '1'], label: 'Chapters: your book folder' },
-  { keys: ['Mod', 'Shift', '2'], label: 'Write: back to the page' },
-  { keys: ['Mod', 'Shift', '3'], label: 'Share: preview and export your book' },
-  { keys: ['Mod', 'Shift', 'P'], label: 'Find a command' },
-  { keys: ['Mod', 'P'], label: 'Quick switcher: jump to a chapter or document' },
+  { keys: ['Mod', 'P'], label: 'Go to any page, or run any command' },
+  { keys: ['Mod', 'Shift', 'P'], label: 'Go to any page, or run any command' },
   { keys: ['Mod', 'Shift', 'R'], label: 'Reference notes beside the page' },
   { keys: ['Mod', 'Shift', 'I'], label: 'Time Machine: earlier versions' },
   { keys: ['Mod', 'Shift', 'A'], label: 'Sprint goal ring' },
@@ -138,14 +141,14 @@ export const SHORTCUTS: readonly ShortcutHelp[] = [
   { keys: ['Mod', 'Shift', 'U'], label: 'Sentence focus' },
   { keys: ['Mod', 'Shift', 'G'], label: 'Full-screen writing' },
   { keys: ['Mod', 'Shift', 'L'], label: 'Change theme' },
-  { keys: ['Mod', 'Shift', 'O'], label: 'Outline' },
+  { keys: ['Mod', 'Shift', 'O'], label: 'On this page: headings' },
   { keys: ['Mod', 'Shift', 'T'], label: 'Typewriter line (keep typing at mid-screen)' },
   { keys: ['Mod', 'Shift', 'J'], label: 'Fade the bars while typing' },
   { keys: ['Mod', 'Shift', 'D'], label: 'Zen draft (pause Backspace and Delete)' },
   { keys: ['Mod', 'Shift', 'M'], label: 'Column width: Narrow, Comfortable, Wide' },
   { keys: ['Mod', 'Shift', 'K'], label: 'Spacing: Dense, Balanced, Spacious' },
   { keys: ['Mod', 'Shift', 'Y'], label: 'Typeface: Editorial serif, Humanist sans, Duospace' },
-  { keys: ['Mod', '\\'], label: 'Show or hide the formatting bar' },
+  { keys: ['Mod', '\\'], label: 'Show or hide the sidebar' },
   { keys: ['Mod', '='], label: 'Bigger text' },
   { keys: ['Mod', '-'], label: 'Smaller text' },
   { keys: ['Mod', '0'], label: 'Reset text size' },

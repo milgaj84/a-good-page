@@ -4,8 +4,8 @@ export interface OutlineElements {
   root: HTMLElement;
   list: HTMLElement;
   empty: HTMLElement;
-  previous: HTMLButtonElement;
-  next: HTMLButtonElement;
+  previous?: HTMLButtonElement;
+  next?: HTMLButtonElement;
 }
 
 function sameOutline(a: readonly OutlineItem[], b: readonly OutlineItem[]): boolean {
@@ -38,8 +38,8 @@ export class OutlinePanel {
         this.rebuild(this.items); this.highlight(this.caret);
       } else onJump(item.pos);
     });
-    els.previous.addEventListener('click', () => { const item = adjacentChapter(this.items, this.caret, -1); if (item) onJump(item.pos); });
-    els.next.addEventListener('click', () => { const item = adjacentChapter(this.items, this.caret, 1); if (item) onJump(item.pos); });
+    els.previous?.addEventListener('click', () => { const item = adjacentChapter(this.items, this.caret, -1); if (item) onJump(item.pos); });
+    els.next?.addEventListener('click', () => { const item = adjacentChapter(this.items, this.caret, 1); if (item) onJump(item.pos); });
   }
 
   setVisible(on: boolean): void {
@@ -55,8 +55,8 @@ export class OutlinePanel {
 
   highlight(caret: number): void {
     this.caret = caret;
-    this.els.previous.disabled = adjacentChapter(this.items, caret, -1) === null;
-    this.els.next.disabled = adjacentChapter(this.items, caret, 1) === null;
+    if (this.els.previous) this.els.previous.disabled = adjacentChapter(this.items, caret, -1) === null;
+    if (this.els.next) this.els.next.disabled = adjacentChapter(this.items, caret, 1) === null;
     const index = activeIndex(this.items, caret);
     if (index === this.active) return;
     const previous = this.buttons.find(b => Number(b.dataset.index) === this.active);

@@ -97,7 +97,8 @@ pub fn list_directory<R: DirectoryReader>(
         let Some(full_path) = path.to_str() else {
             continue;
         };
-        if name.is_empty() {
+        // Hidden items (the Library trash, dot-folders) are never listed or scanned for chapters.
+        if name.is_empty() || name.starts_with('.') {
             continue;
         }
         let is_dir = reader.is_directory(&path);
@@ -215,6 +216,17 @@ mod tests {
         .unwrap()
         .entries
         .is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn hides_dot_items_such_as_the_trash() {
+        let root = temp();
+        fs::create_dir(root.join(".trash")).unwrap();
+        fs::write(root.join(".hidden.md"), "x").unwrap();
+        fs::write(root.join("shown.md"), "x").unwrap();
+        let listing = list_directory(&DiskDirectoryReader, root.to_str().unwrap(), None).unwrap();
+        assert_eq!(listing.entries.len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

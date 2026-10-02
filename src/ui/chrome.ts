@@ -4,34 +4,30 @@ import type { SaveState } from '../core/session';
 
 export interface ChromeElements {
   app: HTMLElement;
-  name: HTMLElement;
-  saveDot: HTMLElement;
+  title: HTMLInputElement;
+  saveState: HTMLElement;
+  saveText: HTMLElement;
   stats: HTMLElement;
-  detail: HTMLElement;
-  focusButton: HTMLElement;
-  themeButton: HTMLElement;
-  toast: HTMLElement;
   goal: HTMLElement;
   goalFill: HTMLElement;
+  focusButton: HTMLElement;
+  toast: HTMLElement;
 }
 
-const STATE_LABELS: Record<SaveState, string> = {
-  saved: 'All words saved',
-  dirty: 'Unsaved changes',
+/** Plain words for the one thing a writer needs to know: are my words safe? */
+export const SAVE_WORDS: Record<SaveState, string> = {
+  saved: 'Saved',
+  dirty: 'Saving soon…',
   saving: 'Saving…',
-  error: 'Could not save',
+  error: 'Could not save · press Ctrl+S',
 };
 
-/** The quiet UI around the page: it fades while you type and returns when you move the mouse. */
+/** The quiet UI around the page: title, save state, word count and toasts. */
 export class Chrome {
   private toastHandle: unknown = null;
-  private celebrateHandle: unknown = null;
   private isTyping = false;
 
-  constructor(
-    private readonly els: ChromeElements,
-    private readonly scheduler: Scheduler,
-  ) {}
+  constructor(private readonly els: ChromeElements, private readonly scheduler: Scheduler) {}
 
   // Called on every keystroke and mouse move: only touch the DOM when the state flips.
   typing(): void {
@@ -47,16 +43,12 @@ export class Chrome {
   }
 
   setName(name: string): void {
-    this.els.name.textContent = name;
+    if (document.activeElement !== this.els.title) this.els.title.value = name;
   }
 
-  setSaveState(state: SaveState): void {
-    this.els.saveDot.dataset.state = state;
-    this.els.saveDot.title = STATE_LABELS[state];
-  }
-
-  setDetail(text: string): void {
-    this.els.detail.textContent = text;
+  setSaveState(state: SaveState, mac = false): void {
+    this.els.saveState.dataset.state = state;
+    this.els.saveText.textContent = mac ? SAVE_WORDS[state].replace('Ctrl', '⌘') : SAVE_WORDS[state];
   }
 
   setStats(text: string): void {
@@ -71,26 +63,10 @@ export class Chrome {
     goal.title = progress ? progress.label + ' words' : '';
   }
 
-  celebrate(message: string): void {
-    const app = this.els.app;
-    app.classList.remove('celebrate');
-    void app.offsetWidth; // restart the glow animation
-    app.classList.add('celebrate');
-    if (this.celebrateHandle !== null) this.scheduler.clear(this.celebrateHandle);
-    this.celebrateHandle = this.scheduler.set(() => {
-      app.classList.remove('celebrate');
-      this.celebrateHandle = null;
-    }, 1800);
-    this.toast(message, 4200);
-  }
+  celebrate(message: string): void { this.toast(message, 4200); }
 
   setFocus(on: boolean): void {
     this.els.app.classList.toggle('focus-mode', on);
-    this.els.focusButton.setAttribute('aria-pressed', String(on));
-  }
-
-  setThemeLabel(label: string): void {
-    this.els.themeButton.textContent = label;
   }
 
   toast(message: string, durationMs = 2600): void {

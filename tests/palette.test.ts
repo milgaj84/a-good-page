@@ -16,14 +16,14 @@ describe('command search', () => {
     expect(searchPalette('size').map(x => x.action)).toContain('bigger');
   });
   it('finds the long-project tools by everyday words', () => {
-    expect(searchPalette('jump chapter')[0].action).toBe('switcher');
     expect(searchPalette('versions')[0].action).toBe('timeMachine');
     expect(searchPalette('curly quotes')[0].action).toBe('polish');
     expect(searchPalette('pin notes')[0].action).toBe('reference');
     expect(searchPalette('ring').map(x => x.action)).toContain('sprint');
-    expect(searchPalette('book folder')[0].action).toBe('chapters');
-    expect(searchPalette('share your book')[0].action).toBe('share');
-    expect(searchPalette('back to the page')[0].action).toBe('writePage');
+    expect(searchPalette('create folder')[0].action).toBe('newBook');
+    expect(searchPalette('whole book pdf')[0].action).toBe('exportPdf');
+    expect(searchPalette('delete')[0].action).toBe('trash');
+    expect(searchPalette('title name')[0].action).toBe('rename');
   });
   it('only lists dispatchable actions', () => {
     PALETTE_ITEMS.forEach(x => expect([...APP_ACTIONS, ...EDITOR_COMMANDS]).toContain(x.action));

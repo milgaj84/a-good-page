@@ -2,6 +2,7 @@ mod commands;
 mod conflict;
 mod disk_probe;
 pub mod document;
+mod library;
 mod pdf;
 mod project;
 mod workspace;
@@ -20,7 +21,13 @@ pub fn run() {
             commands::write_project_order,
             commands::export_pdf,
             commands::list_workspace,
-            commands::open_workspace_file
+            commands::open_workspace_file,
+            commands::default_library,
+            commands::create_entry,
+            commands::rename_entry,
+            commands::trash_entry,
+            commands::list_trash,
+            commands::restore_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running A Good Page");

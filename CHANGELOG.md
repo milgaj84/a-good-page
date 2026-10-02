@@ -6,6 +6,55 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-02
+
+### Fixed
+
+- **Renaming no longer loses History.** Earlier versions of a page move with it when it is renamed, including by the automatic naming of a new page. Renaming a book moves the History of every chapter inside it. Versions already at the new name are merged, never replaced.
+
+### Added
+
+- **Trash, with Restore.** Tools → Trash… (or "Open the trash" in the go-to box) lists everything moved to the trash, newest first, with where it came from. Restore puts it back in its original place, recreating the book if needed, and opens it if it is a page. Nothing is ever overwritten: a name clash restores under a new name. The trash now remembers each item's original location (`.trash/<time>/` with a short `origin.txt` note).
+- Rust commands `list_trash` and `restore_entry`, both confined to the Library's own `.trash`.
+
+### Measured
+
+- Typing in a 3,000-word chapter cost about 2 ms per key with no long tasks, even with the CPU slowed 4×, and scrolling did almost no layout work, so the page's scripts are not a bottleneck. Painting on a software-rendered session could not be measured outside the real window.
+
+### Known limits
+
+- A restored chapter returns to its book but is added at the end of the chapter order.
+- Trash is not emptied automatically; delete the `.trash` folder yourself to reclaim space.
+
+## [0.6.0] - 2026-10-02
+
+The writing app was rebuilt around one idea: a **Library**. Everything lives in one folder, saves by itself, and is reached from one sidebar.
+
+### Changed
+
+- **No more saving or choosing locations.** On first launch the app creates `Documents/A Good Page`. New pages are real files from the moment you press New page; there is no "Untitled draft", Save As or Open step. The page names itself from your first heading or line, once, and only while it still has its placeholder name. Save stays available (Ctrl/Cmd+S) as "save now".
+- **One sidebar for everything you can open.** Pages and books (folders of chapters) with live word counts, search across names and the text of opened books, and "On this page" headings beneath. Chapters reorder by drag or Move up/down and keep their order in `.a-good-page.json`. Rename inline, from the title, or with F2. Move to trash keeps items in a hidden `.trash` folder inside the Library and never erases anything.
+- **Chapters · Write · Share is gone.** Export is one button: this page or the whole book, with a real-page preview that rechecks the chapters on disk before exporting.
+- **One box to go anywhere.** Ctrl/Cmd+P (and Ctrl/Cmd+Shift+P) searches pages, chapters, headings on this page and every command. The old quick switcher is merged into it.
+- **A calmer top and bottom.** Title (the file name) and plain save words on top with Find, History, Export and Settings; word count with Focus and Tools below. Focus holds paragraph, sentence, typewriter line, Zen draft and full screen. Tools holds notes, writing session, sprint goal and typography polish. Themes, type, goals and the Library folder live in one Settings drawer. Everything stays reachable by shortcut and from the go-to box.
+- The formatting bar is replaced by the quick bubble on selection, the `/` menu and shortcuts. The first-run guide is replaced by a short Welcome page in your Library. New shortcuts: Ctrl/Cmd+Shift+N (new book), F2 (rename), Ctrl/Cmd+\ now shows or hides the sidebar.
+- Styles rebuilt as three lean sheets (19 removed): no grain overlay, scroll masks, blur or blend modes, and fewer shadows and animations, to help software-rendered Linux sessions.
+
+### Added
+
+- Rust commands `default_library`, `create_entry`, `rename_entry` and `trash_entry`. Each re-validates the path against the Library root and refuses symlinks; hidden (dot) items are no longer listed.
+- An unsaved untitled draft from an older version is kept as a "Recovered draft" page.
+
+### Removed
+
+- The Chapters, Write and Share screens, the share overview and next-step card, project health and relink dialogs, the workspace panel, the formatting toolbar, the writing guide and the quick switcher window. Per-chapter include/exclude for PDF export is gone: whole-book export includes every readable chapter in order.
+
+### Known limits
+
+- Renaming a page detaches its History, because versions are keyed by path.
+- Files opened from outside the Library (Open, drag and drop) are edited in place and are not listed in the sidebar.
+- Layout and flows were verified in a headless browser against a simulated file system, not yet in an installed app; see `RELEASE_0.6.0.md`.
+
 ## [0.5.0] - 2026-10-02
 
 ### Fixed (staged; not yet installer-verified)

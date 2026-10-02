@@ -24,9 +24,13 @@ export type TextStyle = (typeof TEXT_STYLES)[number];
 /** Application-level actions (files, panels, display). */
 export const APP_ACTIONS = [
   'new',
+  'newBook',
   'open',
   'save',
   'saveAs',
+  'rename',
+  'trash',
+  'openTrash',
   'exportPdf',
   'palette',
   'session',
@@ -37,7 +41,7 @@ export const APP_ACTIONS = [
   'fullScreen',
   'theme',
   'outline',
-  'toolbar',
+  'sidebar',
   'ghost',
   'typewriter',
   'zen',
@@ -50,14 +54,10 @@ export const APP_ACTIONS = [
   'measure',
   'rhythm',
   'typeface',
-  'switcher',
   'reference',
   'timeMachine',
   'sprint',
   'polish',
-  'chapters',
-  'writePage',
-  'share',
   'escape',
 ] as const;
 export type AppAction = (typeof APP_ACTIONS)[number];

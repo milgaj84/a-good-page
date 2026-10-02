@@ -108,3 +108,33 @@ describe('SnapshotStore', () => {
     expect(await store.list('doc:a')).toHaveLength(2);
   });
 });
+
+describe('History follows a rename', () => {
+  const NOW = 1_700_000_000_000;
+  it('moves a page\'s versions to its new path and merges with any already there', async () => {
+    const backend = new MemoryAsyncStore();
+    const store = new SnapshotStore(backend, () => NOW);
+    await store.capture(snapshotDocKey('/lib/Untitled.md'), 'first words');
+    const later = new SnapshotStore(backend, () => NOW + 30 * 60_000);
+    await later.capture(snapshotDocKey('/lib/Harbour.md'), 'different words');
+    expect(await store.rekey('/lib/Untitled.md', '/lib/Harbour.md')).toBe(1);
+    expect((await store.list(snapshotDocKey('/lib/Harbour.md'))).map(s => s.content)).toEqual(['first words', 'different words']);
+    expect(await store.list(snapshotDocKey('/lib/Untitled.md'))).toEqual([]);
+  });
+  it('moves every chapter when a book is renamed, and nothing else', async () => {
+    const backend = new MemoryAsyncStore();
+    const store = new SnapshotStore(backend, () => NOW);
+    await store.capture(snapshotDocKey('/lib/Novel/01.md'), 'one');
+    await store.capture(snapshotDocKey('/lib/Novel/part/02.md'), 'two');
+    await store.capture(snapshotDocKey('/lib/Novel2/03.md'), 'other book');
+    expect(await store.rekey('/lib/Novel', '/lib/Saga')).toBe(2);
+    expect((await store.list(snapshotDocKey('/lib/Saga/01.md')))[0].content).toBe('one');
+    expect((await store.list(snapshotDocKey('/lib/Saga/part/02.md')))[0].content).toBe('two');
+    expect((await store.list(snapshotDocKey('/lib/Novel2/03.md')))[0].content).toBe('other book');
+  });
+  it('does nothing for an unknown path or an unchanged name', async () => {
+    const store = new SnapshotStore(new MemoryAsyncStore(), () => NOW);
+    expect(await store.rekey('/lib/A.md', '/lib/B.md')).toBe(0);
+    expect(await store.rekey('/lib/A.md', '/lib/A.md')).toBe(0);
+  });
+});

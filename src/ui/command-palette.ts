@@ -1,16 +1,18 @@
 import { DialogFocus } from './dialog-focus';
-import { searchPalette, type PaletteItem } from '../core/palette';
+import { PALETTE_ITEMS, searchPalette, type PaletteEntry } from '../core/palette';
 import type { Action } from '../core/commands';
 
 export interface PaletteElements { root: HTMLElement; input: HTMLInputElement; list: HTMLElement; empty: HTMLElement }
 
 /** Keyboard-first command dialog. All actions flow through the app's existing dispatcher. */
 export class CommandPalette {
-  private matches: PaletteItem[] = [];
+  private matches: PaletteEntry[] = [];
   private selected = 0;
   private readonly focus: DialogFocus;
   constructor(private readonly els: PaletteElements, private readonly dispatch: (action: Action) => void,
-    private readonly canRun: (action: Action) => boolean = () => true) {
+    private readonly canRun: (action: Action) => boolean = () => true,
+    /** Places to go (pages, chapters, headings), listed before commands. */
+    private readonly places: (query: string) => readonly PaletteEntry[] = () => []) {
     this.focus = new DialogFocus(els.root);
     els.root.tabIndex = -1;
     els.root.setAttribute('aria-hidden', 'true');
@@ -44,17 +46,19 @@ export class CommandPalette {
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
   private choose(index: number): void {
     const item = this.matches[index];
-    if (!item || !this.canRun(item.action)) return;
-    this.close(); this.dispatch(item.action);
+    if (!item || (item.action && !this.canRun(item.action))) return;
+    this.close();
+    if (item.run) item.run();
+    else if (item.action) this.dispatch(item.action);
   }
   private render(): void {
-    this.matches = searchPalette(this.els.input.value);
+    this.matches = searchPalette<PaletteEntry>(this.els.input.value, [...this.places(this.els.input.value), ...PALETTE_ITEMS]).slice(0, 60);
     const fragment = document.createDocumentFragment();
     this.matches.forEach((item, index) => {
       const button = document.createElement('button'); button.type = 'button';
       button.className = 'command-result'; button.dataset.index = String(index);
       button.id = 'command-result-' + index; button.setAttribute('role', 'option');
-      button.disabled = !this.canRun(item.action);
+      button.disabled = item.action ? !this.canRun(item.action) : false;
       const name = document.createElement('span'); name.className = 'command-label'; name.textContent = item.label;
       const group = document.createElement('small'); group.textContent = item.group;
       const keys = document.createElement('kbd'); keys.textContent = item.shortcut?.replace('Mod', /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl') ?? '';

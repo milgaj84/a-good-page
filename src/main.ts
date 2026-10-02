@@ -1,20 +1,18 @@
 import './stylesheets';
 import { DocumentSession, type EditorPort, type SessionSnapshot } from './core/session';
 import { Debouncer, browserScheduler } from './core/debounce';
-import { ThemeManager, THEME_LABELS } from './core/theme';
+import { ThemeManager, type Theme } from './core/theme';
 import { countWords, formatCount, formatSelection, formatStats } from './core/stats';
-import { statusText } from './core/status';
 import { renderPdf } from './export/pdf';
+import { renderProjectPdf } from './export/project-pdf';
 import { ExportPreview } from './ui/export-preview';
-import { WritingGuide } from './ui/writing-guide';
-import { FirstRunGuide, guideSaveComplete } from './core/first-run';
 import { DEFAULT_PREFS, PreferencesStore, type Preferences } from './core/prefs';
 import { applyTypography, typographyActions } from './core/typography';
 import { GoalTracker, goalProgress, type GoalProgress } from './core/goal';
 import { resolveShortcut } from './core/keymap';
 import { bindButtons, bindShortcuts } from './app/shortcuts';
 import { createLongProjects } from './app/long-projects';
-import { attachManuscript } from './app/manuscript';
+import { LibraryController } from './app/library';
 import { FileConflictDialog } from './ui/file-conflict';
 import { OutsideNotice } from './ui/outside-notice';
 import { NamedRecoveryStore } from './core/named-recovery';
@@ -30,9 +28,9 @@ import { DebouncedDraftStore, LocalDraftStore, SafeStore, browserStorage } from 
 import { ChangeLatch, FrameTask, browserFrames } from './core/frame';
 import { bindAutoscroll } from './ui/autoscroll';
 import {
-  chooseWorkingDirectory, exportPdfFile, filesInWorkingDirectory, listWorkingDirectory, onCloseRequested, onFileDrop,
-  openWorkingFile, setWindowTitle, setWritingFullscreen, tauriFiles, tauriPrompter,
-  exportRecoveryCopy,
+  chooseWorkingDirectory, confirmAction, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
+  onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
+  tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -40,7 +38,7 @@ import { HelpSheet } from './ui/help';
 import { LinkBar } from './ui/linkbar';
 import { OutlinePanel } from './ui/outline';
 import { SettingsPanel } from './ui/settings';
-import { CommandButtons, StyleSelect, type CommandState } from './ui/toolbar';
+import { CommandButtons, type CommandState } from './ui/toolbar';
 import { CommandPalette } from './ui/command-palette';
 import { SessionPanel } from './ui/session-panel';
 import { WritingSession } from './core/writing-session';
@@ -48,18 +46,25 @@ import { FindPanel } from './ui/find-panel';
 import { QuitDialog } from './ui/quit';
 import { SlashMenu } from './ui/slash-menu';
 import { bindFocusControls } from './ui/focus-controls';
-import { WorkspaceHistory } from './core/workspace';
-import { ThemeTransition } from './ui/theme-transition';
-import { WorkspacePanel } from './ui/workspace-panel';
 import { restoreLastDocument } from './core/startup';
 import { bindGhostInterface } from './ui/ghost-interface';
+import { Sidebar } from './ui/sidebar';
+import { Menu } from './ui/menu';
+import { TrashDialog } from './ui/trash';
+import { bookOf, relativeTo } from './core/library';
+import type { ProjectService, ProjectSnapshot } from './core/project-service';
+import type { PaletteEntry } from './core/palette';
+
 const LAST_PATH_KEY = 'hearth.lastPath';
+const SIDEBAR_KEY = 'agp.sidebar.v1';
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.userAgent);
+const SMALL = (): boolean => window.innerWidth <= 760;
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error('Missing element #' + id);
   return node as T;
 }
+
 const store = new SafeStore(browserStorage());
 const lastPath = store.get(LAST_PATH_KEY);
 const root = document.documentElement;
@@ -67,11 +72,10 @@ const app = el('app');
 const scroller = el('scroller');
 const autoscroll = bindAutoscroll(scroller, browserFrames);
 const chrome = new Chrome(
-  { app, name: el('doc-name'), saveDot: el('save-dot'), stats: el('stats'), detail: el('status-detail'),
-    focusButton: el('btn-focus'), themeButton: el('btn-theme'), toast: el('toast'), goal: el('goal'), goalFill: el('goal-fill') },
+  { app, title: el<HTMLInputElement>('doc-title'), saveState: el('save-state'), saveText: el('save-text'), stats: el('stats'),
+    goal: el('goal'), goalFill: el('goal-fill'), focusButton: el('btn-focus'), toast: el('toast') },
   browserScheduler,
 );
-// Ghost chrome, typewriter line and Zen draft.
 const ghostUI = bindGhostInterface({
   win: window, app, editorEl: el('editor'), scroller, chrome, caretLine: () => editor.caretLine(),
   zenBadge: el<HTMLButtonElement>('zen-badge'), zenCheck: el<HTMLInputElement>('zen-check'),
@@ -83,48 +87,41 @@ const goals = new GoalTracker();
 let prefs: Preferences = prefsStore.prefs;
 let focusMode = false;
 let session: DocumentSession | null = null;
-let workspace: WorkspacePanel | null = null;
 let projects: ReturnType<typeof createLongProjects> | null = null;
-// UI pieces reach the editor through closures, so they can be built before it exists.
+let library: LibraryController | null = null;
+
 const commandState: CommandState = {
   isActive: (name) => editor.isActive(name),
   can: (name) => editor.can(name),
   textStyle: () => editor.textStyle(),
 };
-const toolbar = new CommandButtons(el('toolbar'), commandState, dispatch);
 const bubble = new CommandButtons(el('bubble'), commandState, dispatch);
-const styleSelect = new StyleSelect(el<HTMLSelectElement>('style-select'), commandState, dispatch);
 const outline = new OutlinePanel(
-  { root: el('outline'), list: el('outline-list'), empty: el('outline-empty'),
-    previous: el<HTMLButtonElement>('chapter-prev'), next: el<HTMLButtonElement>('chapter-next') },
-  (pos) => {
-    editor.jumpTo(pos);
-    centerCaret(0.3);
-  },
+  { root: el('outline'), list: el('outline-list'), empty: el('outline-empty') },
+  (pos) => { editor.jumpTo(pos); centerCaret(0.3); if (SMALL()) setSidebar(false); },
 );
 const settings = new SettingsPanel(
-  { root: el('settings'), fontChoice: el('font-choice'), widthChoice: el('width-choice'), rhythmChoice: el('rhythm-choice'),
-    sizeRange: el<HTMLInputElement>('size-range'), sizeValue: el('size-value'), goalInput: el<HTMLInputElement>('goal-input'),
-    toolbarCheck: el<HTMLInputElement>('toolbar-check'), ghostCheck: el<HTMLInputElement>('ghost-check'),
-    typewriterCheck: el<HTMLInputElement>('typewriter-check') },
+  { root: el('settings'), close: el('settings-close'), themeChoice: el('theme-choice'), fontChoice: el('font-choice'),
+    widthChoice: el('width-choice'), rhythmChoice: el('rhythm-choice'), sizeRange: el<HTMLInputElement>('size-range'),
+    sizeValue: el('size-value'), goalInput: el<HTMLInputElement>('goal-input'), ghostCheck: el<HTMLInputElement>('ghost-check'),
+    typewriterCheck: el<HTMLInputElement>('typewriter-check'), libraryPath: el('library-path'), libraryChange: el('library-change') },
   el('btn-settings'),
   (patch) => applyPrefs(prefsStore.update(patch)),
+  (theme) => setTheme(theme),
+  () => void library?.changeFolder().then(() => applyPrefs(prefs)),
 );
 const linkBar = new LinkBar(
   { root: el('linkbar'), input: el<HTMLInputElement>('link-input'), apply: el('link-apply'), remove: el('link-remove') },
-  {
-    currentHref: () => editor.linkHref(),
-    apply: (href) => editor.setLink(href),
-    remove: () => editor.unsetLink(),
-    caretRect: () => editor.caretRect(),
-    restoreFocus: () => editor.restoreFocus(),
-  },
+  { currentHref: () => editor.linkHref(), apply: (href) => editor.setLink(href), remove: () => editor.unsetLink(),
+    caretRect: () => editor.caretRect(), restoreFocus: () => editor.restoreFocus() },
 );
 const slash = new SlashMenu(el('slash-menu'), (command) => editor.run(command));
 const help = new HelpSheet(el('help'), el('help-list'), el('help-close'), IS_MAC, () => editor.restoreFocus());
+const menu = new Menu();
 const autosave = new Debouncer(() => void session?.autosave(), 1200, browserScheduler);
 const stats = new Debouncer(refreshStats, 150, browserScheduler);
 const outlineTimer = new Debouncer(refreshOutline, 250, browserScheduler);
+const nameTimer = new Debouncer(() => void library?.maybeAutoRename(), 2500, browserScheduler);
 const editor = createWriterEditor({
   element: el('editor'),
   bubble: el('bubble'),
@@ -133,29 +130,35 @@ const editor = createWriterEditor({
     session?.markEdited();
     autosave.trigger();
     stats.trigger();
-    if (prefs.outline) outlineTimer.trigger();
+    outlineTimer.trigger();
+    nameTimer.trigger();
   },
   onSlash: (anchor) => slash.open(anchor),
   onSlashKey: (event) => slash.handle(event),
   zen: ghostUI.zen,
-  onSelection: () => {
-    selectionFrame.schedule();
-    stats.trigger();
-  },
+  onSelection: () => { selectionFrame.schedule(); stats.trigger(); },
 });
-// Toolbar state and caret-follow are layout reads: coalesce them to one run per painted frame.
-const controlsFrame = new FrameTask(syncControls, browserFrames);
+// Nothing can be typed until a page is open, so words are never written into a page that has no file.
+editor.instance.setEditable(false);
+const controlsFrame = new FrameTask(() => bubble.sync(), browserFrames);
 const selectionFrame = new FrameTask(() => {
   keepCaretCentered();
-  if (prefs.outline) outline.highlight(editor.caretPos());
+  outline.highlight(editor.caretPos());
 }, browserFrames);
 editor.instance.on('transaction', () => controlsFrame.schedule());
+
 const focusUI = bindFocusControls({
-  app, panel: el('focus-choices'), trigger: el('btn-focus-choices'), exit: el('fullscreen-exit'),
+  app, panel: el('focus-choices'), trigger: el('btn-focus'), exit: el('fullscreen-exit'),
   focusButton: el('btn-focus'), setFullscreen: setWritingFullscreen,
   setParagraphFocus: on => { focusMode = on; chrome.setFocus(on); },
   setSentenceFocus: on => { editor.sentenceFocus(on); },
   centered: keepCaretCentered, notify: message => chrome.toast(message, 4000),
+});
+el('focus-choices').addEventListener('click', (event) => {
+  const toggle = (event.target as HTMLElement).closest<HTMLElement>('[data-toggle]')?.dataset.toggle;
+  if (toggle === 'typewriter') APP.typewriter();
+  else if (toggle === 'zen') APP.zen();
+  if (toggle) focusUI.closeMenu();
 });
 const finder = new FindPanel({ root: el('find-dialog'), query: el<HTMLInputElement>('find-query'),
   replacement: el<HTMLInputElement>('replace-query'), count: el('find-count'), matchCase: el<HTMLInputElement>('find-case'), wholeWord: el<HTMLInputElement>('find-words'),
@@ -167,6 +170,7 @@ const palette = new CommandPalette(
   { root: el('command-palette'), input: el<HTMLInputElement>('command-input'),
     list: el('command-results'), empty: el('command-empty') },
   dispatch, (action) => !['undo', 'redo'].includes(action) || editor.can(action),
+  (query) => places(query),
 );
 let sessionEnabledFocus = false;
 const sessionPanel = new SessionPanel(
@@ -182,109 +186,111 @@ const sessionPanel = new SessionPanel(
   () => { sessionEnabledFocus = !focusMode; if (sessionEnabledFocus) toggleFocus(); editor.restoreFocus(); },
   (summary) => { if (sessionEnabledFocus && focusMode) toggleFocus(); sessionEnabledFocus = false; chrome.toast('Session ended · ' + summary, 4200); },
 );
-function syncControls(): void {
-  toolbar.sync();
-  bubble.sync();
-  styleSelect.sync();
-}
+
 function centerCaret(fraction: number): void {
   const top = editor.caretTop();
   if (top === null) return;
   const box = scroller.getBoundingClientRect();
   const delta = top - (box.top + box.height * fraction);
-  // Instant, not smooth: a smooth scroll per keystroke queues animations and feels like lag.
   if (Math.abs(delta) > 4) scroller.scrollTop += delta;
 }
 function keepCaretCentered(): void {
-  // The typewriter line wins over focus mode's follow; neither fights a scroll the writer is making.
   if (autoscroll.active || ghostUI.anchor()) return;
   if (focusMode) centerCaret(0.45);
 }
-function currentProgress(): GoalProgress | null {
-  return goalProgress(countWords(editor.getText()), prefs.goal);
-}
+function currentProgress(): GoalProgress | null { return goalProgress(countWords(editor.getText()), prefs.goal); }
 function refreshStats(): void {
   const text = editor.getText();
   const total = countWords(text);
   const progress = goalProgress(total, prefs.goal);
   const selected = countWords(editor.selectionText());
-  if (selected > 0) {
-    chrome.setStats(formatSelection(selected, total));
-  } else {
-    const goalText = progress ? ' · ' + Math.floor(progress.ratio * 100) + '% of goal' : '';
-    chrome.setStats(formatStats(total) + goalText);
-  }
+  if (selected > 0) chrome.setStats(formatSelection(selected, total));
+  else chrome.setStats(formatStats(total) + (progress ? ' · ' + Math.floor(progress.ratio * 100) + '% of goal' : ''));
   chrome.setGoal(progress);
+  sidebar.setCurrentMeta(total.toLocaleString());
   sessionPanel.update();
-  refreshStatus(total, selected, text.length);
   projects?.statsChanged();
-  if (progress && goals.check(progress)) {
-    chrome.celebrate('Goal reached: ' + formatCount(prefs.goal) + ' words. Lovely work.');
-  }
+  if (progress && goals.check(progress)) chrome.celebrate('Goal reached: ' + formatCount(prefs.goal) + ' words. Lovely work.');
 }
-function refreshStatus(words: number, selected: number, characters: number): void {
-  const caret = editor.caretPos();
-  const section = editor.headings().filter((h) => h.pos < caret).slice(-1)[0]?.text ?? null;
-  const snapshot = session?.snapshot();
-  chrome.setDetail(statusText({ words, selected, characters,
-    goal: prefs.goal, section, filename: snapshot?.path ?? 'Untitled', save: snapshot?.state ?? 'saved' }));
-}
-function refreshOutline(): void {
-  outline.update(editor.headings(), editor.caretPos());
-}
-const themeShift = new ThemeTransition(root, browserScheduler, 520, () => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function applyTheme(): void {
-  themeShift.apply(themes.theme);
-  chrome.setThemeLabel(THEME_LABELS[themes.theme]);
+function refreshOutline(): void { outline.update(editor.headings(), editor.caretPos()); }
+
+function setTheme(theme: Theme): void {
+  themes.set(theme);
+  root.dataset.theme = theme;
+  settings.render(prefs, themes.theme, library?.root ?? null);
 }
 function applyPrefs(next: Preferences): void {
   const goalChanged = next.goal !== prefs.goal;
   prefs = next;
   applyTypography(root, next);
-  app.classList.toggle('no-toolbar', !next.toolbar);
   ghostUI.setGhost(next.ghost);
   ghostUI.setTypewriter(next.typewriter);
-  outline.setVisible(next.outline);
-  el('btn-outline').setAttribute('aria-pressed', String(next.outline));
-  settings.render(next);
-  if (next.outline) refreshOutline();
+  settings.render(next, themes.theme, library?.root ?? null);
+  el('focus-choices').querySelector('[data-toggle="typewriter"]')?.setAttribute('aria-pressed', String(next.typewriter));
   if (goalChanged) goals.reset(currentProgress());
   refreshStats();
 }
-/** Runs whenever the session swaps the page content (open, new, draft restore). */
-function onDocumentLoaded(): void {
-  if (preview.isOpen) preview.close();
-  goals.reset(currentProgress());
-  refreshStats();
-  if (prefs.outline) refreshOutline();
-  syncControls();
-  projects?.documentLoaded();
+
+// ---------- the sidebar ----------
+const sidebar = new Sidebar({ tree: el('tree'), search: el<HTMLInputElement>('side-search') }, {
+  open: (row) => { void library?.open(row.path).then(() => { if (SMALL()) setSidebar(false); }); },
+  toggle: (row) => void library?.toggleBook(row.path),
+  menu: (row, anchor) => library?.rowMenu(row, anchor),
+  reorder: (book, path, to) => void library?.reorder(book, path, to),
+  query: (text) => void library?.search(text),
+  rename: (row, name) => void library?.commitRename(row, name),
+  hit: (hit) => { void library?.open(hit.path, sidebar.query.trim()); if (SMALL()) setSidebar(false); },
+});
+function setSidebar(show: boolean): void {
+  app.classList.toggle('sidebar-hidden', !show);
+  el('btn-sidebar').setAttribute('aria-expanded', String(show));
+  root.style.setProperty('--sidebar-w', show && !SMALL() ? '272px' : '0px');
+  store.set(SIDEBAR_KEY, show ? 'open' : 'closed');
 }
+function sidebarShown(): boolean { return !app.classList.contains('sidebar-hidden'); }
+setSidebar(SMALL() ? false : store.get(SIDEBAR_KEY) !== 'closed');
+
+/** Headings on this page and pages in the Library, for the one "go anywhere" box. */
+function places(query: string): PaletteEntry[] {
+  const found = library?.places(query) ?? [];
+  const headings = editor.headings().filter(h => h.text.trim())
+    .map<PaletteEntry>(h => ({ label: h.text.trim(), group: 'On this page', keywords: 'heading jump', run: () => { editor.jumpTo(h.pos); centerCaret(0.3); } }));
+  return query.trim() ? [...found, ...headings] : [...found, ...headings.slice(0, 4)];
+}
+
+// ---------- the document ----------
 const sessionEditor: EditorPort = {
   getMarkdown: () => editor.getMarkdown(),
   getPlainText: () => editor.getPlainText(),
   setPlainText: (text) => { namedWriter.flush(); sessionPanel.documentChanged(); editor.setPlainText(text); onDocumentLoaded(); },
-  setMarkdown: (markdown) => {
-    sessionPanel.documentChanged();
-    namedWriter.flush(); editor.setMarkdown(markdown);
-    onDocumentLoaded();
-  },
+  setMarkdown: (markdown) => { sessionPanel.documentChanged(); namedWriter.flush(); editor.setMarkdown(markdown); onDocumentLoaded(); },
   focus: () => editor.focus(),
 };
-// Update chrome only on state transitions.
+/** Runs whenever the session swaps the page content (open, new, restore). */
+function onDocumentLoaded(): void {
+  if (preview.isOpen) preview.close();
+  editor.instance.setEditable(true);
+  goals.reset(currentProgress());
+  refreshStats();
+  refreshOutline();
+  controlsFrame.schedule();
+  projects?.documentLoaded();
+  scroller.scrollTop = 0;
+  void library?.documentLoaded();
+}
 const shown = new ChangeLatch();
 function render(snapshot: SessionSnapshot): void {
   stats.trigger();
   namedWriter?.change(snapshot);
   if (!shown.changed(JSON.stringify([snapshot.name, snapshot.path, snapshot.state]))) return;
   chrome.setName(snapshot.name);
-  workspace?.markActive(snapshot.path);
-  if (snapshot.state === 'saved' && snapshot.path) { void workspace?.refresh(); projects?.saved(); }
-  chrome.setSaveState(snapshot.state);
+  chrome.setSaveState(snapshot.state, IS_MAC);
+  if (snapshot.state === 'saved' && snapshot.path) projects?.saved();
   const marker = snapshot.state === 'dirty' || snapshot.state === 'error' ? '• ' : '';
   void setWindowTitle(marker + snapshot.name + ' — A Good Page');
   if (snapshot.path) store.set(LAST_PATH_KEY, snapshot.path);
   else store.remove(LAST_PATH_KEY);
+  sidebar.setCurrentMeta(countWords(editor.getText()).toLocaleString());
 }
 const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
 const namedStore = new NamedRecoveryStore(browserStorage(), () => Date.now());
@@ -297,7 +303,7 @@ const fileConflict = new FileConflictDialog(document.body);
 const outsideNotice = new OutsideNotice(document.body, () => void session?.reviewOutside(), () => outsideNotice.remind());
 session = new DocumentSession({
   editor: sessionEditor,
-  files: filesInWorkingDirectory(() => workspace?.directory ?? null),
+  files: tauriFiles,
   prompter: tauriPrompter,
   drafts,
   events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onDiscard: path => namedWriter.discard(path), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
@@ -306,110 +312,174 @@ session = new DocumentSession({
     }) },
 });
 const doc = session;
-const manuscript = attachManuscript(document.body, doc, editor, () => new WorkspaceHistory(store).active, message => chrome.toast(message, 4200));
-workspace = new WorkspacePanel({
-  root: el('workspace-panel'), toggle: el<HTMLButtonElement>('btn-workspace'),
-  choose: el<HTMLButtonElement>('workspace-choose'), refresh: el<HTMLButtonElement>('workspace-refresh'), recent: el('workspace-recent'),
-  label: el('workspace-location'), up: el<HTMLButtonElement>('workspace-up'),
-  contents: el('workspace-contents'), status: el('workspace-status'), search: el<HTMLInputElement>('workspace-search'),
-}, new WorkspaceHistory(store), {
-  pick: chooseWorkingDirectory, list: listWorkingDirectory,
-  open: (root, path) => doc.openWorkspacePath(root, path, openWorkingFile), report: message => chrome.toast(message, 4200), onRefresh: () => doc.checkOutside(),
+
+library = new LibraryController({
+  store, doc, sidebar, menu,
+  io: {
+    defaultLibrary, list: listWorkingDirectory, open: openWorkingFile, order: readProjectOrder, saveOrder: writeProjectOrder,
+    create: createEntry, rename: renameEntry, trash: trashEntry,
+    write: (path, content) => tauriFiles.write(path, content),
+    pickFolder: chooseWorkingDirectory,
+    listTrash, restore: restoreEntry,
+  },
+  confirm: confirmAction,
+  notify: (message) => chrome.toast(message, 4200),
+  markdown: () => editor.getMarkdown(),
+  jumpToPhrase: (phrase) => {
+    const needle = phrase.toLocaleLowerCase();
+    let pos: number | null = null;
+    editor.instance.state.doc.descendants((node, at) => {
+      if (pos === null && node.isText) { const offset = (node.text ?? '').toLocaleLowerCase().indexOf(needle); if (offset >= 0) pos = at + offset; }
+    });
+    if (pos !== null) editor.jumpTo(pos);
+  },
+  focusEditor: () => editor.focus(),
+  flushAutosave: () => autosave.flush(),
+  words: () => countWords(editor.getText()),
+  changed: () => settings.render(prefs, themes.theme, library?.root ?? null),
+  moved: (from, to) => projects?.historyMoved(from, to),
 });
+const lib = library;
+
+const trashDialog = new TrashDialog(
+  { root: el('trash-dialog'), list: el('trash-list'), close: el('trash-close') },
+  () => lib.trashItems(), (item) => lib.restore(item), () => Date.now(),
+);
+
+// ---------- export ----------
+const previewScope = el<HTMLSelectElement>('preview-scope');
+const previewLayout = el<HTMLSelectElement>('preview-layout');
+let bookExport: { service: ProjectService; snapshot: ProjectSnapshot; title: string } | null = null;
 const preview = new ExportPreview({
   root: el('export-preview'), canvas: el<HTMLCanvasElement>('preview-canvas'),
-  title: el('preview-title'), status: el('preview-status'), layout: el<HTMLSelectElement>('preview-layout'),
+  title: el('preview-title'), status: el('preview-status'), layout: previewLayout,
   page: el('preview-page'), previous: el<HTMLButtonElement>('preview-prev'),
   next: el<HTMLButtonElement>('preview-next'), exportButton: el<HTMLButtonElement>('preview-export'),
   close: el<HTMLButtonElement>('preview-close'),
-}, layout => renderPdf(editor.getJSON(), doc.snapshot().name, layout),
-async bytes => (await exportPdfFile(doc.snapshot().name, bytes)) !== null,
-() => {
-  chrome.toast(preview.changedDuringSave ? 'PDF exported from an earlier snapshot; later edits are not included.' : 'PDF exported. Your manuscript is unchanged.');
-  guide.exported();
-}, () => guide.previewClosed());
+}, async layout => {
+  if (previewScope.value === 'book') {
+    const info = await lib.bookForExport();
+    if (!info) throw new Error('This page is not inside a book.');
+    const readable = info.service.chapters.filter(c => c.file).map(c => c.path);
+    if (!readable.length) throw new Error('This book has no readable chapters yet.');
+    const snapshot = await info.service.previewVerified(readable);
+    bookExport = { service: info.service, snapshot, title: info.title };
+    return renderProjectPdf(snapshot.chapters, info.title, layout);
+  }
+  bookExport = null;
+  return renderPdf(editor.getJSON(), doc.snapshot().name, layout);
+},
+async bytes => {
+  if (previewScope.value === 'book' && bookExport) {
+    const book = bookExport;
+    await book.service.verify(book.snapshot);
+    return (await exportPdfFile(book.title, bytes, () => book.service.verify(book.snapshot))) !== null;
+  }
+  return (await exportPdfFile(doc.snapshot().name, bytes)) !== null;
+},
+() => chrome.toast(preview.changedDuringSave ? 'PDF exported from an earlier snapshot; later edits are not included.' : 'PDF exported. Your pages are unchanged.'),
+() => editor.restoreFocus(),
+error => chrome.toast(error.message + ' Close and reopen Export to refresh.', 5200));
+previewScope.addEventListener('change', () => previewLayout.dispatchEvent(new Event('change')));
 editor.instance.on('update', () => {
-  if (preview.isOpen && preview.manuscriptEdited() === 'close')
-    chrome.toast('Preview closed because the manuscript changed. Open a fresh preview.');
+  if (preview.isOpen && previewScope.value === 'page' && preview.manuscriptEdited() === 'close')
+    chrome.toast('Preview closed because the page changed. Open Export again.');
 });
+async function exportPdf(): Promise<void> {
+  autosave.cancel();
+  if (doc.isDirty && !(await doc.save())) { chrome.toast('Save failed, so nothing was exported.'); return; }
+  const path = doc.snapshot().path;
+  const inBook = Boolean(path && lib.root && bookOf(lib.root, path));
+  previewScope.value = 'page';
+  (previewScope.querySelector('option[value="book"]') as HTMLOptionElement).disabled = !inBook;
+  await preview.open(doc.snapshot().name);
+}
+
 const longProjects = createLongProjects({
   exportRecoveryCopy: (name, content, path) => exportRecoveryCopy(name, content, path),
   host: document.body, store, snapshotBackend: snapshotBackend(window.indexedDB, store),
   now: () => Date.now(), every: (ms, task) => { window.setInterval(task, ms); },
   current: () => { const s = doc.snapshot(); return { path: s.path, name: s.name, plain: isPlainTextPath(s.path) }; },
   content: () => (isPlainTextPath(doc.snapshot().path) ? editor.getPlainText() : editor.getMarkdown()),
-  words: () => countWords(editor.getText()), headings: () => editor.headings(),
-  jump: (pos) => { editor.jumpTo(pos); centerCaret(0.3); }, restoreFocus: () => editor.restoreFocus(),
+  words: () => countWords(editor.getText()),
+  restoreFocus: () => editor.restoreFocus(),
   polish: () => editor.polishTypography(),
   replaceContent: (content) => editor.replaceContent(content, isPlainTextPath(doc.snapshot().path)),
-  workspaceRoot: () => new WorkspaceHistory(store).active, listFolder: listWorkingDirectory,
-  openWorkspaceFile: (root, path) => { autosave.flush(); void doc.openWorkspacePath(root, path, openWorkingFile); },
   readFile: (path) => tauriFiles.read(path), pickFile: () => tauriFiles.pickOpenPath(),
   createReader, notify: (message) => chrome.toast(message, 4200),
 });
 projects = longProjects;
-longProjects.documentLoaded();
-const guide = new WritingGuide({
-  root: el('writing-guide'), resume: el<HTMLButtonElement>('guide-resume'), title: el('guide-title'), copy: el('guide-copy'),
-  action: el<HTMLButtonElement>('guide-action'), skip: el<HTMLButtonElement>('guide-skip'),
-  position: el('guide-position'), error: el('guide-error'),
-}, new FirstRunGuide(store), () => doc.newDocument(), async () => guideSaveComplete(await doc.save(), doc.isDirty), () => preview.open(doc.snapshot().name), () => editor.restoreFocus());
-el('help-guide').addEventListener('click', () => { help.close(); guide.open(true); });
-async function exportPdf(): Promise<void> { await preview.open(doc.snapshot().name); }
+
+// ---------- actions ----------
 async function saveWith(run: () => Promise<boolean>): Promise<void> {
   autosave.cancel();
   if (await run()) chrome.toast(doc.isDirty ? 'Snapshot saved; newer edits remain unsaved.' : 'Saved');
 }
-
 function toggleFocus(): void { void focusUI.choose(focusUI.choices.mode === 'paragraph' ? 'off' : 'paragraph'); }
-
-function toggleToolbar(): void {
-  const next = prefsStore.update({ toolbar: !prefs.toolbar });
-  applyPrefs(next);
-  if (!next.toolbar) chrome.toast('Formatting bar hidden. Press ' + (IS_MAC ? '⌘' : 'Ctrl') + '+\\ to bring it back.');
-}
-
 function togglePref(key: 'ghost' | 'typewriter', on: string, off: string): void {
   applyPrefs(prefsStore.update({ [key]: !prefs[key] }));
   chrome.toast(prefs[key] ? on : off);
 }
-
 function resize(size: number): void { applyPrefs(prefsStore.update({ size })); }
+function rename(): void {
+  if (!doc.snapshot().path) return;
+  const input = el<HTMLInputElement>('doc-title');
+  input.focus();
+  input.select();
+}
+function trashCurrent(): void {
+  const path = doc.snapshot().path;
+  if (!path || !lib.root) return;
+  if (relativeTo(lib.root, path) === null) { chrome.toast('This file is outside your Library, so the app will not move it.'); return; }
+  const kind = bookOf(lib.root, path) ? 'chapter' : 'page';
+  void lib.trash(path, kind, doc.snapshot().name);
+}
+function openTools(): void {
+  const button = el('btn-tools');
+  const k = (keys: string): string => keys.replace('Mod', IS_MAC ? '⌘' : 'Ctrl');
+  menu.open([
+    { label: 'Notes beside the page', hint: k('Mod+Shift+R'), run: () => APP.reference() },
+    { label: 'Writing session', run: () => APP.session() },
+    { label: 'Sprint goal', hint: k('Mod+Shift+A'), run: () => APP.sprint() },
+    { label: 'Polish dashes and quotes', hint: k('Mod+Shift+Q'), run: () => APP.polish() },
+    { separator: true, label: '' },
+    { label: 'Trash…', run: () => APP.openTrash() },
+    { label: 'Go to a page or command', hint: k('Mod+P'), run: () => APP.palette() },
+    { label: 'Shortcuts and tips', hint: k('Mod+/'), run: () => APP.help() },
+  ], button.getBoundingClientRect(), button, true);
+}
 
 /** Closes the top-most layer; returns false when there was nothing to close. */
 function closeLayers(): boolean {
-  if (manuscript.close()) return true;
+  if (menu.close()) return true;
   if (recoveryDialog.isOpen) { recoveryDialog.close(); return true; }
   if (fileConflict.isOpen) { fileConflict.close(); return true; }
   if (quit.cancelChoice()) return true;
+  if (trashDialog.isOpen) { trashDialog.close(); return true; }
   if (preview.isOpen) { preview.close(); return true; }
   if (longProjects.closeLayer()) return true;
-  if (guide.isOpen) { guide.close(true); return true; }
   if (slash.isOpen) { slash.close(); return true; }
   if (focusUI.closeMenu()) return true;
   if (finder.isOpen) { finder.hide(); return true; }
   if (palette.isOpen) { palette.close(); return true; }
   if (sessionPanel.isOpen) { sessionPanel.close(); return true; }
-  if (linkBar.isOpen) {
-    linkBar.close();
-    return true;
-  }
-  if (settings.popover.isOpen) {
-    settings.popover.close();
-    editor.restoreFocus();
-    return true;
-  }
+  if (linkBar.isOpen) { linkBar.close(); return true; }
   if (help.isOpen) { help.close(); return true; }
-  if (workspace?.clearFilter() || workspace?.close()) return true;
+  if (settings.isOpen) { settings.close(); editor.restoreFocus(); return true; }
+  if (SMALL() && sidebarShown()) { setSidebar(false); return true; }
   if (focusMode) { void focusUI.choose('off'); return true; }
   return false;
 }
 
 const APP: Record<AppAction, () => void> = {
-  new: () => void doc.newDocument(),
+  new: () => void lib.newPage(),
+  newBook: () => { setSidebar(true); void lib.newBook(); },
   open: () => void doc.open(),
   save: () => void saveWith(() => doc.save()),
   saveAs: () => void saveWith(() => doc.saveAs()),
+  rename,
+  trash: trashCurrent,
+  openTrash: () => void trashDialog.open(),
   exportPdf: () => void exportPdf(),
   palette: () => { if (sessionPanel.isOpen) sessionPanel.close(); palette.toggle(); },
   session: () => { if (palette.isOpen) palette.close(); sessionPanel.toggle(); },
@@ -418,9 +488,9 @@ const APP: Record<AppAction, () => void> = {
   focus: toggleFocus,
   sentenceFocus: () => void focusUI.choose(focusUI.choices.mode === 'sentence' ? 'off' : 'sentence'),
   fullScreen: () => void focusUI.choose(focusUI.choices.mode === 'fullscreen' ? 'off' : 'fullscreen'),
-  theme: () => { themes.next(); applyTheme(); },
-  outline: () => applyPrefs(prefsStore.update({ outline: !prefs.outline })),
-  toolbar: toggleToolbar,
+  theme: () => setTheme(themes.next()),
+  outline: () => { setSidebar(true); const d = el<HTMLDetailsElement>('onpage'); d.open = !d.open; },
+  sidebar: () => setSidebar(!sidebarShown()),
   ghost: () => togglePref('ghost', 'The bars will fade while you type.', 'The bars stay visible.'),
   typewriter: () => togglePref('typewriter', 'Typewriter line on. Your typing stays mid-screen.', 'Typewriter line off.'),
   zen: () => void ghostUI.toggleZen(),
@@ -431,8 +501,7 @@ const APP: Record<AppAction, () => void> = {
   smaller: () => resize(prefs.size - 1),
   resetSize: () => resize(DEFAULT_PREFS.size),
   ...typographyActions({ get: () => prefs, update: (patch) => applyPrefs(prefsStore.update(patch)), notify: (m) => chrome.toast(m) }),
-  ...longProjects.actions, ...manuscript.places,
-  switcher: () => { if (palette.isOpen) palette.close(false); longProjects.actions.switcher(); },
+  ...longProjects.actions,
   escape: () => void closeLayers(),
 };
 
@@ -443,6 +512,23 @@ function dispatch(action: Action): void {
 
 bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
+el('btn-sidebar').addEventListener('click', () => APP.sidebar());
+el('btn-tools').addEventListener('click', openTools);
+el('btn-new-book').addEventListener('click', () => APP.newBook());
+el('btn-history').addEventListener('click', () => APP.timeMachine());
+el('btn-help').addEventListener('click', () => { settings.close(); APP.help(); });
+
+// The title is the file name: edit it to rename; Esc puts it back.
+const titleInput = el<HTMLInputElement>('doc-title');
+titleInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') { event.preventDefault(); titleInput.blur(); editor.focus(); }
+  else if (event.key === 'Escape') { event.stopPropagation(); titleInput.value = doc.snapshot().name; editor.focus(); }
+});
+titleInput.addEventListener('blur', () => {
+  const next = titleInput.value.trim();
+  if (next && next !== doc.snapshot().name) void lib.renameCurrent(next).then(() => chrome.setName(doc.snapshot().name));
+  else titleInput.value = doc.snapshot().name;
+});
 
 window.addEventListener('blur', () => { namedWriter.flush(); drafts.flush(); if (!quit.isOpen) autosave.flush(); });
 window.addEventListener('focus', () => void doc.checkOutside());
@@ -451,10 +537,7 @@ window.addEventListener('beforeunload', () => { namedWriter.flush(); drafts.flus
 onFileDrop({
   onHover: (active) => app.classList.toggle('is-dropping', active),
   onDrop: (path) => {
-    if (!isWritingFile(path)) {
-      chrome.toast('A Good Page opens .md, .markdown and .txt files.');
-      return;
-    }
+    if (!isWritingFile(path)) { chrome.toast('A Good Page opens .md, .markdown and .txt files.'); return; }
     autosave.flush();
     void doc.openPath(path);
   },
@@ -469,22 +552,33 @@ onCloseRequested(async () => {
     const choice = await quit.ask();
     if (choice === 'cancel') return false;
     if (choice === 'discard') { doc.discardDraft(); return true; }
-    if (!(await doc.save()) || doc.isDirty) {
-      quit.showError('Not saved. Choose Quit without saving, try Save & quit again, or keep writing.');
-    }
+    if (!(await doc.save()) || doc.isDirty) quit.showError('Not saved. Choose Quit without saving, try Save & quit again, or keep writing.');
   }
   return true;
 });
 
-applyTheme();
+// ---------- start ----------
+root.dataset.theme = themes.theme;
 render(doc.snapshot());
 applyPrefs(prefs);
-syncControls();
-void restoreLastDocument(doc, lastPath, message => chrome.toast(message)).then(async recovered => {
-  await offerNamedRecovery({ document: doc, store: namedStore, writer: namedWriter, dialog: recoveryDialog,
-    probe: path => tauriFiles.probe!(path), exportCopy: exportRecoveryCopy, notify: message => chrome.toast(message, 5200) });
-  if (!recovered && guide.shouldOffer && !namedStore.load()) guide.open();
-})
-  .catch(error => chrome.toast('Could not restore your last document: ' + String(error), 4200));
-
-void workspace.restore();
+void (async () => {
+  try { await lib.start(); } catch (error) { chrome.toast('Could not open your Library: ' + String(error), 6000); }
+  const draft = drafts.load();
+  if (draft && draft.trim()) {
+    try {
+      const rescued = await lib.rescueDraft(draft);
+      if (rescued) { drafts.clear(); await lib.open(rescued); chrome.toast('Your unsaved draft is now a page in your Library.', 5000); return; }
+    } catch (error) { chrome.toast('Could not keep your draft as a page: ' + String(error), 6000); }
+  }
+  const recovered = await restoreLastDocument(doc, lastPath, message => chrome.toast(message, 3000)).catch(() => false);
+  if (recovered) {
+    await offerNamedRecovery({ document: doc, store: namedStore, writer: namedWriter, dialog: recoveryDialog,
+      probe: path => tauriFiles.probe!(path), exportCopy: exportRecoveryCopy, notify: message => chrome.toast(message, 5200) });
+    return;
+  }
+  try {
+    const welcome = await lib.welcomeIfNew();
+    if (welcome) await lib.open(welcome);
+    else await lib.openSomething();
+  } catch (error) { chrome.toast('Could not open a page: ' + String(error), 5000); }
+})();

@@ -109,3 +109,21 @@ describe('project loading and export safety', () => {
     await expect(t.service.verify(snap)).rejects.toThrow('Project order changed');
   });
 });
+describe('library edits keep the book in order', () => {
+  it('moves a chapter to an exact place, renames in place, and drops a removed chapter', async () => {
+    const t=fixture();t.chapters.set('/book/c.md','# C\nCherry');
+    await t.service.open('/book');
+    await t.service.moveTo('c.md',0);
+    expect(t.service.chapters.map(c=>c.path)).toEqual(['c.md','a.md','b.md']);
+    await t.service.renameChapter('a.md','apple.md');
+    expect(t.service.chapters.map(c=>c.path)).toEqual(['c.md','apple.md','b.md']);
+    await t.service.dropChapter('b.md');
+    expect(t.service.chapters.map(c=>c.path)).toEqual(['c.md','apple.md']);
+    expect(JSON.parse(t.manifestRaw!).chapters).toEqual(['c.md','apple.md']);
+  });
+  it('does not write when nothing changes', async () => {
+    const t=fixture();await t.service.open('/book');const before=t.manifestRaw;
+    await t.service.moveTo('a.md',0);await t.service.renameChapter('nope.md','x.md');await t.service.dropChapter('nope.md');
+    expect(t.manifestRaw).toBe(before);
+  });
+});

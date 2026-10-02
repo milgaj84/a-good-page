@@ -22,16 +22,16 @@ function harness(action: Action | null, layerOpen = false) {
 
 describe('global shortcuts', () => {
   it('listens in the capture phase and dispatches a resolved action once', () => {
-    const h = harness('switcher');
+    const h = harness('palette');
     const state = h.press('.ProseMirror');
     expect(h.capture()).toBe(true);
-    expect(h.dispatched).toEqual(['switcher']);
+    expect(h.dispatched).toEqual(['palette']);
     expect(state.prevented).toBe(true);
   });
-  it('opens the quick switcher even from a text field', () => {
-    const h = harness('switcher');
+  it('opens the go-to box even from a text field', () => {
+    const h = harness('palette');
     h.press('input');
-    expect(h.dispatched).toEqual(['switcher']);
+    expect(h.dispatched).toEqual(['palette']);
   });
   it('leaves other shortcuts to text fields outside the page', () => {
     const h = harness('polish');
@@ -51,7 +51,8 @@ describe('global shortcuts', () => {
     expect(open.prevented).toBe(true);
   });
   it('maps every toolbar button to one action', () => {
-    expect(BUTTONS['btn-palette']).toBe('palette');
+    expect(BUTTONS['btn-new']).toBe('new');
+    expect(BUTTONS['btn-pdf']).toBe('exportPdf');
     expect(new Set(Object.keys(BUTTONS)).size).toBe(Object.keys(BUTTONS).length);
   });
 });

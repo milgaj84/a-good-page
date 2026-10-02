@@ -84,3 +84,44 @@ pub fn write_project_order(
 ) -> Result<String, String> {
     crate::project::write(&root, expected.as_deref(), &value)
 }
+
+#[tauri::command]
+pub fn default_library(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let docs = app
+        .path()
+        .document_dir()
+        .or_else(|_| app.path().home_dir())
+        .map_err(|e| format!("Cannot find your Documents folder: {e}"))?;
+    crate::library::ensure_folder(&docs.join("A Good Page"))
+}
+
+#[tauri::command]
+pub fn create_entry(
+    root: String,
+    parent: Option<String>,
+    name: String,
+    kind: String,
+) -> Result<String, String> {
+    crate::library::create(&root, parent.as_deref(), &name, &kind)
+}
+
+#[tauri::command]
+pub fn rename_entry(root: String, path: String, new_name: String) -> Result<String, String> {
+    crate::library::rename(&root, &path, &new_name)
+}
+
+#[tauri::command]
+pub fn trash_entry(root: String, path: String) -> Result<String, String> {
+    crate::library::trash(&root, &path)
+}
+
+#[tauri::command]
+pub fn list_trash(root: String) -> Result<Vec<crate::library::TrashItem>, String> {
+    crate::library::list_trash(&root)
+}
+
+#[tauri::command]
+pub fn restore_entry(root: String, path: String) -> Result<String, String> {
+    crate::library::restore(&root, &path)
+}

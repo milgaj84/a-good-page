@@ -29,6 +29,20 @@ export function moveChapter(order: ProjectManifest, path: string, direction: -1 
   [chapters[at], chapters[to]] = [chapters[to], chapters[at]];
   return { version: 1, chapters };
 }
+/** Moves a chapter to an exact position in one step, for drag and drop. */
+export function moveChapterTo(order: ProjectManifest, path: string, index: number): ProjectManifest {
+  const chapters = [...order.chapters], at = chapters.indexOf(path);
+  const to = Math.max(0, Math.min(chapters.length - 1, index));
+  if (at < 0 || at === to) return order;
+  chapters.splice(at, 1);
+  chapters.splice(to, 0, path);
+  return { version: 1, chapters };
+}
+/** Keeps a renamed chapter at the same place in the order. */
+export function renameInOrder(order: ProjectManifest, from: string, to: string): ProjectManifest {
+  if (!order.chapters.includes(from) || order.chapters.includes(to)) return order;
+  return { version: 1, chapters: order.chapters.map(p => (p === from ? to : p)) };
+}
 export function chapterInfo(path: string, text: string): ProjectFile {
   const lines = text.split(String.fromCharCode(10)), headings: ProjectFile['headings'] = [];
   const plain = /\.txt$/i.test(path);

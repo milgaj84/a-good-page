@@ -1,7 +1,7 @@
 {
   "name": "a-good-page",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.1",
   "description": "A calm, distraction-free WYSIWYG Markdown editor for writers.",
   "license": "MIT",
   "type": "module",

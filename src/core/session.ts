@@ -211,6 +211,14 @@ export class DocumentSession {
     return true;
   }
 
+  /** The file on disk was renamed (the content is unchanged): follow it without reloading the page. */
+  adoptRenamedPath(path: string): void {
+    if (this.path === null || path.trim().length === 0) return;
+    this.path = path;
+    this.name = nameFromPath(path);
+    this.emit();
+  }
+
   /** Focus/refresh probe; reads only, never reloads or writes. */
   async checkOutside(): Promise<OutsideState | null> {
     if (!this.path || this.baseline === null || !this.deps.files.probe || this.checking) return this.outside;

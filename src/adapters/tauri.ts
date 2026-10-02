@@ -47,6 +47,25 @@ export async function exportRecoveryCopy(name: string, content: string, livePath
     (path, words) => tauriFiles.write(path, words, null));
 }
 
+/** The Library: a default folder, and create / rename / trash inside it. Rust re-validates every path. */
+export function defaultLibrary(): Promise<string> { return invoke<string>('default_library'); }
+export function createEntry(root: string, parent: string | null, name: string, kind: 'file' | 'folder'): Promise<string> {
+  return invoke<string>('create_entry', { root, parent, name, kind });
+}
+export function renameEntry(root: string, path: string, newName: string): Promise<string> {
+  return invoke<string>('rename_entry', { root, path, newName });
+}
+export function trashEntry(root: string, path: string): Promise<string> {
+  return invoke<string>('trash_entry', { root, path });
+}
+export interface TrashItem { item: string; name: string; original: string; trashed_at: number; is_dir: boolean }
+export function listTrash(root: string): Promise<TrashItem[]> { return invoke<TrashItem[]>('list_trash', { root }); }
+export function restoreEntry(root: string, path: string): Promise<string> { return invoke<string>('restore_entry', { root, path }); }
+/** A plain yes/no in the system's own dialog, for the few actions that cannot be undone from inside the app. */
+export function confirmAction(message: string, okLabel: string): Promise<boolean> {
+  return ask(message, { title: 'A Good Page', kind: 'warning', okLabel, cancelLabel: 'Cancel' });
+}
+
 export const tauriPrompter: Prompter = {
   confirmDiscard: () =>
     ask('These words have not been saved yet. Discard them?', {

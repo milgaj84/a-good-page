@@ -107,6 +107,36 @@ export class SnapshotStore {
     });
   }
 
+  /**
+   * A renamed page (or a renamed book, and every chapter in it) keeps its history: versions move to the new path.
+   * Existing versions at the new path are merged, never overwritten. Returns how many documents moved.
+   */
+  rekey(from: string, to: string): Promise<number> {
+    return this.enqueue(async () => {
+      if (from === to) return 0;
+      const index = parseIndex(await this.backend.get(INDEX_KEY));
+      const fromKey = snapshotDocKey(from);
+      const toKey = snapshotDocKey(to);
+      const under = (key: string): boolean => key === fromKey || key.startsWith(fromKey + '/') || key.startsWith(fromKey + '\\');
+      let moved = 0;
+      for (const key of Object.keys(index).filter(under)) {
+        const next = toKey + key.slice(fromKey.length);
+        const mine = parseList(await this.backend.get(PREFIX + key));
+        const theirs = parseList(await this.backend.get(PREFIX + next));
+        const seen = new Set<string>();
+        const merged = [...theirs, ...mine].sort((a, b) => a.at - b.at)
+          .filter((s) => { const id = s.at + ':' + s.content.length; if (seen.has(id)) return false; seen.add(id); return true; });
+        await this.backend.set(PREFIX + next, JSON.stringify(pruneSnapshots(merged, this.now(), this.limits)));
+        await this.backend.remove(PREFIX + key);
+        index[next] = Math.max(index[key] ?? 0, index[next] ?? 0);
+        delete index[key];
+        moved++;
+      }
+      if (moved) await this.backend.set(INDEX_KEY, JSON.stringify(index));
+      return moved;
+    });
+  }
+
   private async touch(docKey: string, at: number): Promise<void> {
     const index = parseIndex(await this.backend.get(INDEX_KEY));
     index[docKey] = at;

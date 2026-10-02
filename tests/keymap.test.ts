@@ -56,14 +56,14 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut(press('£', 'Digit3', ctrlAlt))).toBe('h3');
   });
 
-  it('maps text size, help, toolbar, link and code', () => {
+  it('maps text size, help, sidebar, link and code', () => {
     expect(resolveShortcut(press('=', 'Equal', ctrl))).toBe('bigger');
     expect(resolveShortcut(press('+', 'Equal', ctrlShift))).toBe('bigger');
     expect(resolveShortcut(press('-', 'Minus', ctrl))).toBe('smaller');
     expect(resolveShortcut(press('0', 'Digit0', ctrl))).toBe('resetSize');
     expect(resolveShortcut(press('/', 'Slash', ctrl))).toBe('help');
     expect(resolveShortcut(press('?', 'Slash', ctrlShift))).toBe('help');
-    expect(resolveShortcut(press('\\', 'Backslash', ctrl))).toBe('toolbar');
+    expect(resolveShortcut(press('\\', 'Backslash', ctrl))).toBe('sidebar');
     expect(resolveShortcut(press('k', 'KeyK', ctrl))).toBe('link');
     expect(resolveShortcut(press('e', 'KeyE', ctrl))).toBe('code');
   });
@@ -108,15 +108,23 @@ describe('resolveShortcut', () => {
     }
   });
 
-  it('maps the long-project tools without taking over Link', () => {
-    expect(resolveShortcut(press('p', 'KeyP', ctrl))).toBe('switcher');
-    expect(resolveShortcut(press('p', 'KeyP', { metaKey: true }))).toBe('switcher');
+  it('maps the library and long-project tools without taking over Link', () => {
+    expect(resolveShortcut(press('p', 'KeyP', ctrl))).toBe('palette');
+    expect(resolveShortcut(press('p', 'KeyP', { metaKey: true }))).toBe('palette');
     expect(resolveShortcut(press('k', 'KeyK', { metaKey: true }))).toBe('link');
     expect(resolveShortcut(press('R', 'KeyR', ctrlShift))).toBe('reference');
     expect(resolveShortcut(press('I', 'KeyI', ctrlShift))).toBe('timeMachine');
     expect(resolveShortcut(press('A', 'KeyA', ctrlShift))).toBe('sprint');
     expect(resolveShortcut(press('Q', 'KeyQ', ctrlShift))).toBe('polish');
     expect(resolveShortcut(press('a', 'KeyA', ctrl))).toBeNull();
+  });
+
+  it('maps new page, new book and rename', () => {
+    expect(resolveShortcut(press('n', 'KeyN', ctrl))).toBe('new');
+    expect(resolveShortcut(press('N', 'KeyN', ctrlShift))).toBe('newBook');
+    expect(resolveShortcut(press('F2', 'F2', {}))).toBe('rename');
+    expect(resolveShortcut(press('P', 'KeyP', ctrlShift))).toBe('palette');
+    expect(resolveShortcut(press('F2', 'F2', { shiftKey: true }))).toBeNull();
   });
 
   it('maps the ghost interface toggles with Shift', () => {

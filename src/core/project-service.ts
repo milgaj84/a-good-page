@@ -1,4 +1,4 @@
-import { chapterInfo, manifest, moveChapter, orderFiles, safeChapter, type ProjectFile, type ProjectManifest } from './project';
+import { chapterInfo, manifest, moveChapter, moveChapterTo, renameInOrder, orderFiles, safeChapter, type ProjectFile, type ProjectManifest } from './project';
 import type { FolderListing } from './quick-switch';
 import { ProjectChangeError } from './project-preview';
 import { rankRelinks, relinkOrder, type RelinkCandidate } from './project-relink';
@@ -93,6 +93,30 @@ export class ProjectService {
     const value = JSON.stringify(next);
     const written = await this.io.saveOrder(this.root, this.raw, value);
     this.order = next; this.raw = written; this.recorded = new Set(next.chapters);
+  }
+  /** Drag and drop: one guarded write for any distance. */
+  async moveTo(path: string, index: number): Promise<void> {
+    if (!this.root) throw Error('Choose a project folder.');
+    const next = moveChapterTo(this.order, path, index);
+    if (next === this.order) return;
+    const written = await this.io.saveOrder(this.root, this.raw, JSON.stringify(next));
+    this.order = next; this.raw = written; this.recorded = new Set(next.chapters);
+  }
+  /** A renamed file keeps its place in the book. */
+  async renameChapter(from: string, to: string): Promise<void> {
+    if (!this.root) throw Error('Choose a project folder.');
+    const next = renameInOrder(this.order, from, to);
+    if (next === this.order) return;
+    const written = await this.io.saveOrder(this.root, this.raw, JSON.stringify(next));
+    this.order = next; this.raw = written; this.recorded = new Set(next.chapters);
+  }
+  /** A chapter that was moved to the trash leaves the order. */
+  async dropChapter(path: string): Promise<void> {
+    if (!this.root) throw Error('Choose a project folder.');
+    const next: ProjectManifest = { version: 1, chapters: this.order.chapters.filter(p => p !== path) };
+    if (next.chapters.length === this.order.chapters.length) return;
+    const written = await this.io.saveOrder(this.root, this.raw, JSON.stringify(next));
+    this.order = next; this.raw = written; this.recorded = new Set(next.chapters); this.files.delete(path);
   }
   async omitMissing(path: string): Promise<void> {
     if (!this.root || this.files.get(path)?.file) throw Error('Only missing chapters can be removed from the project order.');
