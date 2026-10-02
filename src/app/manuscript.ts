@@ -1,5 +1,5 @@
 import { ManuscriptPanel } from '../ui/manuscript-panel';
-import { PlaceTabs } from '../ui/project-guide';
+import { PlaceTabs, attachActionMenus } from '../ui/project-guide';
 import { chooseWorkingDirectory, listWorkingDirectory, openWorkingFile, readProjectOrder, writeProjectOrder, exportPdfFile } from '../adapters/tauri';
 import type { AppAction } from '../core/commands';
 import type { DocumentSession } from '../core/session';
@@ -50,6 +50,7 @@ export function attachManuscript(host: HTMLElement, doc: DocumentSession, editor
       }
     },
   });
+  attachActionMenus();
   const top = new PlaceTabs('Places', go);
   top.root.classList.add('places--top');
   document.querySelector('.chrome--top .doc-title')?.after(top.root);

@@ -21,3 +21,4 @@ import './outside-notice.css';
 import './recovery.css';
 import './manuscript.css';
 import './workflow.css';
+import './ui-fixes.css';

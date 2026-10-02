@@ -1,0 +1,54 @@
+/* 0.5.0 interface fixes: loaded last. Small screens, panels that cover the page, empty project screens. */
+
+/* 1. The page grid may never grow wider than the window; wide rows scroll inside themselves. */
+.app { grid-template-columns: minmax(0, 1fr); }
+.more-menu > summary, .toggles .ghost, .actions .ghost { white-space: nowrap; }
+
+/* 2. Small screens: wrap the bars instead of clipping them, so More menus are never cut off. */
+@media (max-width: 760px) {
+  .chrome { padding: 10px 14px; }
+  .chrome--tools { padding: 0 14px 8px; }
+  .actions, .toggles { overflow: visible; max-width: none; }
+  .chrome--bottom { flex-wrap: wrap; align-items: flex-end; gap: 4px 12px; }
+  .stats-group { flex: 1 1 140px; }
+  .toggles { flex: 1 1 100%; justify-content: space-between; }
+  .toggles .ghost, .more-menu > summary { padding: 7px 8px; }
+  .status-detail { max-width: 100%; }
+  .doc-title #doc-name { max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .workspace-panel, .outline { top: 150px; }
+  .reference-panel { top: 150px; }
+  .sprint { bottom: 118px; }
+}
+
+/* 3. Side panels make room instead of covering the words. */
+@media (min-width: 1181px) {
+  body:has(.outline.is-open) .scroller { padding-left: 264px; }
+}
+@media (min-width: 1100px) {
+  body:has(.workspace-panel.is-open) .scroller { padding-right: 276px; }
+}
+
+/* 4. Shortcut sheet: the title stays at the top when it opens and Close is always reachable. */
+.help-footer { position: sticky; bottom: -18px; z-index: 1; margin: 18px -30px -18px; padding: 12px 30px 16px; background: var(--bg); border-top: 1px solid var(--line); }
+
+/* 5. Settings: checkboxes breathe and stay easy to hit. */
+.popover--settings .check { padding: 6px 0; line-height: 1.4; }
+.popover--settings .check input { flex: none; width: 16px; height: 16px; }
+
+/* 6. Working directory panel: one-line heading, no empty "Recent folders" label. */
+.workspace-heading span { white-space: nowrap; }
+.workspace-recent-title:has(+ #workspace-recent:empty) { display: none; }
+.workspace-location { margin-top: 12px; }
+
+/* 7. Project pages: nothing empty is drawn, and without a book folder only the next step is shown. */
+.manuscript-status:empty, .manuscript-list:empty, .manuscript-health:empty,
+.manuscript-results:empty, .manuscript-page:empty { display: none; }
+.manuscript-panel[data-folder="none"] :is(.manuscript-query, .chapter-tools, .share-tools, .share-hint, .share-steps, .share-overview) { display: none; }
+/* Nothing to list yet: the panel fits its content instead of a tall empty sheet. */
+.manuscript-panel[data-folder="none"] { bottom: auto; }
+@media (max-width: 700px) {
+  .manuscript-head h2 { flex: 1; font-size: 24px; }
+  .manuscript-head .places { order: 3; width: 100%; }
+  .manuscript-head .places .place { flex: 1; }
+  .manuscript-panel .next-button { width: 100%; }
+}

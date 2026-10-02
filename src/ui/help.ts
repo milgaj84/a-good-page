@@ -42,6 +42,7 @@ export class HelpSheet {
     this.root.classList.add('is-open');
     this.root.setAttribute('aria-hidden', 'false');
     this.focus.open(this.closeButton);
+    this.root.querySelector('.sheet')?.scrollTo(0, 0);
   }
 
   close(): void {

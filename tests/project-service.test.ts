@@ -84,6 +84,23 @@ describe('project loading and export safety', () => {
     expect(t.manifestRaw).toContain('new.md');
     expect(t.service.health().issues).toEqual([]);
   });
+  it('rejects stale sources and order before reopening compiled PDF pages', async () => {
+    const t=fixture();await t.service.open('/book');const snap=t.service.preview(['a.md']);
+    await expect(t.service.verify(snap)).resolves.toBeUndefined();
+    t.chapters.set('/book/a.md','# A\nUpdated');
+    await expect(t.service.verify(snap)).rejects.toMatchObject({kind:'content',path:'a.md'});
+    t.chapters.set('/book/a.md','# A\nApple moon');
+    t.setRaw('outside order edit');
+    await expect(t.service.verify(snap)).rejects.toMatchObject({kind:'order',path:'.a-good-page.json'});
+  });
+  it('checks sources before assembling a reading view', async () => {
+    const t=fixture();await t.service.open('/book');
+    await expect(t.service.previewVerified(['a.md'])).resolves.toMatchObject({root:'/book'});
+    t.chapters.set('/book/a.md','# A\nChanged');
+    await expect(t.service.previewVerified(['a.md'])).rejects.toMatchObject({kind:'content',path:'a.md'});
+    t.chapters.delete('/book/a.md');
+    await expect(t.service.previewVerified(['a.md'])).rejects.toMatchObject({kind:'missing',path:'a.md'});
+  });
   it('rejects export when a source or order changes after preview', async () => {
     const t=fixture();await t.service.open('/book');const snap=t.service.preview(['a.md','b.md']);
     t.chapters.set('/book/a.md','# A\nNew words');

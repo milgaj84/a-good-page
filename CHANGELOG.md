@@ -6,6 +6,100 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-02
+
+### Fixed (staged; not yet installer-verified)
+
+- Small windows: the page grid no longer grows wider than the window, so Save, More, the formatting bar and every footer button stay on screen. The top and footer bars wrap, and their More menus are no longer clipped.
+- The Outline and Browse files panels make room beside the page on wide windows instead of covering the first words. On narrow windows, panels start below the wrapped bars.
+- Chapters and Share without a book folder show only the Choose book folder card: no empty bordered boxes, no duplicate message, no search box, and focus lands on the main button. Panels fit their content, and their header and place switcher fit phone widths.
+- The shortcut sheet opens at its title instead of scrolled to the bottom, and Show writing guide and Close stay visible while it scrolls.
+- Display settings checkboxes are spaced and sized for easier targets. Browse files keeps its heading on one line and hides the empty Recent folders label. The sprint ring no longer sits on the word count on phones.
+
+### Changed
+
+- README rewritten to be shorter and scannable: one-screen pitch, Chapters · Write · Share table, feature table, condensed file-safety summary, install and build steps. The release steps now push the matching `v0.5.0` tag.
+
+### Verification required
+
+- Source checks cover the stylesheet wiring and rules. Layout was inspected in a headless browser at 1280 and 390 px wide only; installed-app checks on all themes and platforms remain pending; see `RELEASE_0.5.0.md`.
+
+## [0.4.0] - 2026-10-01
+
+### Added (staged; not yet installer-verified)
+
+- Share now has a live book-PDF overview showing the number of readable chapters selected, their combined word count and the next safe stage: choose, repair, read, refresh or export. The overview does not estimate PDF pages or claim that cached chapter text is current.
+- Read it through verifies the selected chapters and project order against disk before assembling a reading view. Concurrent selection changes invalidate a pending result; verification failures clear stale reading content and direct the writer to Refresh chapters. Export and PDF-preview rechecks remain in place.
+
+### Verification required
+
+- Pure overview tests cover empty, blocked, selected and preview states; project-service tests cover content and read failures before compilation. Full web/Rust builds, suite runs, installer launches and real PDF inspection remain pending; see `RELEASE_0.4.0.md`.
+
+
+## [0.3.5] - 2026-10-01
+
+### Changed (staged; not yet installer-verified)
+
+- Chapter titles now do one predictable thing per place: in Chapters they open the file; in Share they label the Include checkbox and toggle PDF inclusion without leaving Share. Checkboxes are hidden in Chapters.
+- Returning to Share from Write redraws rows for that place without discarding a same-book selection or preview. A different book still reloads.
+- Share shows a short instruction above the chapter list. An unavailable chapter stays unselectable; a no-op selection change does not discard a compiled preview.
+
+### Verification required
+
+- Source regression checks cover contextual row controls and switching places. Full TypeScript/Vitest/Rust tests and installed-app keyboard, screen-reader and PDF checks remain pending; see `RELEASE_0.3.5.md`.
+
+
+## [0.3.4] - 2026-10-01
+
+### Changed (staged; not yet installer-verified)
+
+- One primary Chapters · Write · Share path remains visible. The top bar keeps Save prominent and moves New page, Open file, Browse files and Page PDF into a labeled More menu. The footer retains Find, Outline, Focus and typography settings; session, theme, commands and help move to its More menu. No command or shortcut is removed.
+- Explicit Page PDF versus the book PDF in Share avoids two actions named Export PDF. Both menus close on selection, outside click or Escape, and remain keyboard focusable.
+- The Chapters next-step button now focuses a chapter title rather than returning to the page without selecting anything. The next-step button retains focus during save-state updates.
+- Returning to a loaded book keeps its chapter selection and reading view until explicitly refreshed or changed. Share adds Select all and Clear for long books; inaccessible chapters are never selected.
+- In-app help leads with the three-step path and uses concise recovery guidance.
+
+### Verification required
+
+- Source checks cover action IDs, menu behavior and the Chapters action; full TypeScript/Vitest/Rust checks, installed-app keyboard/screen-reader review, narrow layouts and theme inspection remain pending. See `RELEASE_0.3.4.md`.
+
+
+## [0.3.3] - 2026-10-01
+
+### Fixed (staged; not yet installer-verified)
+
+- Before opening whole-book PDF pages from either Share entry point, recheck the compiled selection against chapter files and project order on disk. If a source changed, block the stale preview and guide the writer to Refresh pages.
+- Keep the existing export-time checks before and after the native Save dialog; prevent duplicate preview-opening requests while a recheck is running.
+
+### Verification required
+
+- Regression tests cover changed chapter content and order at the preflight boundary. Full app builds, tests, installer launch and hands-on preview checks remain pending; see `RELEASE_0.3.3.md`.
+
+
+## [0.3.2] - 2026-10-01
+
+### Fixed (staged; not yet installer-verified)
+
+- The Share step indicator blocks Export PDF while the open chapter is dirty, saving, or has a failed save; it returns to current after a successful save.
+- Existing disk and source rechecks still guard the actual export.
+
+### Verification required
+
+- Regression cases cover dirty, saving, failed and saved states. Full builds, tests and installed-app checks remain pending; see `RELEASE_0.3.2.md`.
+
+
+## [0.3.1] - 2026-10-01
+
+### Fixed (staged; not yet installer-verified)
+
+- Share keeps an explicitly unticked chapter selection when the same book is refreshed; it no longer silently reticks every chapter.
+- Changing book folders starts a fresh readable-chapter selection, even when relative chapter names happen to match.
+- Cancelling Change book folder leaves the current book and selection untouched.
+
+### Verification required
+
+- Source-level regression cases cover empty selection, refreshed selection and another folder with a matching relative path. Full TypeScript/Vitest/Rust checks and installed-app testing remain pending; see `RELEASE_0.3.1.md`.
+
 ## [0.3.0] - 2026-09-28
 
 ### Changed

@@ -13,12 +13,19 @@
           <span class="save-dot" id="save-dot" data-state="saved" aria-hidden="true"></span>
           <span id="doc-name">Untitled</span>
         </div>
-        <nav class="actions" aria-label="File">
-          <button class="ghost" id="btn-new" title="New (Ctrl+N)">New</button>
-          <button class="ghost" id="btn-open" title="Open (Ctrl+O)">Open</button>
-          <button class="ghost" id="btn-workspace" type="button" title="Working directory" aria-controls="workspace-panel" aria-expanded="false">Workspace</button>
-          <button class="ghost" id="btn-save" title="Save (Ctrl+S)">Save</button>
-          <button class="ghost" id="btn-pdf" title="Export PDF (Ctrl+Shift+E)">Export PDF</button>
+        <nav class="actions" aria-label="Page actions">
+          <button class="ghost save-action" id="btn-save" title="Save this page (Ctrl+S)">Save</button>
+          <details class="more-menu" id="file-more">
+            <summary aria-label="More page and file actions">More</summary>
+            <div class="more-menu__panel" aria-label="Page and file actions">
+              <span class="more-menu__heading">This page</span>
+              <button class="ghost" id="btn-new" title="New (Ctrl+N)">New page</button>
+              <button class="ghost" id="btn-open" title="Open (Ctrl+O)">Open file</button>
+              <button class="ghost" id="btn-pdf" title="Export this page as PDF (Ctrl+Shift+E)">Page PDF</button>
+              <span class="more-menu__heading">Files</span>
+              <button class="ghost" id="btn-workspace" type="button" title="Browse files" aria-controls="workspace-panel" aria-expanded="false">Browse files</button>
+            </div>
+          </details>
         </nav>
       </header>
 
@@ -76,10 +83,17 @@
           <button class="ghost" id="btn-focus" title="Paragraph focus (Ctrl+Shift+F)" aria-pressed="false">Focus</button>
           <button class="ghost" id="btn-focus-choices" title="Choose a focus mode" aria-haspopup="dialog" aria-expanded="false">▾</button>
           <button class="ghost ghost--serif" id="btn-settings" title="Display and goal" aria-haspopup="dialog" aria-expanded="false">Aa</button>
-          <button class="ghost" id="btn-theme" title="Change theme (Ctrl+Shift+L)">Paper</button>
-          <button class="ghost" id="btn-session" title="Writing session" aria-label="Writing session">Session</button>
-          <button class="ghost" id="btn-palette" title="Commands (Ctrl+Shift+P)" aria-label="Commands">⌘</button>
-          <button class="ghost" id="btn-help" title="Shortcuts (Ctrl+/)" aria-label="Shortcuts">?</button>
+          <details class="more-menu" id="writing-more">
+            <summary aria-label="More writing tools">More</summary>
+            <div class="more-menu__panel" aria-label="More writing tools">
+              <span class="more-menu__heading">Writing</span>
+              <button class="ghost" id="btn-session" title="Writing session">Writing session</button>
+              <button class="ghost" id="btn-theme" title="Change theme (Ctrl+Shift+L)">Paper</button>
+              <span class="more-menu__heading">Find a tool</span>
+              <button class="ghost" id="btn-palette" title="Commands (Ctrl+Shift+P)">All commands</button>
+              <button class="ghost" id="btn-help" title="Shortcuts (Ctrl+/)">Help &amp; shortcuts</button>
+            </div>
+          </details>
         </div>
       </footer>
 
@@ -174,10 +188,10 @@
         <h2 id="help-title">Shortcuts</h2>
         <p class="sheet-hint">Write freely. Write as a document; save Markdown.</p>
         <div class="help-guide">
-          <p><strong>Chapters · Write · Share:</strong> Three places sit in the top bar (Ctrl/Cmd+Shift+1, 2, 3). Chapters finds, orders, opens and repairs chapters in your book folder; Check project health rescans read-only and never relinks or saves order. Write is the page; Esc or Back to writing returns to it. Share walks three steps: Choose chapters, Read it through, Export PDF. A next-step card names one thing to do now. Changed sources block export until the pages are refreshed.</p>
-          <p><strong>Single pages:</strong> Workspace browses any folder; Export PDF shows the open page's real pages in Manuscript or Reading copy layout. The words beside the title say whether your page is saved.</p>
-          <p><strong>After a forced restart:</strong> Unsaved words in a named manuscript are kept locally after typing pauses. On launch, review the recovered draft and disk file, Resume, Save as a copy, or explicitly Discard recovered words. Esc postpones the choice without deleting the draft. If the disk file changed, Resume pauses autosave; if it is unavailable, Save as a copy remains possible. Recovery now keeps up to eight named manuscripts without evicting other drafts. Local recovery is not a backup.</p>
-          <p><strong>Editing in another app:</strong> On return or Workspace refresh, a persistent notice flags changes, missing files or read errors. Review rechecks disk; Keep writing pauses autosave. Copy suggests a separate filename. If your open file changes on disk, autosave pauses and a conflict dialog offers Review changes, Reload from disk, Save my version as a copy, or Keep writing. Keep safety snapshot & reload first keeps the current draft in Time Machine and then replaces the in-memory page; A copy preserves the outside edit. A missing or unreadable file cannot be reloaded. The dialog names the file and an occupied copy filename. Already queued autosaves stop on conflict; an explicit Save rechecks.</p>
+          <p><strong>Chapters · Write · Share:</strong> In Chapters, click a title to open it. Write is your page. In Share, click a title to include or exclude it from the book PDF, then check the pages and export. Use the next-step button if unsure what to do.</p>
+          <p><strong>Single pages:</strong> More → Browse files opens any folder; More → Page PDF shows the open page's real pages in Manuscript or Reading copy layout. The words beside the title say whether your page is saved.</p>
+          <p><strong>After a forced restart:</strong> Review recovered words before replacing anything. Resume, save a separate copy, discard deliberately, or press Esc to decide later. Recovery is local, not a backup.</p>
+          <p><strong>Editing in another app:</strong> Outside changes pause autosave and require review. Keep writing, reload after a safety snapshot, or save your words as a separate copy. The disk version is never silently replaced.</p>
           <p><strong>While saving or exporting:</strong> New edits remain unsaved until another save. A PDF uses the previewed snapshot; if you edit during its save dialog, those later words are not in that PDF. Cancelled exports with newer edits require a fresh preview.</p>
           <p><strong>First time here?</strong> A guide helps you start. Skip it whenever you like; Show writing guide below reopens it.</p>
           <p><strong>Quiet screen:</strong> Once you start typing, the top bar, the status bar and the scrollbar fade away. Move the mouse or press Esc to bring them back. Turn this off in Aa or with Ctrl/Cmd+Shift+J.</p>
@@ -187,9 +201,9 @@
           <p><strong>Quick formatting:</strong> Type / at the start of an empty paragraph to choose a block in everyday language. Selecting text opens a floating menu with Title, Heading and Scene break.</p>
           <p><strong>Find and replace:</strong> Click Find or press Ctrl/Cmd+F. Selecting a short phrase first fills the search field. Toggle Match case or Whole words, see live match counts, navigate with Enter / Shift+Enter, and press Enter in Replace with to replace the current match. Ctrl/Cmd+H opens replacement.</p>
           <p><strong>Chapters:</strong> Open Outline; the arrows jump to adjacent top-level chapters and triangles collapse subheadings. When quitting with unsaved words, choose save, discard, or keep writing.</p>
-          <p><strong>Long projects:</strong> Ctrl/Cmd+P jumps to any chapter or workspace file by a few letters. Ctrl/Cmd+Shift+R pins a notes file beside the page, read-only; collapse it to a tab or move it to the other side. Ctrl/Cmd+Shift+A sets a sprint goal for new words; the corner ring glows once when you reach it. Ctrl/Cmd+Shift+I opens Time Machine: drag the slider through earlier versions, Restore one (Undo reverses it), or Export recovery copy to a separate file without changing the manuscript. Ctrl/Cmd+Shift+Q polishes dashes, ellipses and quotes, leaving code alone.</p>
-          <p><strong>Find anything:</strong> Click Commands or press Ctrl/Cmd+Shift+P. Type a word, use ↑/↓ and Enter. Try “heading”, “PDF” or “session”.</p>
-          <p><strong>Writing session:</strong> Click Session, choose minutes and optionally a target for new words. Focus mode and a quiet timer accompany the session. Reopen Session to finish early.</p>
+          <p><strong>Long projects:</strong> Use Ctrl/Cmd+P to jump to a chapter, Shift+R for pinned notes, Shift+A for a sprint, Shift+I for Time Machine, and Shift+Q to polish punctuation.</p>
+          <p><strong>Find anything:</strong> Click More → All commands or press Ctrl/Cmd+Shift+P. Type a word, use ↑/↓ and Enter. Try “heading”, “PDF” or “session”.</p>
+          <p><strong>Writing session:</strong> Click More → Writing session, choose minutes and optionally a target for new words. Focus mode and a quiet timer accompany the session. Reopen the session to finish early.</p>
           <p><strong>Format:</strong> Use the top bar for headings, emphasis, lists, links and scene breaks. Select words for quick tools. You can also type #, ##, &gt;, -, [ ], **bold**, *italic* or --- followed by a space.</p>
           <p><strong>Files:</strong> Open, drop or save .md, .markdown and .txt files. Plain text opens literally and saves without Markdown styling. Export PDF creates a separate paginated copy; it does not replace your draft.</p>
           <p><strong>Your space:</strong> Choose Paper, Sepia, Sage, Night or Midnight with Theme. Aa changes type, size, column width, spacing and your word goal. Outline jumps between headings. Named files autosave; untitled drafts are kept locally. Themes respect your system preferences.</p>

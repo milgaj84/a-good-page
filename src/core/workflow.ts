@@ -10,7 +10,7 @@ export const PLACES: readonly { place: Place; label: string; hint: string; digit
 ];
 
 export type NextAction = 'save' | 'chooseFolder' | 'openChapters' | 'newChapter' | 'fixChapters'
-  | 'chooseChapters' | 'preview' | 'refreshPreview' | 'export' | 'write';
+  | 'chooseChapters' | 'openChapter' | 'preview' | 'refreshPreview' | 'export' | 'write';
 export interface NextStep { place: Place; title: string; detail: string; action: NextAction; button: string }
 export type PreviewState = 'none' | 'ready' | 'stale';
 export interface BookState {
@@ -55,8 +55,8 @@ export function nextStep(s: BookState): NextStep {
     return { place: 'share', action: 'export', button: 'See PDF pages',
       title: 'Ready to export', detail: 'Look through the real pages, then Export whole PDF. Export rechecks every chapter.' };
   }
-  if (s.place === 'chapters') return { place: 'write', action: 'write', button: 'Write',
-    title: 'Pick a chapter', detail: 'Click a chapter title to open it and keep writing.' };
+  if (s.place === 'chapters') return { place: 'chapters', action: 'openChapter', button: 'Choose a chapter',
+    title: 'Pick a chapter', detail: 'Choose a title below to open it and keep writing.' };
   return { place: 'write', action: 'write', button: 'Keep writing',
     title: 'Keep writing', detail: s.named ? 'Autosave is on. Share when the book is ready.' : 'This draft is kept on this device until you save it.' };
 }
@@ -65,13 +65,13 @@ export type StepMark = 'done' | 'current' | 'todo' | 'blocked';
 export interface ShareStep { id: 'choose' | 'read' | 'export'; label: string; mark: StepMark }
 
 /** The Share place always shows the same three steps, so the writer knows where they are. */
-export function shareSteps(s: Pick<BookState, 'blocking' | 'selected' | 'preview'>): ShareStep[] {
+export function shareSteps(s: Pick<BookState, 'blocking' | 'selected' | 'preview' | 'save'>): ShareStep[] {
   const chosen = s.selected > 0 && s.blocking === 0;
   const read = chosen && s.preview === 'ready';
   return [
     { id: 'choose', label: '1 · Choose chapters', mark: s.blocking ? 'blocked' : chosen ? 'done' : 'current' },
     { id: 'read', label: '2 · Read it through', mark: !chosen ? 'todo' : s.preview === 'stale' ? 'blocked' : read ? 'done' : 'current' },
-    { id: 'export', label: '3 · Export PDF', mark: read ? 'current' : 'todo' },
+    { id: 'export', label: '3 · Export PDF', mark: !read ? 'todo' : s.save === 'saved' ? 'current' : 'blocked' },
   ];
 }
 
@@ -87,4 +87,10 @@ export function saveWords(state: SaveState, named: boolean): string {
 export function placeShortcut(event: KeyLike): Place | null {
   if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey) return null;
   return PLACES.find(p => event.code === 'Digit' + p.digit)?.place ?? null;
+}
+
+/** Preserve an explicit selection on refresh, including an empty one; a different folder starts fresh. */
+export function chapterSelection(paths: readonly string[], readable: readonly string[], previous: ReadonlySet<string>, sameFolder: boolean): Set<string> {
+  const available = new Set(paths.filter(path => readable.includes(path)));
+  return new Set(paths.filter(path => available.has(path) && (!sameFolder || previous.has(path))));
 }

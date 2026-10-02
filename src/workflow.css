@@ -40,3 +40,39 @@
   .save-words { display: none; }
   .next-step { flex-direction: column; align-items: stretch; }
 }
+
+/* 0.3.4: one clear book path, one Save action, secondary tools on demand. */
+.actions, .toggles { align-items: center; }
+.chrome:has(.more-menu[open]) { opacity: 1; }
+.chrome--top:has(.more-menu[open]), .chrome--bottom:has(.more-menu[open]) { z-index: 20; }
+.save-action { color: var(--ink); font-weight: 650; }
+.more-menu { position: relative; font: 13px var(--sans); }
+.more-menu > summary { display: block; cursor: pointer; list-style: none; border-radius: 8px; padding: 7px 11px; color: var(--ink-soft); }
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu > summary::after { content: ' ▾'; }
+.more-menu[open] > summary, .more-menu > summary:hover { background: var(--bg-soft); color: var(--ink); }
+.more-menu > summary:focus-visible, .more-menu__panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.more-menu__panel { position: absolute; top: calc(100% + 8px); right: 0; width: 212px; z-index: 30; display: grid; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); box-shadow: var(--shadow); }
+#writing-more .more-menu__panel, .more-menu--up .more-menu__panel { top: auto; bottom: calc(100% + 8px); }
+.more-menu__heading { padding: 8px 10px 3px; color: var(--ink-soft); font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .08em; }
+.more-menu__panel .ghost { display: block; width: 100%; text-align: left; padding: 9px 10px; color: var(--ink); white-space: nowrap; }
+@media (max-width: 760px) { .chrome--top { flex-wrap: wrap; gap: 8px; } .places--top { order: 3; width: 100%; justify-content: center; margin: 0; } .actions { margin-left: auto; } }
+
+.share-tools .share-primary { margin-left: auto; }
+@media (max-width: 760px) { .share-tools .share-primary { margin-left: 0; } }
+
+/* A chapter title opens in Chapters; it selects only in Share. */
+.manuscript-panel[data-place="chapters"] .manuscript-row input[type="checkbox"],
+.manuscript-panel[data-place="chapters"] .share-hint { display: none; }
+.manuscript-panel[data-place="share"] .manuscript-row label.manuscript-name { cursor: pointer; color: var(--ink); }
+.manuscript-panel[data-place="share"] .manuscript-row label.manuscript-name:hover { color: var(--accent); }
+.manuscript-panel[data-place="share"] .manuscript-row input:disabled + label { cursor: not-allowed; color: var(--muted); }
+.share-hint { margin: 8px 0 4px; color: var(--ink-soft); font: 13px/1.5 var(--sans); }
+
+/* 0.4.0: selection counts and the next safe Share step. */
+.share-overview { display: none; gap: 4px; margin: 0 0 14px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-soft); color: var(--ink); }
+.manuscript-panel[data-place="share"] .share-overview { display: grid; }
+.overview-heading { font: 600 14px var(--sans); }
+.overview-count { font: 600 17px/1.35 var(--serif); font-variant-numeric: tabular-nums; }
+.overview-state { font: 12.5px/1.5 var(--sans); color: var(--ink-soft); }
+.share-overview[data-state="repair"] .overview-state, .share-overview[data-state="refresh"] .overview-state { color: var(--danger); }

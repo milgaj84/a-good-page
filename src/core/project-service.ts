@@ -107,6 +107,12 @@ export class ProjectService {
     const chapters = selected.map(path => this.files.get(path)!.file!);
     return { root: this.root, orderRaw: this.raw, chapters };
   }
+  /** Verify disk sources before showing a reading view; export verifies again. */
+  async previewVerified(selected: readonly string[]): Promise<ProjectSnapshot> {
+    const snapshot = this.preview(selected);
+    await this.verify(snapshot);
+    return snapshot;
+  }
   async verify(snapshot: ProjectSnapshot): Promise<void> {
     if (snapshot.root !== this.root) throw new ProjectChangeError('order', '.a-good-page.json');
     const currentOrder = await this.io.order(snapshot.root).catch(() => {

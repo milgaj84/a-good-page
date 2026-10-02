@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLACES, nextStep, placeShortcut, saveWords, shareSteps, type BookState } from '../src/core/workflow';
+import { PLACES, chapterSelection, nextStep, placeShortcut, saveWords, shareSteps, type BookState } from '../src/core/workflow';
 
 const book = (over: Partial<BookState> = {}): BookState => ({
   place: 'write', save: 'saved', named: true, folder: true, loaded: true,
@@ -56,21 +56,34 @@ describe('next step', () => {
   it('keeps writing as the calm default', () => {
     expect(nextStep(book()).action).toBe('write');
     expect(nextStep(book({ place: 'chapters' })).title).toBe('Pick a chapter');
+    expect(nextStep(book({ place: 'chapters' })).action).toBe('openChapter');
     expect(nextStep(book({ named: false })).detail).toContain('kept on this device');
   });
 });
 
 describe('share steps', () => {
   it('starts on choosing when nothing is ticked', () => {
-    expect(shareSteps({ blocking: 0, selected: 0, preview: 'none' }).map(s => s.mark)).toEqual(['current', 'todo', 'todo']);
+    expect(shareSteps({ blocking: 0, selected: 0, preview: 'none', save: 'saved' }).map(s => s.mark)).toEqual(['current', 'todo', 'todo']);
   });
   it('moves to reading, then export', () => {
-    expect(shareSteps({ blocking: 0, selected: 2, preview: 'none' }).map(s => s.mark)).toEqual(['done', 'current', 'todo']);
-    expect(shareSteps({ blocking: 0, selected: 2, preview: 'ready' }).map(s => s.mark)).toEqual(['done', 'done', 'current']);
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'none', save: 'saved' }).map(s => s.mark)).toEqual(['done', 'current', 'todo']);
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'ready', save: 'saved' }).map(s => s.mark)).toEqual(['done', 'done', 'current']);
+  });
+  it('blocks export while the open chapter is not saved', () => {
+    for (const save of ['dirty', 'saving', 'error'] as const) {
+      expect(shareSteps({ blocking: 0, selected: 2, preview: 'ready', save }).map(s => s.mark))
+        .toEqual(['done', 'done', 'blocked']);
+    }
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'ready', save: 'saved' }).map(s => s.mark))
+      .toEqual(['done', 'done', 'current']);
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'none', save: 'dirty' }).map(s => s.mark))
+      .toEqual(['done', 'current', 'todo']);
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'stale', save: 'dirty' }).map(s => s.mark))
+      .toEqual(['done', 'blocked', 'todo']);
   });
   it('shows blocked steps for chapter problems and stale pages', () => {
-    expect(shareSteps({ blocking: 1, selected: 2, preview: 'ready' }).map(s => s.mark)).toEqual(['blocked', 'todo', 'todo']);
-    expect(shareSteps({ blocking: 0, selected: 2, preview: 'stale' }).map(s => s.mark)).toEqual(['done', 'blocked', 'todo']);
+    expect(shareSteps({ blocking: 1, selected: 2, preview: 'ready', save: 'saved' }).map(s => s.mark)).toEqual(['blocked', 'todo', 'todo']);
+    expect(shareSteps({ blocking: 0, selected: 2, preview: 'stale', save: 'saved' }).map(s => s.mark)).toEqual(['done', 'blocked', 'todo']);
   });
 });
 
@@ -82,5 +95,17 @@ describe('save words', () => {
     expect(saveWords('dirty', false)).toBe('Not saved yet');
     expect(saveWords('saving', true)).toBe('Saving…');
     expect(saveWords('error', false)).toBe('Save failed · press Save');
+  });
+});
+
+describe('0.3.1 chapter selection', () => {
+  it('preserves a deliberate empty selection on a same-folder refresh', () => {
+    expect([...chapterSelection(['a.md', 'b.md'], ['a.md', 'b.md'], new Set(), true)]).toEqual([]);
+  });
+  it('keeps only readable selections in book order on refresh', () => {
+    expect([...chapterSelection(['b.md', 'a.md', 'gone.md'], ['b.md', 'a.md'], new Set(['a.md', 'gone.md', 'b.md']), true)]).toEqual(['b.md', 'a.md']);
+  });
+  it('starts a different folder with its readable chapters despite matching relative paths', () => {
+    expect([...chapterSelection(['a.md', 'b.md'], ['b.md'], new Set(['a.md']), false)]).toEqual(['b.md']);
   });
 });

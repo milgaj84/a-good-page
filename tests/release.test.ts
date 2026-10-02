@@ -1,17 +1,18 @@
+// @vitest-environment node
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-describe('0.3.0 release files', () => {
+describe('0.5.0 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.3.0');
+    expect(version).toBe('0.5.0');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
   });
   it('records the release in the changelog', () => {
-    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.3\.0\] - \d{4}-\d{2}-\d{2}$/m);
+    expect(file('CHANGELOG.md')).toMatch(/^## \[0\.5\.0\] - \d{4}-\d{2}-\d{2}$/m);
   });
   it('keeps the Linux rendering fallback conditional and respects overrides', () => {
     const startup = file('src-tauri/src/main.rs');
@@ -58,6 +59,40 @@ describe('0.3.0 release files', () => {
     expect(file('src/ui/manuscript-panel.ts')).toContain('nextStep(');
     expect(file('src/app/manuscript.ts')).toContain('placeShortcut(');
     expect(file('src/stylesheets.ts')).toContain("import './workflow.css';");
+  });
+  it('keeps the 0.3.1 chapter selection guard and checklist', () => {
+    expect(existsSync(new URL('../RELEASE_0.3.1.md', import.meta.url))).toBe(true);
+    expect(file('src/ui/manuscript-panel.ts')).toContain('chapterSelection(paths,readable,this.selection,this.selectionRoot===root)');
+    expect(file('src/ui/manuscript-panel.ts')).toContain('if(ask&&!root)');
+  });
+  it('ships 0.3.2 Share status and release checklist', () => {
+    expect(existsSync(new URL('../RELEASE_0.3.2.md', import.meta.url))).toBe(true);
+    expect(file('src/core/workflow.ts')).toContain('s.save');
+  });
+  it('ships 0.3.3 preflight and acceptance checklist', () => {
+    expect(existsSync(new URL('../RELEASE_0.3.3.md', import.meta.url))).toBe(true);
+    const panel = file('src/ui/manuscript-panel.ts');
+    expect(panel).toContain('await this.service.verify(snapshot)');
+    expect(panel).toContain("this.pdfButton.addEventListener('click',()=>void this.openCheckedPreview())");
+    expect(panel).toContain("if(action==='export'){void this.openCheckedPreview();return;}");
+  });
+  it('ships the 0.3.4 usability checklist and navigation checks', () => {
+    expect(existsSync(new URL('../RELEASE_0.3.4.md', import.meta.url))).toBe(true);
+    expect(existsSync(new URL('../tests/navigation-surface.test.ts', import.meta.url))).toBe(true);
+  });
+  it('ships the 0.3.5 chapter row UX checks and release gate', () => {
+    expect(existsSync(new URL('../tests/chapter-row-ux.test.ts', import.meta.url))).toBe(true);
+    expect(existsSync(new URL('../RELEASE_0.3.5.md', import.meta.url))).toBe(true);
+  });
+  it('ships the 0.4.0 live Share overview and verified reading gate', () => {
+    for (const path of ['src/core/share-overview.ts','tests/share-overview.test.ts','RELEASE_0.4.0.md'])
+      expect(existsSync(new URL('../' + path, import.meta.url))).toBe(true);
+    expect(file('src/ui/manuscript-panel.ts')).toContain('this.service.previewVerified(selected)');
+  });
+  it('ships the 0.5.0 interface fixes', () => {
+    for (const path of ['src/ui-fixes.css','tests/ui-fixes.test.ts','RELEASE_0.5.0.md'])
+      expect(existsSync(new URL('../' + path, import.meta.url))).toBe(true);
+    expect(file('src/stylesheets.ts')).toContain("import './ui-fixes.css';");
   });
   it('builds tagged releases as drafts with the icons generated first', () => {
     const release = file('.github/workflows/release.yml');
