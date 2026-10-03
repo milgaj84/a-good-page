@@ -30,6 +30,11 @@ function markPressed(group: HTMLElement, value: string): void {
   });
 }
 
+export const SETTINGS_TABS = ['look', 'writing', 'focus', 'library'] as const;
+export type SettingsTab = (typeof SETTINGS_TABS)[number];
+export const SETTINGS_TAB_KEY = 'agp.settings.tab.v1';
+export const asTab = (value: unknown): SettingsTab => ((SETTINGS_TABS as readonly unknown[]).includes(value) ? (value as SettingsTab) : 'look');
+
 /** One panel for everything that is a preference. It slides in from the right and never blocks the page. */
 export class SettingsPanel {
   constructor(
@@ -40,6 +45,12 @@ export class SettingsPanel {
     onChangeLibrary: () => void,
   ) {
     els.root.setAttribute('aria-hidden', 'true');
+    this.tabs = [...els.root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    for (const tab of this.tabs) tab.addEventListener('click', () => this.select(asTab(tab.dataset.tab), true));
+    els.root.querySelector('[role="tablist"]')?.addEventListener('keydown', (event) => this.tabKey(event as KeyboardEvent));
+    let remembered: unknown = null;
+    try { remembered = window.localStorage.getItem(SETTINGS_TAB_KEY); } catch { /* the first tab is fine */ }
+    this.select(asTab(remembered), false);
     els.sizeRange.min = String(MIN_SIZE);
     els.sizeRange.max = String(MAX_SIZE);
     els.close.addEventListener('click', () => this.close(true));
@@ -59,6 +70,34 @@ export class SettingsPanel {
       if (els.root.contains(target) || trigger.contains(target)) return;
       this.close();
     });
+  }
+
+  private readonly tabs: HTMLButtonElement[];
+  private current: SettingsTab = 'look';
+
+  get tab(): SettingsTab { return this.current; }
+
+  /** Shows one section of the settings. The choice is remembered for next time. */
+  select(tab: SettingsTab, focus: boolean): void {
+    this.current = tab;
+    for (const button of this.tabs) {
+      const on = button.dataset.tab === tab;
+      button.setAttribute('aria-selected', String(on));
+      button.tabIndex = on ? 0 : -1;
+      const panel = document.getElementById(button.getAttribute('aria-controls') ?? '');
+      if (panel) panel.hidden = !on;
+      if (on && focus) button.focus();
+    }
+    this.els.root.scrollTop = 0;
+    try { window.localStorage.setItem(SETTINGS_TAB_KEY, tab); } catch { /* not remembered */ }
+  }
+
+  private tabKey(event: KeyboardEvent): void {
+    const at = SETTINGS_TABS.indexOf(this.current);
+    const to = event.key === 'ArrowRight' ? at + 1 : event.key === 'ArrowLeft' ? at - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? SETTINGS_TABS.length - 1 : null;
+    if (to === null) return;
+    event.preventDefault();
+    this.select(SETTINGS_TABS[(to + SETTINGS_TABS.length) % SETTINGS_TABS.length], true);
   }
 
   get isOpen(): boolean { return this.els.root.classList.contains('is-open'); }
@@ -81,7 +120,7 @@ export class SettingsPanel {
     this.els.root.classList.add('is-open');
     this.els.root.setAttribute('aria-hidden', 'false');
     this.trigger.setAttribute('aria-expanded', 'true');
-    this.els.close.focus();
+    (this.tabs.find(t => t.dataset.tab === this.current) ?? this.els.close).focus();
   }
 
   close(restoreFocus = false): void {

@@ -95,7 +95,14 @@ export function createLongProjects(deps: LongProjectDeps) {
     closeLayer(): boolean {
       if (timeMachine.isOpen) { timeMachine.close(); return true; }
       if (sprint.isOpen) { sprint.closeForm(); return true; }
+      if (reference.isOpen && reference.hasFocus) { reference.close(); return true; }
       return false;
+    },
+    /** Esc with nothing else open closes the notes panel too; wire this after the other layers. */
+    closeReference(): boolean {
+      if (!reference.isOpen) return false;
+      reference.close();
+      return true;
     },
     /** A different document is on the page: keep a version of it and drop state that belonged to the old one. */
     documentLoaded(): void {

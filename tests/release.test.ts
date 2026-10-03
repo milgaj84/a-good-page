@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const exists = (path: string): boolean => existsSync(new URL('../' + path, import.meta.url));
 
-describe('0.8.2 release files', () => {
+describe('0.8.3 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.8.2');
+    expect(version).toBe('0.8.3');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
     // Windows checks files out with CRLF line endings, so the line break is matched either way.

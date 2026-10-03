@@ -599,11 +599,11 @@ describe('Library controller 0.8.2', () => {
     expect(t.session.path).toBe('/lib/Draft 2/b.md');
   });
 
-  it('shows the words in a project next to its page count', async () => {
+  it('shows the words in a project beside its name, short enough to keep the name readable', async () => {
     const t = fixture({ '/lib/Novel/01.md': '# One\n\nthree little words', '/lib/Novel/02.md': 'and four more' });
     await t.controller.start();
     await t.controller.toggleBook('/lib/Novel');
-    expect(t.last().rows[0].meta).toBe('2 pages · 7 words');
+    expect(t.last().rows[0].meta).toBe('7 words');
   });
 
   it('finds pages in collapsed projects once they are warmed', async () => {
@@ -671,5 +671,15 @@ describe('importing', () => {
     t.noFolder();
     await t.controller.importFolder();
     expect(t.notes).toEqual([]);
+  });
+});
+
+describe('project size label', () => {
+  it('is short: words when there are some, pages when there are none', async () => {
+    const { projectMeta } = await import('../src/app/library');
+    expect(projectMeta([{ file: { words: 7 } }, { file: { words: 0 } }])).toBe('7 words');
+    expect(projectMeta([{ file: { words: 25_987 } }, { file: { words: 100 } }])).toBe('26k words');
+    expect(projectMeta([{ file: null }, { file: null }])).toBe('2 pages');
+    expect(projectMeta([{ file: null }])).toBe('1 page');
   });
 });

@@ -6,6 +6,30 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-10-05
+
+The right-hand side, made easier. No new features: the same things, easier to find and understand.
+
+### Improved: Settings
+
+- **Four short sections instead of one long scroll.** Settings is now **Look** (colours, typeface and size, line length and spacing, book-style indent, formatting bar), **Writing** (spell-check, language, word goal), **Focus** (the distraction-free options) and **Library** (folder, backups, speed). Every section fits without scrolling, the title and sections stay in view, the arrow keys move between sections, and Settings reopens on the one you used last.
+- **Related things are together.** Line length, spacing and the paragraph indent used to hide under "More options" or sit in another section; the formatting-bar switch now lives beside them.
+- **Plain words.** Typefaces read Serif, Sans and Mono; widths Short, Medium and Long; spacing Tight, Balanced and Airy; effects "Always on / Off (fastest)"; "Backup folder…" is "Choose folder…". Each switch that needed explaining (indent, formatting bar, fade the bars, typing line, Zen draft, language, goal) now has one line saying what it does.
+- **A real icon.** The Settings button was a sun, easily taken for a theme switch; it is now a set of sliders. The goal field shows "words" and no longer has tiny spinner arrows.
+- The Library folder is shown in its own box, and the backup buttons match the rest.
+
+### Improved: Notes beside your page
+
+- It sits below the top and formatting bars, so it no longer covers the link, undo and redo buttons, stays inside short windows and scrolls on its own.
+- Esc closes it. The header matches Settings. The empty state reads "Notes beside your page", with the buttons "Use this page as notes" and "Choose a file as notes…". The unlabeled glyph buttons are now clear text buttons or a ✕ ("Hide notes") with tooltips and a visible focus ring. Collapsed, it is a visible "Notes" tab on the window edge. In a very narrow window it takes the full width.
+
+### Improved: Contents and the sidebar
+
+- The Contents list opens below the formatting bar instead of over its buttons.
+- A project's size beside its name is short (for example "26k words"), so long project names stay readable. It replaces the longer text added in 0.8.2.
+- The command box lists Settings and Notes under the names used on screen.
+
+
 ## [0.8.2] - 2026-10-04
 
 A wide polish release: found by reading every feature for weak spots, then fixing the ones that could cost a writer words, time or sleep.

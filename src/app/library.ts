@@ -82,11 +82,11 @@ function skippedNote(book: { pictures: number; footnotes?: number; comments?: nu
   return parts.length ? ' ' + parts.join(', ') + ' not imported.' : '';
 }
 
-/** "12 pages · 31,400 words" under a project's name. */
-function projectMeta(chapters: ReadonlyArray<{ file: { words: number } | null }>): string {
-  const pages = chapters.length + (chapters.length === 1 ? ' page' : ' pages');
+/** The size of a project beside its name: its words ("26k words"), or its pages while it has none. Short, so the name stays readable. */
+export function projectMeta(chapters: ReadonlyArray<{ file: { words: number } | null }>): string {
   const words = chapters.reduce((sum, c) => sum + (c.file?.words ?? 0), 0);
-  return words ? pages + ' · ' + words.toLocaleString() + ' words' : pages;
+  if (!words) return chapters.length + (chapters.length === 1 ? ' page' : ' pages');
+  return (words >= 10_000 ? Math.round(words / 1000) + 'k' : words.toLocaleString()) + ' words';
 }
 const stem = (path: string): string => nameFromPath(path);
 

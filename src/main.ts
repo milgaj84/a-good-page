@@ -62,6 +62,7 @@ import { epubBytes } from './export/epub';
 import { markdownDocument } from './export/markdown';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
+import { topInset } from './ui/reference-panel';
 import { friendly } from './core/friendly';
 import { describeEffects, detectSoftware, resolveEffects, type EffectMode } from './core/graphics';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
@@ -286,6 +287,7 @@ function closeContents(): boolean {
 function toggleContents(): void {
   if (closeContents()) return;
   if (outline.count === 0) { chrome.toast('Headings you write will gather here.'); return; }
+  contentsPop.style.top = topInset() + 'px';
   contentsPop.classList.add('is-open');
   outline.setVisible(true);
   contentsPop.setAttribute('aria-hidden', 'false');
@@ -782,6 +784,7 @@ function closeLayers(): boolean {
   if (linkBar.isOpen) { linkBar.close(); return true; }
   if (help.isOpen) { help.close(); return true; }
   if (settings.isOpen) { settings.close(); editor.restoreFocus(); return true; }
+  if (longProjects.closeReference()) return true;
   if (SMALL() && sidebarShown()) { setSidebar(false); return true; }
   if (focusMode) { void focusUI.choose('off'); return true; }
   return false;

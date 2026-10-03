@@ -48,8 +48,8 @@
             <button type="button" class="icon-btn" id="btn-pdf" aria-label="Export as PDF, Word or Markdown" title="Export as PDF, Word or Markdown (Ctrl+Shift+E)">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
             </button>
-            <button type="button" class="icon-btn" id="btn-settings" aria-label="Settings" title="Settings" aria-haspopup="dialog" aria-expanded="false">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg>
+            <button type="button" class="icon-btn" id="btn-settings" aria-label="Settings" title="Settings: colours, letters, spelling, backups" aria-haspopup="dialog" aria-expanded="false">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h8M16 17h4"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="14" cy="17" r="2"/></svg>
             </button>
           </div>
         </header>
@@ -136,103 +136,127 @@
     <div class="slash-menu" id="slash-menu" role="listbox" aria-label="Insert a writing block"></div>
 
     <aside class="drawer" id="settings" role="dialog" aria-modal="false" aria-label="Settings" aria-hidden="true">
-      <header class="drawer-head"><h2>Settings</h2><button type="button" class="icon-btn" id="settings-close" aria-label="Close settings">✕</button></header>
-      <section class="drawer-section">
-        <h3>Theme</h3>
-        <div class="swatches" id="theme-choice">
-          <button type="button" data-value="paper" aria-pressed="false"><i style="--sw:#fbf8f3"></i>Paper</button>
-          <button type="button" data-value="sepia" aria-pressed="false"><i style="--sw:#f1e7d6"></i>Sepia</button>
-          <button type="button" data-value="sage" aria-pressed="false"><i style="--sw:#edf3ec"></i>Sage</button>
-          <button type="button" data-value="night" aria-pressed="false"><i style="--sw:#1b1917"></i>Night</button>
-          <button type="button" data-value="midnight" aria-pressed="false"><i style="--sw:#111929"></i>Midnight</button>
+      <div class="drawer-top">
+        <header class="drawer-head"><h2>Settings</h2><button type="button" class="icon-btn" id="settings-close" aria-label="Close settings" title="Close (Esc)">✕</button></header>
+        <div class="drawer-tabs" role="tablist" aria-label="Settings sections">
+          <button type="button" role="tab" id="tab-look" data-tab="look" aria-controls="panel-look">Look</button>
+          <button type="button" role="tab" id="tab-writing" data-tab="writing" aria-controls="panel-writing">Writing</button>
+          <button type="button" role="tab" id="tab-focus" data-tab="focus" aria-controls="panel-focus">Focus</button>
+          <button type="button" role="tab" id="tab-library" data-tab="library" aria-controls="panel-library">Library</button>
         </div>
-      </section>
-      <section class="drawer-section">
-        <h3>Text</h3>
-        <div class="field">
-          <span class="field-label">Typeface</span>
-          <div class="segmented" id="font-choice">
-            <button type="button" data-value="serif" title="Editorial serif, for narrative">Editorial</button>
-            <button type="button" data-value="sans" title="Humanist sans, for articles and notes">Humanist</button>
-            <button type="button" data-value="mono" title="Duospace, for drafting">Duospace</button>
+      </div>
+
+      <div class="drawer-panel" role="tabpanel" id="panel-look" aria-labelledby="tab-look">
+        <section class="drawer-section">
+          <h3>Colours</h3>
+          <div class="swatches" id="theme-choice">
+            <button type="button" data-value="paper" aria-pressed="false"><i style="--sw:#fbf8f3"></i>Paper</button>
+            <button type="button" data-value="sepia" aria-pressed="false"><i style="--sw:#f1e7d6"></i>Sepia</button>
+            <button type="button" data-value="sage" aria-pressed="false"><i style="--sw:#edf3ec"></i>Sage</button>
+            <button type="button" data-value="night" aria-pressed="false"><i style="--sw:#1b1917"></i>Night</button>
+            <button type="button" data-value="midnight" aria-pressed="false"><i style="--sw:#111929"></i>Midnight</button>
           </div>
-        </div>
-        <div class="field">
-          <label class="field-label" for="size-range">Size <span id="size-value">20</span></label>
-          <input type="range" id="size-range" min="15" max="28" step="1" />
-        </div>
-      </section>
-      <section class="drawer-section">
-        <h3>Distraction-free</h3>
-        <label class="check"><input type="checkbox" id="ghost-check" /> Fade the bars while I type</label>
-        <label class="check"><input type="checkbox" id="typewriter-check" /> Keep my typing line mid-screen</label>
-        <label class="check"><input type="checkbox" id="zen-check" /> Zen draft: pause Backspace and Delete</label>
-      </section>
-      <section class="drawer-section">
-        <h3>Writing</h3>
-        <label class="check"><input type="checkbox" id="indent-check" /> Indent paragraphs like a book</label>
-        <label class="check"><input type="checkbox" id="spell-check" /> Underline misspelled words</label>
-        <div class="field">
-          <label class="field-label" for="lang-choice">Language of my writing</label>
-          <select class="text-input" id="lang-choice"><option value="">Same as my computer</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option><option value="nl">Nederlands</option><option value="pl">Polski</option><option value="sv">Svenska</option><option value="hr">Hrvatski</option><option value="sr">Srpski</option><option value="sl">Slovenščina</option></select>
-        </div>
-      </section>
-      <section class="drawer-section">
-        <h3>Goal</h3>
-        <div class="field">
-          <label class="field-label" for="goal-input">Words to write on a page</label>
-          <input class="text-input" type="number" id="goal-input" min="0" step="50" placeholder="No goal" inputmode="numeric" />
-        </div>
-      </section>
-      <section class="drawer-section">
-        <h3>Backup</h3>
-        <p class="drawer-note" id="backup-status">No backup yet.</p>
-        <div class="field">
-          <label class="field-label" for="backup-mode">Automatic backups</label>
-          <select class="text-input" id="backup-mode"><option value="off">Off</option><option value="daily">Every day</option><option value="weekly">Every week</option></select>
-        </div>
-        <p class="drawer-note" id="backup-dir"></p>
-        <div class="backup-actions">
-          <button type="button" class="btn" id="backup-now">Back up now</button>
-          <button type="button" class="btn" id="backup-folder">Backup folder…</button>
-          <button type="button" class="btn" id="backup-restore">Restore…</button>
-        </div>
-      </section>
-      <details class="drawer-more">
-        <summary>More options</summary>
-        <div class="drawer-section">
+        </section>
+        <section class="drawer-section">
+          <h3>Letters</h3>
           <div class="field">
-            <span class="field-label">Column width</span>
+            <span class="field-label">Typeface</span>
+            <div class="segmented" id="font-choice">
+              <button type="button" data-value="serif" title="Editorial serif, for narrative">Serif</button>
+              <button type="button" data-value="sans" title="Humanist sans, for articles and notes">Sans</button>
+              <button type="button" data-value="mono" title="Duospace, for drafting">Mono</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="size-range">Size <span id="size-value">20</span></label>
+            <input type="range" id="size-range" min="15" max="28" step="1" />
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>The page</h3>
+          <div class="field">
+            <span class="field-label">Line length</span>
             <div class="segmented" id="width-choice">
-              <button type="button" data-value="narrow" title="About 60 characters per line">Narrow</button>
-              <button type="button" data-value="medium" title="About 72 characters per line">Comfortable</button>
-              <button type="button" data-value="wide" title="About 85 characters per line">Wide</button>
+              <button type="button" data-value="narrow" title="About 60 characters per line">Short</button>
+              <button type="button" data-value="medium" title="About 72 characters per line">Medium</button>
+              <button type="button" data-value="wide" title="About 85 characters per line">Long</button>
             </div>
           </div>
           <div class="field">
-            <span class="field-label">Spacing</span>
+            <span class="field-label">Line spacing</span>
             <div class="segmented" id="rhythm-choice">
-              <button type="button" data-value="dense">Dense</button>
+              <button type="button" data-value="dense">Tight</button>
               <button type="button" data-value="balanced">Balanced</button>
-              <button type="button" data-value="spacious">Spacious</button>
+              <button type="button" data-value="spacious">Airy</button>
             </div>
           </div>
-          <label class="check"><input type="checkbox" id="toolbar-check" /> Show the formatting bar</label>
+          <label class="check"><input type="checkbox" id="indent-check" /><span>Indent paragraphs like a book<small>The first line is indented and the gaps between paragraphs close.</small></span></label>
+          <label class="check"><input type="checkbox" id="toolbar-check" /><span>Show the formatting bar<small>The row of H1, bold, italic and list buttons under the title.</small></span></label>
+        </section>
+      </div>
+
+      <div class="drawer-panel" role="tabpanel" id="panel-writing" aria-labelledby="tab-writing" hidden>
+        <section class="drawer-section">
+          <h3>Spelling</h3>
+          <label class="check"><input type="checkbox" id="spell-check" /><span>Underline misspelled words</span></label>
           <div class="field">
-            <label class="field-label" for="effects-choice">Visual effects</label>
-            <select class="text-input" id="effects-choice"><option value="auto">Automatic</option><option value="full">Full</option><option value="light">Light (fastest)</option></select>
+            <label class="field-label" for="lang-choice">Language of my writing</label>
+            <select class="text-input" id="lang-choice"><option value="">Same as my computer</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option><option value="nl">Nederlands</option><option value="pl">Polski</option><option value="sv">Svenska</option><option value="hr">Hrvatski</option><option value="sr">Srpski</option><option value="sl">Slovenščina</option></select>
+            <p class="drawer-note">Used for spell-check, and for the language of Word and e-book files you export.</p>
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>Goal</h3>
+          <div class="field">
+            <label class="field-label" for="goal-input">Words to write on each page</label>
+            <div class="input-unit"><input class="text-input" type="number" id="goal-input" min="0" step="50" placeholder="No goal" inputmode="numeric" /><span aria-hidden="true">words</span></div>
+            <p class="drawer-note">A quiet ring near the bottom corner fills as you write. Leave it empty for no goal.</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="drawer-panel" role="tabpanel" id="panel-focus" aria-labelledby="tab-focus" hidden>
+        <section class="drawer-section">
+          <h3>While I type</h3>
+          <label class="check"><input type="checkbox" id="ghost-check" /><span>Fade the bars<small>The bars and scrollbars dim while you type and return when you stop.</small></span></label>
+          <label class="check"><input type="checkbox" id="typewriter-check" /><span>Keep my typing line mid-screen<small>The page scrolls so the line you are writing stays in the middle.</small></span></label>
+          <label class="check"><input type="checkbox" id="zen-check" /><span>Zen draft<small>Backspace and Delete are paused, so you keep moving forward. Turn it off to edit.</small></span></label>
+        </section>
+        <p class="drawer-note drawer-hint">More ways to focus (one paragraph, one sentence, full screen) are under <strong>Focus</strong> at the bottom right.</p>
+      </div>
+
+      <div class="drawer-panel" role="tabpanel" id="panel-library" aria-labelledby="tab-library" hidden>
+        <section class="drawer-section">
+          <h3>Your Library</h3>
+          <p class="drawer-note drawer-path" id="library-path">Your Library folder</p>
+          <button type="button" class="btn btn-outline" id="library-change">Change folder…</button>
+        </section>
+        <section class="drawer-section">
+          <h3>Backups</h3>
+          <p class="drawer-note" id="backup-status">No backup yet.</p>
+          <div class="field">
+            <label class="field-label" for="backup-mode">Back up automatically</label>
+            <select class="text-input" id="backup-mode"><option value="off">Never</option><option value="daily">Every day</option><option value="weekly">Every week</option></select>
+          </div>
+          <p class="drawer-note" id="backup-dir"></p>
+          <div class="backup-actions">
+            <button type="button" class="btn btn-outline" id="backup-now">Back up now</button>
+            <button type="button" class="btn btn-outline" id="backup-folder">Choose folder…</button>
+            <button type="button" class="btn btn-outline" id="backup-restore">Restore…</button>
+          </div>
+        </section>
+        <section class="drawer-section">
+          <h3>Speed</h3>
+          <div class="field">
+            <label class="field-label" for="effects-choice">Fades and animations</label>
+            <select class="text-input" id="effects-choice"><option value="auto">Automatic</option><option value="full">Always on</option><option value="light">Off (fastest)</option></select>
             <p class="drawer-note" id="effects-note"></p>
           </div>
-        </div>
-        <div class="drawer-section">
-          <h3>Library folder</h3>
-          <p class="drawer-note" id="library-path">Your Library folder</p>
-          <button type="button" class="btn" id="library-change">Change folder…</button>
-        </div>
-        <div class="drawer-section">
-          <button type="button" class="btn" id="btn-help">Shortcuts and tips</button>
-        </div>
-      </details>
+        </section>
+        <section class="drawer-section">
+          <button type="button" class="btn btn-outline" id="btn-help">Shortcuts and tips</button>
+        </section>
+      </div>
     </aside>
 
     <div class="popover popover--link" id="linkbar" role="dialog" aria-label="Link">
