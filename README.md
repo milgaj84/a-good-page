@@ -25,6 +25,8 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 - **Nothing to save.** **New page** creates a real file at once and autosaves it. The page names itself from your first heading or line. There is no Save As, no "Untitled draft" and no folder picker.
 - **Library → projects → pages.** The Library is your working folder. A **project** is a folder in it (a novel, an essay, a set of notes) with one or many `.md` or `.txt` pages. The **+** beside Projects starts one with a first page; the **+** on a project adds a page. Drag pages into order, or use ⋯ → Move up/down. Pages that sit outside any project are listed under **Unfiled pages**, and ⋯ → Move to puts them in a project. Order is kept in `.a-good-page.json` inside the project.
 - **Working with many pages.** Click the tick-box icon beside *Projects* to **select** several pages, then move, export or trash them together. Drag a page onto another project, between its pages, or onto *Unfiled pages*. The sidebar search looks inside every page of every project, including unfiled ones.
+- **Find and replace across pages.** **Ctrl/Cmd+Alt+F** (or *All pages…* in Find) searches every page of a project or the whole Library, shows each match with what it would become, lets you tick which to change, and keeps a version of each page in History. Undo puts it all back.
+- **Backups.** *Settings → Backup* makes a zip of your Library (only your writing files and project order, never the trash) on demand or every day or week, keeps the newest few, and can **restore** one next to your current work without overwriting it.
 - **Export as PDF, Word or Markdown.** Add a **title page** (title, subtitle, author), a **contents**, and page numbers; the PDF preview shows exactly what you will get.
 - **Export follows your projects.** Export a single page, or a project in page order, and **tick just the pages you want** (All / None / individual). Use ⋯ → **Export project…** on a project or ⋯ → **Export this page…** on a page. Word counts, search, Ctrl+P and History all work across the same structure.
 - **Go anywhere.** **Ctrl/Cmd+P** searches pages and every command. The **contents** button (top right) lists the headings on this page. Try "focus", "export" or "theme".
@@ -87,7 +89,7 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must share one version, and a test checks it.
 
 1. Update `CHANGELOG.md` and the version in those files.
-2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md`, `RELEASE_0.7.0.md`, `RELEASE_0.7.1.md`, `RELEASE_0.7.2.md` and `RELEASE_CHECKLIST.md`.
-3. Commit, then `git tag v0.7.2 && git push origin v0.7.2`.
+2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md`, `RELEASE_0.7.0.md`, `RELEASE_0.7.1.md`, `RELEASE_0.7.2.md`, `RELEASE_0.7.3.md` and `RELEASE_CHECKLIST.md`.
+3. Commit, then `git tag v0.7.3 && git push origin v0.7.3`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).

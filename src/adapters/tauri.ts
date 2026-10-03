@@ -68,6 +68,19 @@ export function renameEntry(root: string, path: string, newName: string): Promis
 export function moveEntry(root: string, path: string, to: string | null): Promise<string> {
   return invoke<string>('move_entry', { root, path, to });
 }
+export interface BackupSummary { path: string; files: number; bytes: number; pruned: number }
+export interface RestoreSummary { restored: string[]; files: number }
+export function createBackup(root: string, dest: string, stamp: string, keep: number): Promise<BackupSummary> {
+  return invoke<BackupSummary>('create_backup', { root, dest, stamp, keep });
+}
+export function restoreBackup(root: string, zip: string): Promise<RestoreSummary> {
+  return invoke<RestoreSummary>('restore_backup', { root, zip });
+}
+export function defaultBackupDir(root: string): Promise<string> { return invoke<string>('default_backup_dir', { root }); }
+export async function chooseBackupFile(): Promise<string | null> {
+  const result = await open({ multiple: false, directory: false, filters: [{ name: 'Backup', extensions: ['zip'] }] });
+  return typeof result === 'string' ? result : null;
+}
 export function trashEntry(root: string, path: string, position?: number): Promise<string> {
   return invoke<string>('trash_entry', { root, path, position: position ?? null });
 }

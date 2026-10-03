@@ -6,6 +6,25 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-03
+
+Change many pages at once, and keep your work safe.
+
+### Added
+
+- **Find and replace in many pages.** Ctrl/Cmd+Alt+F, "Find and replace in many pages" in the go-to box or Tools, or *All pages…* in the Find dialog. Search the open project or the whole Library (unfiled pages included), with Match case and Whole words (accented letters count as letters). Results are grouped by page; each match shows the line, the words around it, and the replacement as it would read (old struck through, new highlighted). Tick or untick single matches, a whole page, or all; the button says exactly how many will change.
+- **Careful replacing.** The open page changes inside the editor, as one undoable edit that autosave keeps (Ctrl+Z works). Every other page is written only if it is still exactly as it was searched; a page that changed elsewhere in the meantime is left alone and named. A version of each page is kept in History just before it changes, and an **Undo** button puts everything back (again skipping anything that has changed since).
+- **Backups.** Settings → Backup, the go-to box and Tools. *Back up now* writes `<Library> backup <date time>.zip`, holding only your writing files (`.md`, `.markdown`, `.txt`) and each project's order file; the trash, hidden files and other file types are left out. Automatic backups can run every day or week (checked at launch and every half hour), keep the newest 7 (adjustable in storage), and mention themselves quietly, or loudly once per session if they fail. The backup folder defaults to a sibling of the Library (`<Library> backups`) and cannot be inside it or contain it. The zip is a standard compressed zip, checked with an independent reader.
+- **Restore from a backup.** Adds a backup's projects and pages next to your current work and never over it: a name already in use comes back as "Novel (restored)". The archive is checked first (safe paths only, writing files only, sizes and checksums) and nothing is restored if anything is wrong.
+- Rust commands `create_backup`, `restore_backup` and `default_backup_dir`; the `flate2` compression crate (already part of the dependency tree).
+
+### Known limits
+
+- Replacing works on the text as stored (Markdown), so a match inside a link address or a heading marker can be found; the context line shows it. Pages that are plain text are searched as plain text.
+- Importing a Word file is not part of this release; use any converter to Markdown, or open the folder as your Library.
+- A restored backup cannot choose where it goes: it arrives in the Library root, beside what is there.
+- Verified in a headless browser against a simulated file system, not yet in an installed app; see `RELEASE_0.7.3.md`.
+
 ## [0.7.2] - 2026-10-02
 
 Better exports.

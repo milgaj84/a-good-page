@@ -4,6 +4,7 @@ import type { FolderListing } from '../core/quick-switch';
 import type { PaletteEntry } from '../core/palette';
 import { ProjectService, type ProjectPorts } from '../core/project-service';
 import { chapterInfo, searchProject, type ProjectFile } from '../core/project';
+import type { SearchFile } from '../core/project-replace';
 import { nameFromPath } from '../core/paths';
 import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
 import type { Menu, MenuItem } from '../ui/menu';
@@ -30,6 +31,8 @@ export interface LibraryDeps {
     rename(root: string, path: string, name: string): Promise<string>;
     trash(root: string, path: string, position?: number): Promise<string>;
     write(path: string, content: string): Promise<unknown>;
+    /** Saves only if the file still holds `expected`; throws if it changed meanwhile. */
+    writeGuarded(path: string, content: string, expected: string): Promise<unknown>;
     pickFolder(): Promise<string | null>;
     move(root: string, path: string, to: string | null): Promise<string>;
     listTrash(root: string): Promise<TrashItem[]>;
@@ -487,6 +490,37 @@ export class LibraryController {
   projectList(): Array<{ name: string; path: string }> {
     return this.rows.filter(r => r.kind === 'project').map(r => ({ name: r.name, path: r.path }));
   }
+
+  // ---------- find and replace in many pages ----------
+  /** Every page of the open project (or of the whole Library), read fresh from disk. */
+  async filesForSearch(scope: 'project' | 'library'): Promise<SearchFile[]> {
+    if (!this.root) return [];
+    const out: SearchFile[] = [];
+    const current = this.currentBook();
+    const projects = scope === 'project' ? (current ? [current] : []) : this.rows.filter(r => r.kind === 'project').map(r => r.path).slice(0, 100);
+    for (const project of projects) {
+      const service = await this.loadBook(project);
+      if (!service) continue;
+      this.books.set(project, service);
+      for (const entry of service.chapters) {
+        if (entry.file) out.push({ path: this.chapterPath(project, entry.path), label: displayName(stem(entry.path), entry.file.title), group: nameFromPath(project), text: entry.file.text });
+      }
+    }
+    if (scope === 'library') {
+      for (const row of this.rows.filter(r => r.kind === 'loose').slice(0, 300)) {
+        try { out.push({ path: row.path, label: row.name, group: 'Unfiled', text: (await this.d.io.open(this.root, row.path)).content }); } catch { /* unreadable pages are simply not searched */ }
+      }
+    }
+    return out;
+  }
+
+  /** Saves a replaced page only if it is exactly as it was when searched. False means it changed elsewhere and was left alone. */
+  async writeReplaced(path: string, newText: string, oldText: string): Promise<boolean> {
+    try { await this.d.io.writeGuarded(path, newText, oldText); return true; } catch { return false; }
+  }
+
+  /** After many pages changed on disk: reread what is shown. */
+  async afterBulkEdit(): Promise<void> { this.looseText.clear(); this.searchStamp = 0; await this.refresh(); }
 
   // ---------- selecting several pages ----------
   get selectionCount(): number { return this.selected.size; }

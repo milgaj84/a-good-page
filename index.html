@@ -175,6 +175,20 @@
           <input class="text-input" type="number" id="goal-input" min="0" step="50" placeholder="No goal" inputmode="numeric" />
         </div>
       </section>
+      <section class="drawer-section">
+        <h3>Backup</h3>
+        <p class="drawer-note" id="backup-status">No backup yet.</p>
+        <div class="field">
+          <label class="field-label" for="backup-mode">Automatic backups</label>
+          <select class="text-input" id="backup-mode"><option value="off">Off</option><option value="daily">Every day</option><option value="weekly">Every week</option></select>
+        </div>
+        <p class="drawer-note" id="backup-dir"></p>
+        <div class="backup-actions">
+          <button type="button" class="btn" id="backup-now">Back up now</button>
+          <button type="button" class="btn" id="backup-folder">Backup folder…</button>
+          <button type="button" class="btn" id="backup-restore">Restore…</button>
+        </div>
+      </section>
       <details class="drawer-more">
         <summary>More options</summary>
         <div class="drawer-section">
@@ -268,7 +282,23 @@
       <div class="find-options"><label><input id="find-case" type="checkbox" /> Match case</label><label><input id="find-words" type="checkbox" /> Whole words</label></div>
       <div class="find-actions"><span id="find-count" role="status">0 matches</span><button id="find-prev" type="button">Previous</button><button id="find-next" type="button">Next</button></div>
       <label for="replace-query">Replace with</label><input id="replace-query" type="text" autocomplete="off" spellcheck="false" placeholder="Replacement text" />
-      <div class="find-actions"><button id="replace-one" type="button">Replace</button><button id="replace-all" type="button">Replace all</button><button id="find-close" type="button">Close</button></div>
+      <div class="find-actions"><button id="replace-one" type="button">Replace</button><button id="replace-all" type="button">Replace all</button><button id="find-many" type="button" title="Find and replace in every page of a project (Ctrl+Alt+F)">All pages…</button><button id="find-close" type="button">Close</button></div>
+    </div></div>
+    <div class="overlay find-overlay" id="project-find" aria-hidden="true"><div class="find-sheet pf-sheet" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+      <h2 id="pf-title">Find and replace in many pages</h2>
+      <div class="pf-fields">
+        <label for="pf-query">Find</label><input id="pf-query" type="search" autocomplete="off" spellcheck="false" placeholder="Words or phrase" />
+        <label for="pf-replace">Replace with</label><input id="pf-replace" type="text" autocomplete="off" spellcheck="false" placeholder="Replacement (may be empty)" />
+      </div>
+      <div class="find-options">
+        <label><input id="pf-case" type="checkbox" /> Match case</label><label><input id="pf-words" type="checkbox" /> Whole words</label>
+        <label class="pf-scope">Look in <select id="pf-scope"><option value="project">This project</option><option value="library">The whole Library</option></select></label>
+      </div>
+      <p class="pf-summary" id="pf-summary" role="status"></p>
+      <div class="pf-tools"><button type="button" class="btn" id="pf-all">Tick all</button><button type="button" class="btn" id="pf-none">Tick none</button></div>
+      <div class="pf-results" id="pf-results"></div>
+      <div class="find-actions"><button id="pf-do" type="button" class="preview-primary" disabled>Replace</button><button id="pf-close" type="button">Close</button></div>
+      <p class="pf-note">Changes are saved to your pages at once. An earlier version of each page is kept in History, and Undo appears afterwards.</p>
     </div></div>
     <div class="overlay quit-overlay" id="quit-dialog" aria-hidden="true"><div class="quit-sheet" role="dialog" aria-modal="true" aria-labelledby="quit-title">
       <h2 id="quit-title">Before you go</h2><p>Your latest words haven’t been saved. What would you like to do?</p><p id="quit-error" role="alert"></p>

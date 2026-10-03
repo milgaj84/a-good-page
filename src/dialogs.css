@@ -149,3 +149,33 @@
 @media (max-width: 640px) { .export-meta { grid-template-columns: 1fr; } .export-options { margin: 0 12px 10px; } }
 /* The controls scroll on their own, so the preview always keeps room on a short window. */
 .preview-controls { max-height: 40vh; overflow-y: auto; }
+
+/* Find and replace in many pages */
+.pf-sheet { width: min(760px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.pf-fields { display: grid; }
+.pf-scope { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.pf-scope select { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--bg-soft); color: var(--ink); font: 13px var(--sans); }
+.pf-summary { margin: 12px 0 6px; color: var(--ink-soft); font: 600 12.5px var(--sans); min-height: 1.3em; }
+.pf-tools { display: flex; gap: 6px; margin-bottom: 6px; }
+.pf-tools .btn { border-color: var(--line); color: var(--ink); padding: 4px 10px; font-size: 12px; }
+.pf-results { flex: 1; min-height: 120px; max-height: 40vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--bg); }
+.pf-group { border-bottom: 1px solid var(--line); }
+.pf-group:last-child { border-bottom: 0; }
+.pf-head { display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: var(--bg-soft); font: 13px var(--sans); cursor: pointer; }
+.pf-head strong { font-weight: 600; }
+.pf-head small { margin-left: auto; color: var(--muted); }
+.pf-match { display: flex; align-items: baseline; gap: 9px; padding: 6px 10px 6px 28px; font: 13px/1.5 var(--serif); color: var(--ink-soft); cursor: pointer; }
+.pf-match:hover { background: var(--bg-soft); }
+.pf-match small { flex: none; width: 52px; color: var(--muted); font: 11px var(--sans); }
+.pf-match span { min-width: 0; overflow-wrap: anywhere; }
+.pf-match del { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--ink); text-decoration: line-through; border-radius: 3px; }
+.pf-match ins { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--ink); text-decoration: none; border-radius: 3px; }
+.pf-match input, .pf-head input { flex: none; margin: 0; accent-color: var(--accent); align-self: center; }
+.pf-note { margin: 10px 0 0; color: var(--muted); font: 12px/1.5 var(--sans); }
+/* These rows are labels, but must not pick up the plain Find dialog's block labels. */
+.find-sheet .pf-head, .find-sheet .pf-match { display: flex; margin: 0; color: var(--ink); }
+.find-sheet .pf-head { align-items: center; padding: 8px 10px; font: 13px var(--sans); }
+.find-sheet .pf-match { align-items: baseline; padding: 6px 10px 6px 28px; font: 13px/1.5 var(--serif); color: var(--ink-soft); }
+.find-sheet .pf-match small { flex: none; width: 52px; margin-right: 4px; }
+.find-sheet .pf-scope { display: inline-flex; margin: 0 0 0 auto; }
+.find-sheet .pf-fields label { margin: 12px 0 6px; }

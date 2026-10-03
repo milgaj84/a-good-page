@@ -65,6 +65,7 @@ function fixture(seed: Record<string, string> = {}) {
       return to;
     },
     write: async (path: string, content: string) => { files.set(path, content); },
+    writeGuarded: async (path: string, content: string, expected: string) => { if (files.get(path) !== expected) throw new Error('changed'); files.set(path, content); },
     pickFolder: async () => null,
     move: async (_root: string, path: string, to: string | null) => {
       const dest = to ?? '/lib'; const name = path.split('/').pop()!; let target = `${dest}/${name}`; let i = 2;
@@ -490,6 +491,43 @@ describe('Library-wide search and the welcome guide', () => {
     await t.controller.openWelcome();
     expect(t.files.get('/lib/Getting started/Welcome to A Good Page.md')).toBe('my own notes');
     expect([...t.dirs].filter(d => d.includes('Getting started'))).toHaveLength(1);
+  });
+});
+
+describe('finding and replacing in many pages', () => {
+  const seed = { '/lib/A/01.md': '# One\n\nThe fog came.', '/lib/A/02.md': '# Two\n\nSunny.', '/lib/B/x.md': '# X\n\nMore fog.', '/lib/Loose.md': 'fog on the hill' };
+
+  it('reads the open project, or the whole Library with unfiled pages, fresh from disk', async () => {
+    const t = fixture(seed);
+    await t.controller.start();
+    await t.controller.open('/lib/A/01.md');
+    expect((await t.controller.filesForSearch('project')).map(f => f.group + '/' + f.label)).toEqual(['A/01', 'A/02']);
+    const all = await t.controller.filesForSearch('library');
+    expect(all.map(f => f.label).sort()).toEqual(['01', '02', 'Loose', 'X']);
+    expect(all.find(f => f.label === 'Loose')?.group).toBe('Unfiled');
+    t.files.set('/lib/A/02.md', '# Two\n\nStormy fog.');
+    expect((await t.controller.filesForSearch('project')).find(f => f.label === '02')?.text).toContain('Stormy');
+  });
+
+  it('writes a replaced page only if it is still as it was searched', async () => {
+    const t = fixture(seed);
+    await t.controller.start();
+    expect(await t.controller.writeReplaced('/lib/B/x.md', '# X\n\nMore mist.', '# X\n\nMore fog.')).toBe(true);
+    expect(t.files.get('/lib/B/x.md')).toBe('# X\n\nMore mist.');
+    t.files.set('/lib/Loose.md', 'someone else edited this');
+    expect(await t.controller.writeReplaced('/lib/Loose.md', 'mist on the hill', 'fog on the hill')).toBe(false);
+    expect(t.files.get('/lib/Loose.md')).toBe('someone else edited this');
+  });
+
+  it('refreshes what the sidebar shows after a bulk edit', async () => {
+    const t = fixture(seed);
+    await t.controller.start();
+    await t.controller.search('fog');
+    expect(t.last().hits.length).toBeGreaterThan(0);
+    t.files.set('/lib/Loose.md', 'mist on the hill');
+    await t.controller.afterBulkEdit();
+    await t.controller.search('fog');
+    expect(t.last().hits.map(h => h.title)).not.toContain('Loose');
   });
 });
 

@@ -104,6 +104,8 @@ export function createLongProjects(deps: LongProjectDeps) {
       void capture();
     },
     saved(): void { void capture(); },
+    /** Keeps a version of any page (not only the open one), for example just before a bulk replace. */
+    keepVersion(path: string, content: string): Promise<boolean> { return snapshots.capture(snapshotDocKey(path), content).catch(() => false); },
     /** A page or book was renamed: its history moves with it. */
     historyMoved(from: string, to: string): void {
       void snapshots.rekey(from, to).then(() => timeMachine.documentChanged()).catch(error => deps.notify('History could not follow the rename: ' + String(error)));

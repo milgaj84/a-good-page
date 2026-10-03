@@ -76,6 +76,7 @@ const ALT_CODES = new Map<string, Action>([
   ['Digit1', 'h1'],
   ['Digit2', 'h2'],
   ['Digit3', 'h3'],
+  ['KeyF', 'findProject'],
 ]);
 
 /** Latin letter for the key; falls back to the physical key on non-latin layouts (e.g. Cyrillic). */
@@ -135,6 +136,7 @@ export const SHORTCUTS: readonly ShortcutHelp[] = [
   { keys: ['Mod', 'Shift', 'Q'], label: 'Polish dashes, ellipses and quotes' },
   { keys: ['Mod', 'F'], label: 'Find in manuscript' },
   { keys: ['Mod', 'H'], label: 'Find and replace' },
+  { keys: ['Mod', 'Alt', 'F'], label: 'Find and replace in many pages' },
   { keys: ['Mod', 'Z'], label: 'Undo' },
   { keys: ['Mod', 'Shift', 'Z'], label: 'Redo' },
   { keys: ['Mod', 'Shift', 'F'], label: 'Paragraph focus' },

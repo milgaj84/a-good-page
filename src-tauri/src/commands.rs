@@ -136,3 +136,33 @@ pub fn restore_entry(root: String, path: String) -> Result<String, String> {
 pub fn move_entry(root: String, path: String, to: Option<String>) -> Result<String, String> {
     crate::library::move_into(&root, &path, to.as_deref())
 }
+
+#[tauri::command]
+pub fn create_backup(
+    root: String,
+    dest: String,
+    stamp: String,
+    keep: u32,
+) -> Result<crate::backup::BackupSummary, String> {
+    crate::backup::create_backup(&root, &dest, &stamp, keep)
+}
+
+#[tauri::command]
+pub fn restore_backup(root: String, zip: String) -> Result<crate::backup::RestoreSummary, String> {
+    crate::backup::restore_backup(&root, &zip)
+}
+
+/// The suggested backup folder: a sibling of the Library, never inside it.
+#[tauri::command]
+pub fn default_backup_dir(root: String) -> Result<String, String> {
+    let path = std::path::PathBuf::from(&root);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "Library".into());
+    let parent = path.parent().ok_or("The Library has no parent folder.")?;
+    Ok(parent
+        .join(format!("{name} backups"))
+        .to_string_lossy()
+        .into_owned())
+}

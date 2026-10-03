@@ -30,7 +30,7 @@ import { bindAutoscroll } from './ui/autoscroll';
 import {
   chooseWorkingDirectory, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
-  exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
+  chooseBackupFile, createBackup, defaultBackupDir, restoreBackup, exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -52,6 +52,10 @@ import { Sidebar } from './ui/sidebar';
 import { Menu } from './ui/menu';
 import { TrashDialog } from './ui/trash';
 import { ExportPicker } from './ui/export-picker';
+import { ProjectFind } from './ui/project-find';
+import { BackupController } from './app/backup';
+import type { ReplaceEdit } from './core/project-replace';
+import type { ReplaceReport } from './ui/project-find';
 import { ExportOptionsStore, FORMAT_INFO, effectiveTitle, sanitizeExportOptions, type ExportOptions } from './core/export-options';
 import { docxBytes } from './export/docx';
 import { markdownDocument } from './export/markdown';
@@ -408,6 +412,7 @@ library = new LibraryController({
     defaultLibrary, list: listWorkingDirectory, open: openWorkingFile, order: readProjectOrder, saveOrder: writeProjectOrder,
     create: createEntry, rename: renameEntry, trash: trashEntry,
     write: (path, content) => tauriFiles.write(path, content),
+    writeGuarded: (path, content, expected) => tauriFiles.write(path, content, expected),
     pickFolder: chooseWorkingDirectory,
     listTrash, restore: restoreEntry, move: moveEntry,
   },
@@ -444,6 +449,69 @@ const trashDialog = new TrashDialog(
   { root: el('trash-dialog'), list: el('trash-list'), close: el('trash-close') },
   () => lib.trashItems(), (item) => lib.restore(item), () => Date.now(),
 );
+
+// ---------- find and replace in many pages ----------
+const projectFind = new ProjectFind({
+  root: el('project-find'), query: el<HTMLInputElement>('pf-query'), replacement: el<HTMLInputElement>('pf-replace'),
+  matchCase: el<HTMLInputElement>('pf-case'), wholeWord: el<HTMLInputElement>('pf-words'), scope: el<HTMLSelectElement>('pf-scope'),
+  results: el('pf-results'), summary: el('pf-summary'), replace: el<HTMLButtonElement>('pf-do'), all: el('pf-all'), none: el('pf-none'), close: el('pf-close'),
+}, {
+  inProject: () => Boolean(lib.currentBook()),
+  // The open page is searched as it is on screen, including words not saved yet.
+  load: async (scope) => {
+    const open = doc.snapshot().path;
+    return (await lib.filesForSearch(scope)).map(f => (f.path === open ? { ...f, text: isPlainTextPath(open) ? editor.getPlainText() : editor.getMarkdown() } : f));
+  },
+  apply: (edits) => applyReplacements(edits, false),
+});
+
+/** Applies replacements page by page. The open page changes inside the editor (one undoable edit, kept by autosave);
+ *  every other page is written only if it is still exactly as it was searched, after a version is kept in History. */
+async function applyReplacements(edits: ReplaceEdit[], undoing: boolean): Promise<ReplaceReport> {
+  const open = doc.snapshot().path;
+  const skipped: string[] = [];
+  const done: ReplaceEdit[] = [];
+  for (const edit of edits) {
+    const from = undoing ? edit.newText : edit.oldText;
+    const to = undoing ? edit.oldText : edit.newText;
+    if (edit.path === open) {
+      const plain = isPlainTextPath(open);
+      if ((plain ? editor.getPlainText() : editor.getMarkdown()) !== from) { skipped.push(edit.label); continue; }
+      if (!undoing) void projects?.keepVersion(edit.path, from);
+      editor.replaceQuietly(to, plain);
+      done.push(edit);
+      continue;
+    }
+    if (!undoing) await projects?.keepVersion(edit.path, from);
+    if (await lib.writeReplaced(edit.path, to, from)) done.push(edit); else skipped.push(edit.label);
+  }
+  await lib.afterBulkEdit();
+  const pages = done.length + (done.length === 1 ? ' page' : ' pages');
+  if (undoing) chrome.toast(done.length ? 'Put back ' + pages + '.' : 'Nothing could be put back.');
+  else if (done.length) chrome.toastAction('Replaced in ' + pages + '. A version of each is in History.', 'Undo', () => void applyReplacements(done, true));
+  return { changed: done.length, skipped };
+}
+el('find-many').addEventListener('click', () => {
+  const typed = el<HTMLInputElement>('find-query').value;
+  finder.hide();
+  void projectFind.open(typed);
+});
+
+// ---------- backup ----------
+const backup = new BackupController({
+  store, root: () => lib.root,
+  io: { create: createBackup, restore: restoreBackup, defaultDir: defaultBackupDir, pickFolder: chooseWorkingDirectory, pickZip: chooseBackupFile },
+  notify: (message) => chrome.toast(message, 5200), changed: () => renderBackup(), refreshLibrary: () => lib.refresh(), now: () => Date.now(),
+});
+function renderBackup(): void {
+  el('backup-status').textContent = backup.status();
+  el<HTMLSelectElement>('backup-mode').value = backup.settings.mode;
+  void backup.folder().then((dir) => { el('backup-dir').textContent = dir ? 'Backups go to ' + dir + ' (the newest ' + backup.settings.keep + ' are kept).' : ''; });
+}
+el('backup-now').addEventListener('click', () => void backup.backupNow());
+el('backup-folder').addEventListener('click', () => void backup.chooseFolder());
+el('backup-restore').addEventListener('click', () => void backup.restore());
+el<HTMLSelectElement>('backup-mode').addEventListener('change', (event) => backup.setMode((event.target as HTMLSelectElement).value as 'off' | 'daily' | 'weekly'));
 
 // ---------- selecting several pages ----------
 const selectBar = el('select-bar');
@@ -653,6 +721,8 @@ function openTools(): void {
     { label: 'Sprint goal', hint: k('Mod+Shift+A'), run: () => APP.sprint() },
     { label: 'Polish dashes and quotes', hint: k('Mod+Shift+Q'), run: () => APP.polish() },
     { separator: true, label: '' },
+    { label: 'Find in many pages…', hint: k('Mod+Alt+F'), run: () => APP.findProject() },
+    { label: 'Back up the Library now', run: () => APP.backupNow() },
     { label: 'Trash…', run: () => APP.openTrash() },
     { label: 'Go to a page or command', hint: k('Mod+P'), run: () => APP.palette() },
     { label: 'Shortcuts and tips', hint: k('Mod+/'), run: () => APP.help() },
@@ -672,6 +742,7 @@ function closeLayers(): boolean {
   if (longProjects.closeLayer()) return true;
   if (slash.isOpen) { slash.close(); return true; }
   if (focusUI.closeMenu()) return true;
+  if (projectFind.isOpen) { projectFind.close(); return true; }
   if (finder.isOpen) { finder.hide(); return true; }
   if (palette.isOpen) { palette.close(); return true; }
   if (sessionPanel.isOpen) { sessionPanel.close(); return true; }
@@ -709,7 +780,10 @@ const APP: Record<AppAction, () => void> = {
   ghost: () => togglePref('ghost', 'The bars will fade while you type.', 'The bars stay visible.'),
   typewriter: () => togglePref('typewriter', 'Typewriter line on. Your typing stays mid-screen.', 'Typewriter line off.'),
   zen: () => void ghostUI.toggleZen(),
-  settings: () => settings.toggle(),
+  settings: () => { settings.toggle(); renderBackup(); },
+  findProject: () => void projectFind.open(editor.selectionText() || el<HTMLInputElement>('find-query').value),
+  backupNow: () => void backup.backupNow(),
+  restoreBackup: () => void backup.restore(),
   help: () => help.toggle(),
   link: () => linkBar.open(),
   bigger: () => resize(prefs.size + 1),
@@ -785,6 +859,8 @@ render(doc.snapshot());
 applyPrefs(prefs);
 void (async () => {
   try { await lib.start(); } catch (error) { chrome.toast('Could not open your Library: ' + String(error), 6000); }
+  backup.start();
+  renderBackup();
   const draft = drafts.load();
   if (draft && draft.trim()) {
     try {

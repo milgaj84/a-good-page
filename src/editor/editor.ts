@@ -40,6 +40,8 @@ export interface WriterEditor extends EditorPort {
   textStyle(): TextStyle | null;
   headings(): HeadingInfo[];
   jumpTo(pos: number): void;
+  /** Replaces the whole page as one undoable edit without taking focus (used while a dialog is open). */
+  replaceQuietly(content: string, plain: boolean): void;
   /** Puts the caret at an exact document position without scrolling; clamps to the page. */
   restoreCaret(pos: number): void;
   linkHref(): string | null;
@@ -188,6 +190,9 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
     },
     replaceContent: (content: string, plain: boolean) => {
       editor.chain().focus().setContent(plain ? plainDoc(content) : content, true).run();
+    },
+    replaceQuietly: (content: string, plain: boolean) => {
+      editor.commands.setContent(plain ? plainDoc(content) : content, true);
     },
     polishTypography: () => {
       const tr = editor.state.tr;

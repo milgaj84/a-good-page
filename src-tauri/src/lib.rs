@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod conflict;
 mod disk_probe;
@@ -30,7 +31,10 @@ pub fn run() {
             commands::trash_entry,
             commands::list_trash,
             commands::restore_entry,
-            commands::move_entry
+            commands::move_entry,
+            commands::create_backup,
+            commands::restore_backup,
+            commands::default_backup_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running A Good Page");
