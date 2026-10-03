@@ -39,3 +39,21 @@ describe('find across styled text', () => {
     expect(nextMatch([], 0, 1)).toBe(-1);
   });
 });
+describe('find typeset punctuation and speed', () => {
+  it('straight quotes, apostrophes and hyphens match typeset ones', () => {
+    expect(findMatches(doc(['don’t and don\'t']), "don't")).toHaveLength(2);
+    expect(findMatches(doc(['“hi” "hi"']), '"hi"')).toHaveLength(2);
+    expect(findMatches(doc(['a-b a–b a—b']), 'a-b')).toHaveLength(3);
+    expect(findMatches(doc(['it’s']), "it's", { wholeWord: true })).toHaveLength(1);
+  });
+  it('a curly query does not match a straight quote', () => {
+    expect(findMatches(doc(["don't"]), 'don’t')).toHaveLength(0);
+  });
+  it('searches 100k words in well under a second', () => {
+    const words = Array.from({ length: 100_000 }, (_, i) => (i % 1000 === 0 ? 'needle' : 'word'));
+    const runs = Array.from({ length: 2000 }, (_, i) => words.slice(i * 50, i * 50 + 50).join(' ') + ' ');
+    const started = performance.now();
+    expect(findMatches(doc(runs), 'needle').length).toBe(100);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});

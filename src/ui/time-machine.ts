@@ -40,6 +40,8 @@ export class TimeMachine {
   private reader: ReaderView | null = null;
   private versions: Snapshot[] = [];
   private generation = 0;
+  private paintTimer: ReturnType<typeof setTimeout> | null = null;
+  private paintFrame = 0;
 
   constructor(host: HTMLElement, private readonly deps: TimeMachineDeps) {
     const sheet = make('div', 'time-sheet');
@@ -67,7 +69,7 @@ export class TimeMachine {
     host.append(this.root);
     this.focus = new DialogFocus(this.root);
 
-    this.slider.addEventListener('input', () => this.show(Number(this.slider.value)));
+    this.slider.addEventListener('input', () => this.show(Number(this.slider.value), false));
     this.restoreButton.addEventListener('click', () => this.restoreSelected());
     this.exportButton.addEventListener('click', () => void this.exportSelected());
     this.closeButton.addEventListener('click', () => this.close());
@@ -110,6 +112,7 @@ export class TimeMachine {
   close(restore = true): void {
     if (!this.isOpen) return;
     this.generation++;
+    this.cancelPaint();
     this.root.classList.remove('is-open');
     this.root.setAttribute('aria-hidden', 'true');
     this.focus.close(restore);
@@ -128,16 +131,31 @@ export class TimeMachine {
     if (empty) this.when.textContent = '';
   }
 
-  private show(index: number): void {
+  private cancelPaint(): void {
+    if (this.paintTimer !== null) clearTimeout(this.paintTimer);
+    if (this.paintFrame) cancelAnimationFrame(this.paintFrame);
+    this.paintTimer = null;
+    this.paintFrame = 0;
+  }
+
+  /** The label follows the slider at once; the (expensive) page only settles once the slider pauses. */
+  private show(index: number, immediate = true): void {
     const version = this.versions[index];
     if (!version) return;
     const label = relativeLabel(version.at, this.deps.now());
     const position = (index + 1) + ' of ' + this.versions.length;
     this.when.textContent = label + ' · ' + formatCount(version.words) + ' words · ' + position;
     this.slider.setAttribute('aria-valuetext', label + ', version ' + position);
-    this.reader ??= this.deps.createReader(this.page);
-    this.reader.show(version.content, this.deps.isPlain());
-    this.page.scrollTop = 0;
+    this.cancelPaint();
+    const paint = () => {
+      this.paintTimer = null;
+      this.paintFrame = 0;
+      this.reader ??= this.deps.createReader(this.page);
+      this.reader.show(version.content, this.deps.isPlain());
+      this.page.scrollTop = 0;
+    };
+    if (immediate) { paint(); return; }
+    this.paintTimer = setTimeout(() => { this.paintTimer = null; this.paintFrame = requestAnimationFrame(paint); }, 60);
   }
 
   private async exportSelected(): Promise<void> {

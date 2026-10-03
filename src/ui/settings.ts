@@ -42,7 +42,7 @@ export class SettingsPanel {
     els.root.setAttribute('aria-hidden', 'true');
     els.sizeRange.min = String(MIN_SIZE);
     els.sizeRange.max = String(MAX_SIZE);
-    els.close.addEventListener('click', () => this.close());
+    els.close.addEventListener('click', () => this.close(true));
     els.themeChoice.addEventListener('click', (event) => { const theme = choice(THEMES, event); if (theme) onTheme(theme); });
     els.fontChoice.addEventListener('click', (event) => { const font = choice(FONTS, event); if (font) onChange({ font }); });
     els.widthChoice.addEventListener('click', (event) => { const width = choice(WIDTHS, event); if (width) onChange({ width }); });
@@ -84,12 +84,14 @@ export class SettingsPanel {
     this.els.close.focus();
   }
 
-  close(): void {
+  close(restoreFocus = false): void {
     if (!this.isOpen) return;
+    const hadFocus = this.els.root.contains(document.activeElement);
     this.els.root.classList.remove('is-open');
     this.els.root.setAttribute('aria-hidden', 'true');
     this.trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && hadFocus) this.trigger.focus();
   }
 
-  toggle(): void { if (this.isOpen) this.close(); else this.open(); }
+  toggle(): void { if (this.isOpen) this.close(true); else this.open(); }
 }

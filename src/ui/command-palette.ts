@@ -44,6 +44,8 @@ export class CommandPalette {
     this.focus.close(restore);
   }
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
+  /** Redraws the list (for example when more pages became known) without moving the typed text. */
+  refresh(): void { if (this.isOpen) this.render(); }
   private choose(index: number): void {
     const item = this.matches[index];
     if (!item || (item.action && !this.canRun(item.action))) return;
@@ -66,6 +68,7 @@ export class CommandPalette {
     });
     this.els.list.replaceChildren(fragment);
     this.els.empty.hidden = this.matches.length > 0;
+    this.els.input.setAttribute('aria-expanded', String(this.matches.length > 0));
     this.markSelected();
   }
   private markSelected(): void {

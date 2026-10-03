@@ -75,7 +75,7 @@ function fixture(seed: Record<string, string> = {}) {
     pickFolder: async () => null,
     pickWord: async () => pickedWord,
     readWord: async (path: string) => { if (path.endsWith('bad.docx')) throw new Error('That is not a Word (.docx) document.'); return wordParts; },
-    importFolder: async () => { dirs.add('/lib/Sketches'); files.set('/lib/Sketches/a.md', '# A'); return pickedFolder ? '/lib/Sketches' : null; },
+    importFolder: async () => { dirs.add('/lib/Sketches'); files.set('/lib/Sketches/a.md', '# A'); return pickedFolder ? { project: '/lib/Sketches', pages: 1, skipped: ['x.md', 'y.md'], converted: [] } : null; },
     current: async () => remembered,
     adopt: async (path: string) => { adopted.push(path); if (refuseAdopt) throw new Error('declined'); remembered = path; return path; },
     use: async (path: string) => { remembered = path; return path; },
@@ -588,6 +588,33 @@ describe('older untitled drafts', () => {
   });
 });
 
+describe('Library controller 0.8.2', () => {
+  it('does not mistake "Draft 2" for the inside of "Draft" when renaming', async () => {
+    const t = fixture({ '/lib/Draft/a.md': '# A', '/lib/Draft 2/b.md': '# B' });
+    await t.controller.start();
+    await t.controller.open('/lib/Draft 2/b.md');
+    const rows = t.last().rows;
+    const draft = rows.find(r => r.label === 'Draft')!;
+    await t.controller.commitRename(draft, 'Story');
+    expect(t.session.path).toBe('/lib/Draft 2/b.md');
+  });
+
+  it('shows the words in a project next to its page count', async () => {
+    const t = fixture({ '/lib/Novel/01.md': '# One\n\nthree little words', '/lib/Novel/02.md': 'and four more' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/Novel');
+    expect(t.last().rows[0].meta).toBe('2 pages · 7 words');
+  });
+
+  it('finds pages in collapsed projects once they are warmed', async () => {
+    const t = fixture({ '/lib/Novel/01 Dawn.md': '# Dawn', '/lib/Essays/Fog.md': '# Fog' });
+    await t.controller.start();
+    expect(t.controller.places('fog')).toEqual([]);
+    await t.controller.warmPlaces();
+    expect(t.controller.places('fog').map(p => p.label)).toContain('Fog');
+  });
+});
+
 describe('importing', () => {
   const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   const doc = (body: string) => `<w:document ${NS}><w:body>${body}</w:body></w:document>`;
@@ -603,6 +630,14 @@ describe('importing', () => {
     expect(t.files.get('/lib/My Novel/02 The Sea.md')).toBe('# The Sea\n\nSalt.\n');
     expect(t.session.path).toBe('/lib/My Novel/01 The Road.md');
     expect(t.notes.at(-1)).toBe('Imported “My Novel”: 2 pages.');
+  });
+
+  it('says what Word held that did not come across', async () => {
+    const t = fixture();
+    t.word(doc(para('Words.') + '<w:p><w:r><w:drawing/></w:r></w:p><w:p><w:r><w:drawing/></w:r></w:p>'));
+    await t.controller.start();
+    await t.controller.importWord();
+    expect(t.notes.at(-1)).toBe('Imported “My Novel”: 1 page. 2 pictures not imported.');
   });
 
   it('does nothing when the picker is cancelled, and says why when a file cannot be read or is empty', async () => {
@@ -627,7 +662,7 @@ describe('importing', () => {
     expect(t.files.get('/lib/Notes/01 Notes.md')).toBe('# Notes\n\nJust words.\n');
     await t.controller.importFolder();
     expect(t.last().rows.map(r => r.label)).toContain('Sketches');
-    expect(t.notes.at(-1)).toBe('Imported “Sketches” as a project.');
+    expect(t.notes.at(-1)).toBe('Imported “Sketches”: 1 page. 2 files were skipped: x.md, y.md.');
   });
 
   it('stays quiet when the folder picker is cancelled', async () => {

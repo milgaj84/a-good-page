@@ -75,7 +75,7 @@ describe('sanitizePrefs', () => {
 
   it('keeps a fully valid object', () => {
     const valid = {
-      font: 'mono', size: 18, width: 'wide', rhythm: 'spacious', goal: 500, toolbar: false, outline: true, ghost: false, typewriter: true, effects: 'light',
+      font: 'mono', size: 18, width: 'wide', rhythm: 'spacious', goal: 500, toolbar: false, outline: true, ghost: false, typewriter: true, effects: 'light', spellcheck: false, lang: 'en-GB', indent: true,
     };
     expect(sanitizePrefs(valid)).toEqual(valid);
   });
@@ -89,7 +89,7 @@ describe('sanitizePrefs', () => {
 
   it('loads preferences saved before spacing existed', () => {
     const old = { font: 'sans', size: 22, width: 'narrow', goal: 0, toolbar: true, outline: false, ghost: true, typewriter: false };
-    expect(sanitizePrefs(old)).toEqual({ ...old, rhythm: 'balanced', effects: 'auto' });
+    expect(sanitizePrefs(old)).toEqual({ ...old, rhythm: 'balanced', effects: 'auto', spellcheck: true, lang: '', indent: false });
   });
 
   it('fades the bars by default and leaves the typewriter line off', () => {
@@ -138,5 +138,17 @@ describe('PreferencesStore', () => {
     const copy = prefs.prefs;
     copy.size = 27;
     expect(prefs.prefs.size).toBe(DEFAULT_PREFS.size);
+  });
+});
+
+describe('writing preferences', () => {
+  it('defaults to spell-check on, no indent, and the system language', () => {
+    expect(sanitizePrefs(null)).toMatchObject({ spellcheck: true, indent: false, lang: '' });
+  });
+  it('keeps a valid language and drops anything else', () => {
+    expect(sanitizePrefs({ lang: 'en-GB' }).lang).toBe('en-GB');
+    expect(sanitizePrefs({ lang: 'sr' }).lang).toBe('sr');
+    for (const bad of ['english', 'en_GB', '<b>', 5, null, 'x'.repeat(40)]) expect(sanitizePrefs({ lang: bad }).lang).toBe('');
+    expect(sanitizePrefs({ spellcheck: 'no', indent: 1 })).toMatchObject({ spellcheck: true, indent: false });
   });
 });

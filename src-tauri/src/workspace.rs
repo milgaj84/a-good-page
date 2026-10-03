@@ -33,13 +33,18 @@ impl DirectoryReader for DiskDirectoryReader {
     fn read_dir(&self, path: &Path) -> io::Result<Vec<PathBuf>> {
         let mut entries = Vec::new();
         for entry in fs::read_dir(path)? {
+            let path = entry?.path();
+            // Only what the listing would show counts toward the limit (a folder of images is fine).
+            if !path.is_dir() && !writing_file(&path) {
+                continue;
+            }
             if entries.len() >= MAX_FOLDER_ENTRIES {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "Folder has too many items to display.",
                 ));
             }
-            entries.push(entry?.path());
+            entries.push(path);
         }
         Ok(entries)
     }
@@ -328,6 +333,18 @@ mod tests {
                 .unwrap_err()
                 .contains("too many items")
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn files_that_are_not_writing_do_not_count_toward_the_limit() {
+        let root = temp();
+        for index in 0..=MAX_FOLDER_ENTRIES {
+            fs::write(root.join(format!("pic-{index}.png")), "a").unwrap();
+        }
+        fs::write(root.join("page.md"), "a").unwrap();
+        let listing = list_directory(&DiskDirectoryReader, root.to_str().unwrap(), None).unwrap();
+        assert_eq!(listing.entries.len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

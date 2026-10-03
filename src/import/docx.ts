@@ -1,5 +1,9 @@
 /** What Rust hands over for a Word file: the three XML parts that matter. Nothing else is read. */
-export interface DocxParts { document: string; rels: string; numbering: string }
+export interface DocxParts {
+  document: string; rels: string; numbering: string;
+  /** Optional extra parts ('' when the file has none): custom heading styles, and notes counted but not imported. */
+  styles?: string; footnotes?: string; comments?: string;
+}
 export interface ImportedPage { title: string; markdown: string }
 export interface ImportedBook {
   /** The document's Title paragraph, or its only Heading 1 when chapters are Heading 2. Null when it has none. */
@@ -7,6 +11,9 @@ export interface ImportedBook {
   pages: ImportedPage[];
   /** Pictures and drawings are not imported. */
   pictures: number;
+  /** Footnotes and comments are not imported, only counted so the writer can be told. */
+  footnotes: number;
+  comments: number;
 }
 
 // Names are matched without their prefix (w:, r:), so any producer's spelling reads the same.
@@ -49,6 +56,33 @@ function listKinds(numbering: string): (numId: string, level: number) => 'bullet
   };
 }
 
+const HEADING_NAME = /^(?:heading|chapter|naslov|poglavlje|[uü]berschrift|kapitel|titre|t[ií]tulo|titolo)\s*(\d)?$/i;
+
+/** Which heading level (1-9) a paragraph style means, following "based on" chains; 0 when it is body text. */
+function styleLevels(styles: string | undefined): (id: string) => number {
+  const defs = new Map<string, { name: string; outline: number | null; basedOn: string }>();
+  if (styles) {
+    try {
+      for (const s of all(xml(styles), 'style')) {
+        const props = first(s, 'pPr');
+        const outline = val(props && first(props, 'outlineLvl'));
+        defs.set(attr(s, 'styleId') ?? '', { name: val(first(s, 'name')) ?? '', outline: outline === null ? null : Number(outline), basedOn: val(first(s, 'basedOn')) ?? '' });
+      }
+    } catch { /* unreadable styles: fall back to the built-in names */ }
+  }
+  return id => {
+    const seen = new Set<string>();
+    for (let at: string | undefined = id; at && !seen.has(at); at = defs.get(at)?.basedOn) {
+      seen.add(at);
+      const def = defs.get(at);
+      const named = /^heading ?([1-9])$/i.exec(at) ?? HEADING_NAME.exec(def?.name ?? '');
+      if (named) return Number(named[1] ?? 1);
+      if (def?.outline != null && def.outline < 9) return def.outline + 1;
+    }
+    return 0;
+  };
+}
+
 function links(rels: string): Map<string, string> {
   const out = new Map<string, string>();
   if (!rels) return out;
@@ -70,7 +104,8 @@ function collect(node: Element, href: string | null, out: Run[], hyperlinks: Map
         const kind = local(part.nodeName);
         if (kind === 't') text += part.textContent ?? '';
         else if (kind === 'tab') text += ' ';
-        else if (kind === 'br' && !attr(part, 'type')) text += '\n';
+        else if (kind === 'noBreakHyphen') text += '-';
+        else if (kind === 'br' && (!attr(part, 'type') || attr(part, 'type') === 'textWrapping')) text += '\n';
       }
       if (text) out.push({ text, ...flags, href });
     } else if (name === 'hyperlink') {
@@ -111,10 +146,11 @@ function inline(p: Element, hyperlinks: Map<string, string>): { md: string; plai
 
 const SCENE_BREAK = /^\s*(?:[*#~_•⁂-]\s*){3,}$|^\s*[#⁂]\s*$/;
 
-function blocksOf(parts: DocxParts): { blocks: Block[]; title: string | null; pictures: number } {
+function blocksOf(parts: DocxParts): { blocks: Block[]; title: string | null; pictures: number; footnotes: number; comments: number } {
   const doc = xml(parts.document);
   const hyperlinks = links(parts.rels);
   const kindOf = listKinds(parts.numbering);
+  const levelOf = styleLevels(parts.styles);
   const blocks: Block[] = [];
   let title: string | null = null;
   for (const p of all(doc, 'p')) {
@@ -128,8 +164,7 @@ function blocksOf(parts: DocxParts): { blocks: Block[]; title: string | null; pi
     if (/^title$/i.test(style)) { title ??= plain; continue; }
     if (/^subtitle$/i.test(style)) continue;
     const outline = val(props && first(props, 'outlineLvl'));
-    const named = /^heading ?([1-9])$/i.exec(style);
-    const level = named ? Number(named[1]) : outline !== null && Number(outline) < 9 ? Number(outline) + 1 : 0;
+    const level = levelOf(style) || (outline !== null && Number(outline) < 9 ? Number(outline) + 1 : 0);
     if (level) { blocks.push({ kind: 'heading', level, text: plain }); continue; }
     if (SCENE_BREAK.test(plain)) { blocks.push({ kind: 'text', md: '---', depth: 0, quote: false }); continue; }
     const numPr = props && first(props, 'numPr');
@@ -145,7 +180,13 @@ function blocksOf(parts: DocxParts): { blocks: Block[]; title: string | null; pi
     blocks.push({ kind: 'text', md: safe, list, depth, quote });
   }
   const pictures = all(doc, 'drawing').length + all(doc, 'pict').length;
-  return { blocks, title, pictures };
+  const counted = (part: string | undefined, entry: string): number | null => {
+    try { return part ? all(xml(part), entry).filter(n => !/separator|continuation/i.test(attr(n, 'type') ?? '')).length : null; } catch { return null; }
+  };
+  // The notes part lists every note (plus two separators); without it, count where the document points at them.
+  const notes = (part: string | undefined, entry: string, mark: string): number =>
+    counted(part, entry) ?? all(doc, mark).length;
+  return { blocks, title, pictures, footnotes: notes(parts.footnotes, 'footnote', 'footnoteReference'), comments: notes(parts.comments, 'comment', 'commentReference') };
 }
 
 function render(blocks: readonly Block[], shift: number): string {
@@ -174,7 +215,7 @@ function render(blocks: readonly Block[], shift: number): string {
  * "Front matter"; a document with no chapters is one page called `fallback`.
  */
 export function importDocx(parts: DocxParts, fallback: string): ImportedBook {
-  const { blocks, title: styled, pictures } = blocksOf(parts);
+  const { blocks, title: styled, pictures, footnotes, comments } = blocksOf(parts);
   const count = (level: number): number => blocks.filter(b => b.kind === 'heading' && b.level === level).length;
   const split = count(1) <= 1 && count(2) >= 2 ? 2 : 1;
   let title = styled;
@@ -193,5 +234,5 @@ export function importDocx(parts: DocxParts, fallback: string): ImportedBook {
     if (pages.length) pages.unshift({ title: 'Front matter', markdown: '# Front matter\n\n' + body + '\n' });
     else pages.push({ title: fallback, markdown: '# ' + fallback + '\n\n' + body + '\n' });
   }
-  return { title, pages, pictures };
+  return { title, pages, pictures, footnotes, comments };
 }

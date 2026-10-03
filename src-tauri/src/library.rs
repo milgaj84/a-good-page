@@ -28,7 +28,29 @@ pub fn clean_name(raw: &str) -> String {
     if limited.is_empty() {
         "Untitled".into()
     } else {
-        limited
+        avoid_device_name(limited)
+    }
+}
+
+/// Windows cannot create files named CON, NUL, COM1... (with or without an extension); an underscore fixes it everywhere.
+fn avoid_device_name(name: String) -> String {
+    let (base, rest) = name.split_once('.').unwrap_or((&name, ""));
+    let upper = base.trim_end().to_ascii_uppercase();
+    let numbered = |p: &str| {
+        upper
+            .strip_prefix(p)
+            .is_some_and(|n| n.len() == 1 && matches!(n.as_bytes()[0], b'1'..=b'9'))
+    };
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL") || numbered("COM") || numbered("LPT")
+    {
+        let tail = if rest.is_empty() {
+            String::new()
+        } else {
+            format!(".{rest}")
+        };
+        format!("{}_{tail}", base.trim_end())
+    } else {
+        name
     }
 }
 
@@ -182,9 +204,11 @@ pub fn rename(root: &str, selected: &str, new_name: &str) -> Result<String, Stri
     if target == item {
         return to_string(&item);
     }
-    let same_ignoring_case =
-        target.to_string_lossy().to_lowercase() == item.to_string_lossy().to_lowercase();
-    if target.exists() && !same_ignoring_case {
+    // Only a case-only rename of this very item may target an existing name (case-insensitive filesystems).
+    let same_item = target.to_string_lossy().to_lowercase()
+        == item.to_string_lossy().to_lowercase()
+        && fs::canonicalize(&target).is_ok_and(|t| t == item);
+    if target.exists() && !same_item {
         return Err("Something with that name already exists here.".into());
     }
     fs::rename(&item, &target).map_err(|e| format!("Could not rename: {e}"))?;
@@ -224,6 +248,21 @@ pub fn move_into(root: &str, selected: &str, to: Option<&str>) -> Result<String,
     to_string(&target)
 }
 
+/// Creates a fresh `<bin>/<millis>` folder; a clash in the same millisecond bumps the stamp.
+fn new_stamp_dir(bin: &Path) -> Result<PathBuf, String> {
+    let fail = |e: std::io::Error| format!("Could not prepare the trash: {e}");
+    fs::create_dir_all(bin).map_err(fail)?;
+    let mut millis = now_millis();
+    loop {
+        let stamp = bin.join(millis.to_string());
+        match fs::create_dir(&stamp) {
+            Ok(()) => return Ok(stamp),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => millis += 1,
+            Err(e) => return Err(fail(e)),
+        }
+    }
+}
+
 /// Moves a page or book into `<Library>/.trash/<stamp>/`, remembering where it came from so it can be restored.
 pub fn trash(root: &str, selected: &str, position: Option<u32>) -> Result<String, String> {
     let base = canonical_root(root)?;
@@ -235,8 +274,7 @@ pub fn trash(root: &str, selected: &str, position: Option<u32>) -> Result<String
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join("/");
-    let stamp = base.join(TRASH).join(now_millis().to_string());
-    fs::create_dir_all(&stamp).map_err(|e| format!("Could not prepare the trash: {e}"))?;
+    let stamp = new_stamp_dir(&base.join(TRASH))?;
     let name = item.file_name().ok_or("Cannot move that item.")?;
     let target = stamp.join(name);
     let note = match position {
@@ -321,7 +359,7 @@ pub fn list_trash(root: &str) -> Result<Vec<TrashItem>, String> {
         });
     }
     items.sort_by_key(|a| std::cmp::Reverse(a.trashed_at));
-    items.truncate(200);
+    items.truncate(2000);
     Ok(items)
 }
 
@@ -415,6 +453,45 @@ mod tests {
         assert_eq!(clean_name(""), "Untitled");
         assert_eq!(clean_name("a\u{0}b\nc"), "a b c");
         assert_eq!(clean_name(&"x".repeat(200)).chars().count(), MAX_NAME);
+    }
+
+    #[test]
+    fn device_names_get_an_underscore() {
+        assert_eq!(clean_name("con"), "con_");
+        assert_eq!(clean_name("NUL.txt"), "NUL_.txt");
+        assert_eq!(clean_name("Com1"), "Com1_");
+        assert_eq!(clean_name("lpt9.md"), "lpt9_.md");
+        assert_eq!(clean_name("Console"), "Console");
+        assert_eq!(clean_name("COM0"), "COM0");
+        assert_eq!(clean_name("con. "), "con_");
+    }
+
+    #[test]
+    fn case_only_rename_cannot_overwrite_a_different_file() {
+        let root = temp();
+        let a = create(s(&root), None, "Draft", "file").unwrap();
+        let other = create(s(&root), None, "draft", "file").unwrap();
+        if other.ends_with("draft.md") && Path::new(&a).exists() && a != other {
+            fs::write(&other, "keep").unwrap();
+            assert!(rename(s(&root), &a, "draft").is_err());
+            assert_eq!(fs::read_to_string(&other).unwrap(), "keep");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn trashing_twice_in_one_millisecond_keeps_both() {
+        let root = temp();
+        let bin = root.join(TRASH);
+        let first = new_stamp_dir(&bin).unwrap();
+        let second = new_stamp_dir(&bin).unwrap();
+        assert_ne!(first, second);
+        let a = create(s(&root), None, "A", "file").unwrap();
+        let b = create(s(&root), None, "B", "file").unwrap();
+        trash(s(&root), &a, None).unwrap();
+        trash(s(&root), &b, None).unwrap();
+        assert_eq!(list_trash(s(&root)).unwrap().len(), 2);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

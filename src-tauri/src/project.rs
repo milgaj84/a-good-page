@@ -9,7 +9,7 @@ use std::{
     },
 };
 const NAME: &str = ".a-good-page.json";
-const LIMIT: usize = 32_768;
+const LIMIT: usize = 262_144;
 static LOCK: Mutex<()> = Mutex::new(());
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 fn target(root: &str) -> Result<PathBuf, String> {
@@ -50,7 +50,7 @@ fn validate(raw: &str) -> Result<(), String> {
         .get("chapters")
         .and_then(Value::as_array)
         .ok_or("Missing chapters in project order")?;
-    if value.get("version").and_then(Value::as_u64) != Some(1) || arr.len() > 200 {
+    if value.get("version").and_then(Value::as_u64) != Some(1) || arr.len() > 2000 {
         return Err("Unsupported project order version or chapter count.".into());
     }
     let mut seen = std::collections::HashSet::new();
@@ -114,7 +114,7 @@ pub fn write(root: &str, expected: Option<&str>, value: &str) -> Result<String, 
             file.write_all(value.as_bytes())?;
             file.sync_all()?;
             drop(file);
-            fs::hard_link(&temp, &path)
+            crate::document::publish_new(&temp, &path)
         })();
         let _ = fs::remove_file(&temp);
         result.map_err(|e| {
@@ -166,6 +166,22 @@ mod tests {
         fs::write(&outside, r#"{"version":1,"chapters":[]}"#).unwrap();
         symlink(&outside, dir.join(NAME)).unwrap();
         assert!(read(dir.to_str().unwrap()).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_thousand_chapters_fit() {
+        let names: Vec<String> = (0..1500)
+            .map(|i| format!("\"chapter-{i:04}-with-a-longer-name.md\""))
+            .collect();
+        let raw = format!(r#"{{"version":1,"chapters":[{}]}}"#, names.join(","));
+        assert!(raw.len() > 32_768 && raw.len() <= LIMIT);
+        let dir = temp();
+        let root = dir.to_str().unwrap();
+        write(root, None, &raw).unwrap();
+        assert_eq!(read(root).unwrap().as_deref(), Some(raw.as_str()));
+        let too_many: Vec<String> = (0..2001).map(|i| format!("\"c{i}.md\"")).collect();
+        let raw = format!(r#"{{"version":1,"chapters":[{}]}}"#, too_many.join(","));
+        assert!(validate(&raw).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]

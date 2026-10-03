@@ -26,7 +26,7 @@ export class SlashMenu {
     root.setAttribute('aria-hidden', 'true');
     SLASH_ACTIONS.forEach(({ label, command, description }, i) => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.index = String(i);
-      button.setAttribute('aria-label', label); button.title = description;
+      button.setAttribute('role', 'option'); button.setAttribute('aria-label', label); button.title = description;
       const title = document.createElement('strong'); title.textContent = label;
       const hint = document.createElement('small'); hint.textContent = description;
       button.append(title, hint);

@@ -94,3 +94,24 @@ describe('Debouncer', () => {
     expect(() => new Debouncer(() => undefined, Number.NaN, clock)).toThrow(RangeError);
   });
 });
+
+describe('Debouncer maxWait', () => {
+  it('still fires during continuous triggering, then starts a new window', () => {
+    const clock = new FakeScheduler();
+    let calls = 0;
+    const debouncer = new Debouncer(() => { calls += 1; }, 100, clock, { maxWait: 1000 });
+    for (let t = 0; t < 1000; t += 50) { debouncer.trigger(); clock.advance(50); }
+    expect(calls).toBe(1);
+    expect(debouncer.pending).toBe(false);
+    debouncer.trigger();
+    clock.advance(100);
+    expect(calls).toBe(2);
+    clock.advance(5000);
+    expect(calls).toBe(2);
+  });
+  it('without maxWait continuous triggering never fires', () => {
+    const { clock, debouncer, calls } = setup();
+    for (let t = 0; t < 2000; t += 50) { debouncer.trigger(); clock.advance(50); }
+    expect(calls()).toBe(0);
+  });
+});

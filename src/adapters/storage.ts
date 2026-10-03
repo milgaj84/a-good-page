@@ -49,12 +49,14 @@ export class LocalDraftStore implements DraftStore {
     return this.store.get(DRAFT_KEY);
   }
 
-  save(markdown: string): void {
+  /** Returns false when the draft could not be stored (storage full or unavailable). */
+  save(markdown: string): boolean {
     if (markdown.trim().length === 0) {
       this.store.remove(DRAFT_KEY);
-    } else {
-      this.store.set(DRAFT_KEY, markdown);
+      return true;
     }
+    this.store.set(DRAFT_KEY, markdown);
+    return this.store.get(DRAFT_KEY) === markdown;
   }
 
   clear(): void {
@@ -74,9 +76,13 @@ export class DebouncedDraftStore implements DraftStore {
     private readonly inner: DraftStore,
     private readonly scheduler: Scheduler,
     private readonly delayMs: number,
+    /** Called once when drafts start failing to save; called again only after a save has worked in between. */
+    private readonly onFail?: () => void,
   ) {
     if (!Number.isFinite(delayMs) || delayMs < 0) throw new RangeError('delayMs must be a non-negative finite number');
   }
+
+  private failing = false;
 
   get hasPending(): boolean {
     return this.pending !== null;
@@ -102,7 +108,10 @@ export class DebouncedDraftStore implements DraftStore {
     this.stopTimer();
     const read = this.pending;
     this.pending = null;
-    if (read) this.inner.save(read());
+    if (!read) return;
+    const ok = this.inner.save(read()) !== false;
+    if (!ok && !this.failing) this.onFail?.();
+    this.failing = !ok;
   }
 
   clear(): void {

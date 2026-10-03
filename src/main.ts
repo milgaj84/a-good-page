@@ -62,6 +62,7 @@ import { epubBytes } from './export/epub';
 import { markdownDocument } from './export/markdown';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
+import { friendly } from './core/friendly';
 import { describeEffects, detectSoftware, resolveEffects, type EffectMode } from './core/graphics';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
 import type { PaletteEntry } from './core/palette';
@@ -130,7 +131,7 @@ const linkBar = new LinkBar(
 const slash = new SlashMenu(el('slash-menu'), (command) => editor.run(command));
 const help = new HelpSheet(el('help'), el('help-list'), el('help-close'), IS_MAC, () => editor.restoreFocus());
 const menu = new Menu();
-const autosave = new Debouncer(() => void session?.autosave(), 1200, browserScheduler);
+const autosave = new Debouncer(() => void session?.autosave(), 1200, browserScheduler, { maxWait: 15000 });
 const stats = new Debouncer(refreshStats, 150, browserScheduler);
 const outlineTimer = new Debouncer(refreshOutline, 250, browserScheduler);
 const nameTimer = new Debouncer(() => void library?.maybeAutoRename(), 2500, browserScheduler);
@@ -238,11 +239,16 @@ function setTheme(theme: Theme): void {
   settings.render(prefs, themes.theme, library?.root ?? null);
 }
 const software = detectSoftware();
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 function applyEffects(mode: EffectMode): void {
-  root.dataset.effects = resolveEffects(mode, software);
+  root.dataset.effects = resolveEffects(mode, software, reducedMotion.matches);
   el<HTMLSelectElement>('effects-choice').value = mode;
-  el('effects-note').textContent = describeEffects(mode, software);
+  el('effects-note').textContent = describeEffects(mode, software, reducedMotion.matches);
 }
+reducedMotion.addEventListener?.('change', () => applyEffects(prefs.effects));
+el<HTMLInputElement>('indent-check').addEventListener('change', (event) => applyPrefs(prefsStore.update({ indent: (event.target as HTMLInputElement).checked })));
+el<HTMLInputElement>('spell-check').addEventListener('change', (event) => applyPrefs(prefsStore.update({ spellcheck: (event.target as HTMLInputElement).checked })));
+el<HTMLSelectElement>('lang-choice').addEventListener('change', (event) => applyPrefs(prefsStore.update({ lang: (event.target as HTMLSelectElement).value })));
 el<HTMLSelectElement>('effects-choice').addEventListener('change', (event) => applyPrefs(prefsStore.update({ effects: (event.target as HTMLSelectElement).value as EffectMode })));
 function applyPrefs(next: Preferences): void {
   const goalChanged = next.goal !== prefs.goal;
@@ -250,6 +256,13 @@ function applyPrefs(next: Preferences): void {
   applyEffects(next.effects);
   applyTypography(root, next);
   app.classList.toggle('no-toolbar', !next.toolbar);
+  app.classList.toggle('indent', next.indent);
+  const page = editor.instance.view.dom;
+  page.setAttribute('spellcheck', String(next.spellcheck));
+  if (next.lang) page.setAttribute('lang', next.lang); else page.removeAttribute('lang');
+  el<HTMLInputElement>('indent-check').checked = next.indent;
+  el<HTMLInputElement>('spell-check').checked = next.spellcheck;
+  el<HTMLSelectElement>('lang-choice').value = next.lang;
   if (next.toolbar) controlsFrame.schedule();
   ghostUI.setGhost(next.ghost);
   ghostUI.setTypewriter(next.typewriter);
@@ -265,6 +278,7 @@ const contentsButton = el('btn-contents');
 function closeContents(): boolean {
   if (!contentsPop.classList.contains('is-open')) return false;
   contentsPop.classList.remove('is-open');
+  outline.setVisible(false);
   contentsPop.setAttribute('aria-hidden', 'true');
   contentsButton.setAttribute('aria-expanded', 'false');
   return true;
@@ -273,6 +287,7 @@ function toggleContents(): void {
   if (closeContents()) return;
   if (outline.count === 0) { chrome.toast('Headings you write will gather here.'); return; }
   contentsPop.classList.add('is-open');
+  outline.setVisible(true);
   contentsPop.setAttribute('aria-hidden', 'false');
   contentsButton.setAttribute('aria-expanded', 'true');
   outline.highlight(editor.caretPos());
@@ -395,7 +410,7 @@ function render(snapshot: SessionSnapshot): void {
   else store.remove(LAST_PATH_KEY);
   sidebar.setCurrentMeta(countWords(editor.getText()).toLocaleString());
 }
-const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500);
+const drafts = new DebouncedDraftStore(new LocalDraftStore(store), browserScheduler, 500, () => chrome.toast('Your draft could not be saved on this device. Save the page to a file.', 6000));
 const namedStore = new NamedRecoveryStore(browserStorage(), () => Date.now());
 const namedWriter = new NamedRecoveryWriter(namedStore, browserScheduler, () => {
   const path = session?.snapshot().path;
@@ -409,7 +424,7 @@ session = new DocumentSession({
   files: tauriFiles,
   prompter: tauriPrompter,
   drafts,
-  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onDiscard: path => namedWriter.discard(path), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
+  events: { onChange: render, onError: (message) => chrome.toast(message, 4200), onOutside: state => outsideNotice.show(state), onResolved: message => chrome.toast(message, 4200), onKeepVersion: (path, content) => void projects?.keepVersion(path, content), onSimplified: () => chrome.toast('This file uses formatting A Good Page simplifies; the original is kept in History.', 7000), onDiscard: path => namedWriter.discard(path), onConflict: async info => protectReload(await fileConflict.ask(info), async () => {
       if (!projects) throw new Error('Recovery is not ready; the draft was not reloaded.');
       await projects.preserveBeforeReload();
     }) },
@@ -639,7 +654,7 @@ const preview = new ExportPreview({
 },
 async bytes => {
   const o = exportOpts;
-  const base = { title: exportTitle(), subtitle: o.subtitle, author: o.author, titlePage: o.titlePage, contents: o.contents };
+  const base = { title: exportTitle(), subtitle: o.subtitle, author: o.author, titlePage: o.titlePage, contents: o.contents, language: prefs.lang || o.language };
   if (previewScope.value === 'book' && bookExport) {
     const book = bookExport;
     const recheck = (): Promise<void> => book.service.verify(book.snapshot);
@@ -784,7 +799,7 @@ const APP: Record<AppAction, () => void> = {
   selectPages: () => { setSidebar(true); lib.toggleSelectMode(); },
   welcome: () => { setSidebar(true); void lib.openWelcome(); },
   exportPdf: () => void exportPdf(null),
-  palette: () => { if (sessionPanel.isOpen) sessionPanel.close(); palette.toggle(); },
+  palette: () => { if (sessionPanel.isOpen) sessionPanel.close(); palette.toggle(); if (palette.isOpen) void lib.warmPlaces().then(() => palette.refresh()); },
   session: () => { if (palette.isOpen) palette.close(); sessionPanel.toggle(); },
   find: () => finder.open(),
   replace: () => finder.open(true),
@@ -896,7 +911,7 @@ root.dataset.theme = themes.theme;
 render(doc.snapshot());
 applyPrefs(prefs);
 void (async () => {
-  try { await lib.start(); } catch (error) { chrome.toast('Could not open your Library: ' + String(error), 6000); }
+  try { await lib.start(); } catch (error) { chrome.toast('Could not open your Library. ' + friendly(error), 6000); }
   backup.start();
   renderBackup();
   const draft = drafts.load();
@@ -904,7 +919,7 @@ void (async () => {
     try {
       const rescued = await lib.rescueDraft(draft);
       if (rescued) { drafts.clear(); await lib.open(rescued); chrome.toast('Your unsaved draft is now a page in your Library.', 5000); return; }
-    } catch (error) { chrome.toast('Could not keep your draft as a page: ' + String(error), 6000); }
+    } catch (error) { chrome.toast('Could not keep your draft as a page. ' + friendly(error), 6000); }
   }
   const recovered = await restoreLastDocument(doc, lastPath, message => chrome.toast(message, 3000)).catch(() => false);
   if (recovered) {
@@ -916,5 +931,5 @@ void (async () => {
     const welcome = await lib.welcomeIfNew();
     if (welcome) await lib.open(welcome);
     else await lib.openSomething();
-  } catch (error) { chrome.toast('Could not open a page: ' + String(error), 5000); }
+  } catch (error) { chrome.toast('Could not open a page. ' + friendly(error), 5000); }
 })();

@@ -126,4 +126,13 @@ describe('library edits keep the book in order', () => {
     await t.service.moveTo('a.md',0);await t.service.renameChapter('nope.md','x.md');await t.service.dropChapter('nope.md');
     expect(t.manifestRaw).toBe(before);
   });
+  it('opens a 1200-page project and sorts "Chapter 10" after "Chapter 2"', async () => {
+    const t=fixture(); t.chapters.clear();
+    for(let i=1;i<=1200;i++)t.chapters.set('/book/Chapter '+i+'.md','# '+i);
+    await t.service.open('/book');
+    const names=t.service.chapters.map(c=>c.path);
+    expect(names).toHaveLength(1200);
+    expect(names.slice(0,3)).toEqual(['Chapter 1.md','Chapter 2.md','Chapter 3.md']);
+    expect(names.indexOf('Chapter 10.md')).toBe(9);
+  });
 });

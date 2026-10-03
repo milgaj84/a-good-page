@@ -6,6 +6,58 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-04
+
+A wide polish release: found by reading every feature for weak spots, then fixing the ones that could cost a writer words, time or sleep.
+
+### Fixed: your words
+
+- **History keeps the state from before a mistake.** It used to keep only the latest version of each 10-minute slot, so a bad paste or deletion replaced its own undo point within seconds. It now keeps the first and the latest of each slot, and the size cap never drops the newest five versions or the first of today.
+- **Files that use formatting A Good Page simplifies** (tables, images, raw HTML, footnotes, front matter) now say so once when opened, and the original is kept in History before anything is saved over it.
+- **`.txt` pages stay plain text.** Typing `# `, `---`, `1. ` or `*x*`, curly quotes and Markdown paste no longer reshape a plain-text file.
+- **A page that changed on disk while you had no unsaved words reloads quietly** (sync tools, another computer), with a note and the old version kept in History. Pages with unsaved words still ask.
+- **Autosave saves at least every 15 seconds** during continuous typing or dictation, and repeated failures are reported on the 1st, 5th, 25th time instead of at every pause. A draft that cannot be stored says so.
+- **Renaming a page by case only** (`Draft` to `draft`) can no longer overwrite another page on case-sensitive filesystems.
+- **Two items trashed in the same instant** no longer overwrite each other's trash folder; the trash list shows 2000 items, not 200.
+- **Renaming or trashing the project `Draft`** no longer confuses it with an open page of the project `Draft 2`.
+
+### Fixed: Library
+
+- Projects with more than 200 pages open (limit now 2000). A folder with thousands of images no longer fails to list.
+- New and imported pages sort naturally ("Chapter 2" before "Chapter 10").
+- On exFAT/FAT drives and some network shares, creating a new file or a project order no longer fails.
+- Pages named like Windows devices (`con`, `NUL`, `COM1`) can be created.
+- A folder import cleans up after itself when nothing could be imported, lists skipped files, and converts Windows-1252 text. Windows paths with a different drive-letter case match.
+- The first-run guide counts as shown only once it really exists. Moving several pages reports how many actually moved.
+
+### Fixed: export and import
+
+- PDF: underlined text is underlined (it was struck through); nested lists stay nested; quotes keep their paragraphs; inline code and code blocks are set apart.
+- Word: no blank page before chapter 1 after a title page or contents.
+- A real first `##` section heading is no longer dropped from project exports.
+- Word import keeps non-breaking hyphens ("well-known"), reads custom heading styles ("Chapter", "Naslov 1", "Überschrift 1"), and says how many footnotes and comments were not imported, next to the pictures count.
+- Saving a Word or e-book export checks the file's contents, and the error names the format.
+
+### Added
+
+- **Settings → Writing:** indent paragraphs like a book, spell-check on or off, and the language of your writing (also used for Word and e-book exports, which were English only).
+- **E-books** now have a legacy contents file for older readers, a landmarks list, accessibility information, a publication date, checkbox symbols for task lists, and book-style paragraph indents and hyphenation.
+- **Find** highlights every match softly and the current one strongly, matches typeset quotes and dashes when you type plain ones (`'` finds ’), and stays fast on 100,000-word pages.
+- **Palette (Ctrl+P)** finds pages in collapsed projects. Projects show their word total. Search results show the text around the match.
+
+### Improved: accessibility and comfort
+
+- Muted text on the Paper, Sepia and Sage themes now meets WCAG AA contrast.
+- Contents sections stay collapsed when you edit above them, can be collapsed from the keyboard, and are no longer hidden from screen readers. The word count no longer chatters through a screen reader while you type.
+- The command box and slash menu use correct list roles; Settings returns focus to its button; high-contrast mode keeps borders and focus rings.
+- Automatic visual effects follow your system's "reduce motion". Short windows hide the formatting bar to give the page room.
+- Error messages drop `Error:` prefixes and operating-system codes and suggest what to do.
+- The Time Machine slider stays responsive on long pages; sentence focus ends sentences at closing quotes and brackets; the PDF preview re-uses already-parsed chapters when you change layout.
+
+### Internal
+
+- `mobile_entry_point` is back on the right function.
+
 ## [0.8.1] - 2026-10-04
 
 Bring a book in, send a book out.

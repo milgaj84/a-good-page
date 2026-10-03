@@ -93,7 +93,7 @@
 
         <footer class="bottombar" id="bottombar">
           <div class="goal" id="goal" aria-hidden="true"><div class="goal-fill" id="goal-fill"></div></div>
-          <div class="stats" id="stats" aria-live="polite">0 words</div>
+          <div class="stats" id="stats" aria-live="off">0 words</div>
           <button type="button" class="zen-badge" id="zen-badge" hidden title="Zen draft is on. Click to allow editing again">Zen draft</button>
           <div class="bottom-actions">
             <button type="button" class="btn" id="btn-focus" title="Focus modes" aria-haspopup="dialog" aria-expanded="false">Focus</button>
@@ -133,9 +133,9 @@
       <button type="button" data-toggle="zen" aria-pressed="false">Zen draft <small>Pause Backspace and Delete to keep drafting</small></button>
     </div>
     <button type="button" class="fullscreen-exit" id="fullscreen-exit" hidden aria-label="Leave full screen">Leave full screen · Esc</button>
-    <div class="slash-menu" id="slash-menu" role="menu" aria-label="Insert a writing block"></div>
+    <div class="slash-menu" id="slash-menu" role="listbox" aria-label="Insert a writing block"></div>
 
-    <aside class="drawer" id="settings" role="dialog" aria-label="Settings" aria-hidden="true">
+    <aside class="drawer" id="settings" role="dialog" aria-modal="false" aria-label="Settings" aria-hidden="true">
       <header class="drawer-head"><h2>Settings</h2><button type="button" class="icon-btn" id="settings-close" aria-label="Close settings">✕</button></header>
       <section class="drawer-section">
         <h3>Theme</h3>
@@ -167,6 +167,15 @@
         <label class="check"><input type="checkbox" id="ghost-check" /> Fade the bars while I type</label>
         <label class="check"><input type="checkbox" id="typewriter-check" /> Keep my typing line mid-screen</label>
         <label class="check"><input type="checkbox" id="zen-check" /> Zen draft: pause Backspace and Delete</label>
+      </section>
+      <section class="drawer-section">
+        <h3>Writing</h3>
+        <label class="check"><input type="checkbox" id="indent-check" /> Indent paragraphs like a book</label>
+        <label class="check"><input type="checkbox" id="spell-check" /> Underline misspelled words</label>
+        <div class="field">
+          <label class="field-label" for="lang-choice">Language of my writing</label>
+          <select class="text-input" id="lang-choice"><option value="">Same as my computer</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option><option value="nl">Nederlands</option><option value="pl">Polski</option><option value="sv">Svenska</option><option value="hr">Hrvatski</option><option value="sr">Srpski</option><option value="sl">Slovenščina</option></select>
+        </div>
       </section>
       <section class="drawer-section">
         <h3>Goal</h3>
@@ -260,7 +269,7 @@
     <div class="overlay command-overlay" id="command-palette" aria-hidden="true">
       <div class="command-sheet" role="dialog" aria-modal="true" aria-label="Go to a page or run a command">
         <label class="sr-only" for="command-input">Go to a page or run a command</label>
-        <input id="command-input" type="search" placeholder="Go to a page, or type a command…" autocomplete="off" spellcheck="false" role="combobox" aria-controls="command-results" aria-expanded="true" />
+        <input id="command-input" type="search" placeholder="Go to a page, or type a command…" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="command-results" aria-expanded="false" />
         <div id="command-results" role="listbox" aria-label="Pages and commands"></div>
         <p id="command-empty" class="command-empty" hidden>Nothing matches. Try “new”, “focus” or “export”.</p>
         <div class="command-hint">↑ ↓ to choose · Enter to go · Esc to close</div>

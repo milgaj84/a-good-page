@@ -45,19 +45,31 @@ function slot(at: number, now: number): string | null {
 
 /**
  * Thins the history: ten-minute steps for the last hour, hourly for a day, daily for two weeks.
- * The latest version in each step survives; the newest version always survives the time window.
+ * The first AND latest version in each step survive, so the state from before a mistake is not replaced by the mistake.
+ * The newest version always survives the time window. Over the size cap the oldest go first, but never the newest five
+ * or the first version of today.
  */
 export function pruneSnapshots(list: readonly Snapshot[], now: number, limits: RetentionLimits = {}): Snapshot[] {
   const sorted = [...list].sort((a, b) => a.at - b.at);
-  const bySlot = new Map<string, Snapshot>();
+  const groups = new Map<string, Snapshot[]>();
   sorted.forEach((snap, index) => {
     const key = slot(snap.at, now) ?? (index === sorted.length - 1 ? 'newest' : null);
-    if (key) bySlot.set(key, snap);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), snap]);
   });
-  const kept = [...bySlot.values()].sort((a, b) => a.at - b.at);
+  const keep = new Set<Snapshot>();
+  for (const group of groups.values()) { keep.add(group[0]); keep.add(group[group.length - 1]); }
+  const kept = sorted.filter((s) => keep.has(s));
+  const midnight = new Date(now).setHours(0, 0, 0, 0);
+  const protectedSet = new Set<Snapshot>(kept.slice(-5));
+  const firstToday = kept.find((s) => s.at >= midnight);
+  if (firstToday) protectedSet.add(firstToday);
   const maxChars = limits.maxChars ?? DEFAULT_MAX_CHARS;
   let total = kept.reduce((sum, s) => sum + s.content.length, 0);
-  while (kept.length > 0 && total > maxChars) total -= kept.shift()!.content.length;
+  for (let i = 0; i < kept.length && total > maxChars; ) {
+    if (protectedSet.has(kept[i])) { i++; continue; }
+    total -= kept[i].content.length;
+    kept.splice(i, 1);
+  }
   return kept;
 }
 

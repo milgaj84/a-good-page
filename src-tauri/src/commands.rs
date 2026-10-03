@@ -364,7 +364,7 @@ pub async fn import_folder(
     app: tauri::AppHandle,
     root: String,
     access: State<'_, Access>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<crate::import::FolderImport>, String> {
     let root = text(&access.library_root(&root)?);
     let Some(picked) = app.dialog().file().blocking_pick_folder() else {
         return Ok(None);

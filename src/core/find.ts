@@ -2,26 +2,38 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 export interface Match { from: number; to: number }
 export interface FindOptions { matchCase?: boolean; wholeWord?: boolean }
 const WORD = /[\p{L}\p{N}_]/u;
+/** Straight quotes and hyphens in the query also find their typeset forms. */
+const LOOSE: Record<string, string> = { "'": '[\'\u2018\u2019]', '"': '["\u201C\u201D]', '-': '[\\-\u2013\u2014]' };
+function queryPattern(query: string): string {
+  return [...query].map(ch => LOOSE[ch] ?? ch.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')).join('');
+}
 /** Search each text block; positions remain correct across differently styled text runs. */
 export function findMatches(doc: PMNode, query: string, options: FindOptions = {}): Match[] {
   if (!query) return [];
-  const escaped = query.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const matcher = new RegExp(escaped, options.matchCase ? 'gu' : 'giu');
+  const matcher = new RegExp(queryPattern(query), options.matchCase ? 'gu' : 'giu');
   const matches: Match[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
-    let text = ''; const positions: number[] = [];
+    let text = '';
+    // One entry per text run, not per character: the map from text offset to document position is built lazily.
+    const runs: { start: number; pos: number; length: number }[] = [];
     node.descendants((child, offset) => {
       if (!child.isText || !child.text) return;
-      for (let i = 0; i < child.text.length; i++) { text += child.text[i]; positions.push(pos + 1 + offset + i); }
+      runs.push({ start: text.length, pos: pos + 1 + offset, length: child.text.length });
+      text += child.text;
     });
+    const at = (index: number): number => {
+      let lo = 0, hi = runs.length - 1;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (runs[mid].start <= index) lo = mid; else hi = mid - 1; }
+      return runs[lo].pos + index - runs[lo].start;
+    };
     for (const found of text.matchAll(matcher)) {
-      const at = found.index;
-      const end = at + found[0].length;
-      if (options.wholeWord && ((at > 0 && WORD.test(text[at - 1])) || (end < text.length && WORD.test(text[end])))) continue;
-      const first = positions[at], last = positions[end - 1];
-      if (first !== undefined && last !== undefined && last - first === found[0].length - 1)
-        matches.push({ from: first, to: last + 1 });
+      const start = found.index;
+      const end = start + found[0].length;
+      if (!found[0].length) continue;
+      if (options.wholeWord && ((start > 0 && WORD.test(text[start - 1])) || (end < text.length && WORD.test(text[end])))) continue;
+      const first = at(start), last = at(end - 1);
+      if (last - first === found[0].length - 1) matches.push({ from: first, to: last + 1 });
     }
     return false;
   });

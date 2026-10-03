@@ -35,15 +35,16 @@ export function detectSoftware(doc: Document = document): boolean {
 }
 
 /** The effects actually used: your choice, or (on Automatic) light when the computer draws in software. */
-export function resolveEffects(mode: EffectMode, software: boolean): Effects {
+export function resolveEffects(mode: EffectMode, software: boolean, reducedMotion = false): Effects {
   if (mode === 'full') return 'full';
   if (mode === 'light') return 'light';
-  return software ? 'light' : 'full';
+  return software || reducedMotion ? 'light' : 'full';
 }
 
-export function describeEffects(mode: EffectMode, software: boolean): string {
-  const used = resolveEffects(mode, software);
+export function describeEffects(mode: EffectMode, software: boolean, reducedMotion = false): string {
+  const used = resolveEffects(mode, software, reducedMotion);
   if (mode !== 'auto') return used === 'light' ? 'Fades, shadows and animations are off.' : 'Fades, shadows and animations are on.';
+  if (reducedMotion && !software) return 'Light is being used because your system asks for less motion.';
   return software
     ? 'Light is being used because this computer draws the window in software, where effects slow typing and scrolling.'
     : 'Full effects are being used because this computer has graphics acceleration.';

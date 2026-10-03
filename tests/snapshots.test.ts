@@ -39,22 +39,36 @@ describe('retention', () => {
   const snap = (time: number, content = 'x' + time): Snapshot => ({ at: time, content, words: 1 });
   it('keeps ten-minute steps for the last hour, hourly for a day and daily for two weeks', () => {
     const times = [
-      now - 1 * 60_000, now - 4 * 60_000, // same ten-minute slot: keep the later one
+      now - 1 * 60_000, now - 4 * 60_000, // same ten-minute slot: keep first and last
       now - 25 * 60_000,
       now - 2 * HOUR - 5 * 60_000, now - 2 * HOUR - 40 * 60_000, // same hour
       now - 3 * DAY, now - 3 * DAY - 2 * HOUR, // same day
       now - 20 * DAY, // too old
     ];
     const kept = pruneSnapshots(times.map((t) => snap(t)), now).map((s) => s.at);
-    expect(kept).toEqual([now - 3 * DAY, now - 2 * HOUR - 5 * 60_000, now - 25 * 60_000, now - 1 * 60_000]);
+    expect(kept).toEqual([now - 3 * DAY - 2 * HOUR, now - 3 * DAY, now - 2 * HOUR - 40 * 60_000, now - 2 * HOUR - 5 * 60_000,
+      now - 25 * 60_000, now - 4 * 60_000, now - 1 * 60_000]);
   });
   it('always keeps the newest version, even if it is older than the window', () => {
     expect(pruneSnapshots([snap(now - 30 * DAY)], now)).toHaveLength(1);
   });
-  it('drops the oldest versions to fit the character budget', () => {
-    const list = [snap(now - 3 * HOUR, 'aaaa'), snap(now - 2 * HOUR, 'bbbb'), snap(now - HOUR, 'cccc')];
-    expect(pruneSnapshots(list, now, { maxChars: 9 }).map((s) => s.content)).toEqual(['bbbb', 'cccc']);
-    expect(pruneSnapshots(list, now, { maxChars: 2 })).toEqual([]);
+  it('drops the oldest versions to fit the character budget, but never the newest five', () => {
+    const list = Array.from({ length: 8 }, (_, i) => snap(now - (9 - i) * HOUR, String(i).repeat(4)));
+    const kept = pruneSnapshots(list, now, { maxChars: 20 }).map((s) => s.content);
+    expect(kept).toEqual(['0000', '3333', '4444', '5555', '6666', '7777']); // 0000 is the first of today
+    expect(pruneSnapshots(list, now, { maxChars: 2 })).toHaveLength(6);
+  });
+  it('never evicts the first version of today', () => {
+    const early = snap(at(2026, 9, 27, 0, 5), 'morning');
+    const list = [snap(now - 5 * DAY, 'old'), early, ...Array.from({ length: 6 }, (_, i) => snap(now - (6 - i) * 10 * 60_000, 'late' + i))];
+    const kept = pruneSnapshots(list, now, { maxChars: 1 }).map((s) => s.content);
+    expect(kept).toContain('morning');
+    expect(kept).not.toContain('old');
+  });
+  it('keeps the state from before a mistake: first and latest of a slot', () => {
+    const t = at(2026, 9, 27, 19, 51);
+    const list = [snap(t, 'the good chapter'), snap(t + 20_000, 'good chapter, half deleted'), snap(t + 40_000, '')];
+    expect(pruneSnapshots(list, now).map((s) => s.content)).toEqual(['the good chapter', '']);
   });
 });
 
@@ -76,12 +90,14 @@ describe('SnapshotStore', () => {
     expect(list.map((s) => s.words)).toEqual([2, 3]);
     expect(await store.list('doc:b')).toEqual([]);
   });
-  it('replaces a version in the same ten-minute slot', async () => {
+  it('keeps the first and latest version of a ten-minute slot', async () => {
     const { store, tick } = setup();
     await store.capture('doc:a', 'first');
     tick(60_000);
     await store.capture('doc:a', 'second');
-    expect((await store.list('doc:a')).map((s) => s.content)).toEqual(['second']);
+    tick(60_000);
+    await store.capture('doc:a', 'third');
+    expect((await store.list('doc:a')).map((s) => s.content)).toEqual(['first', 'third']);
   });
   it('recovers from damaged stored data', async () => {
     const { store, backend } = setup();

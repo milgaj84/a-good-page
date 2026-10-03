@@ -8,6 +8,7 @@ import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { EditorState } from '@tiptap/pm/state';
+import { Fragment, Slice } from '@tiptap/pm/model';
 import { Markdown } from 'tiptap-markdown';
 import type { EditorPort } from '../core/session';
 import type { EditorCommand, TextStyle } from '../core/commands';
@@ -142,6 +143,8 @@ function extensions(bubble: HTMLElement, sentenceEnabled: () => boolean, zen: Ze
 
 export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
   let sentenceEnabled = false;
+  // A .txt page is literal text: no Markdown input rules, curly quotes or Markdown paste. Set by whichever load or replace runs last.
+  let plainMode = false;
   const editor = new Editor({
     element: opts.element,
     autofocus: false,
@@ -149,9 +152,17 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
     editorProps: {
       handleKeyDown: (_view, event) => opts.onSlashKey(event),
       // Pasted text gets the same dashes, ellipses and curly quotes as typed text; code stays literal.
-      transformPastedText: (text, inCode) => (inCode ? text : polishMarkdownSource(text)),
-      transformPasted: (slice, view) => (view.state.selection.$from.parent.type.spec.code ? slice : polishSlice(slice)),
+      transformPastedText: (text, inCode) => (inCode || plainMode ? text : polishMarkdownSource(text)),
+      transformPasted: (slice, view) => (plainMode || view.state.selection.$from.parent.type.spec.code ? slice : polishSlice(slice)),
+      clipboardTextParser: (text, _context, _plain, view) => {
+        if (!plainMode) return undefined as never; // fall through to the Markdown parser
+        const { paragraph } = view.state.schema.nodes;
+        const lines = text.replace(/\r\n?/g, '\n').split('\n');
+        return new Slice(Fragment.from(lines.map((line) => paragraph.create(null, line ? view.state.schema.text(line) : undefined))), 1, 1);
+      },
       handleTextInput: (view, from, to, text) => {
+        // Returning true here stops every later input rule (Markdown shortcuts, Typography) from rewriting what was typed.
+        if (plainMode) { view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView()); return true; }
         const $from = view.state.doc.resolve(from);
         if (!$from.parent.isTextblock || !shouldOpenSlash(text, from, to, $from.parent.type.name, $from.parent.textContent.length)) return false;
         const rect = view.coordsAtPos(from);
@@ -185,13 +196,16 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
     getPlainText: () => toPlainText(editor.getJSON()),
     getJSON: () => editor.getJSON(),
     setPlainText: (text: string) => {
+      plainMode = true;
       editor.commands.setContent(plainDoc(text), false);
       resetHistory();
     },
     replaceContent: (content: string, plain: boolean) => {
+      plainMode = plain;
       editor.chain().focus().setContent(plain ? plainDoc(content) : content, true).run();
     },
     replaceQuietly: (content: string, plain: boolean) => {
+      plainMode = plain;
       editor.commands.setContent(plain ? plainDoc(content) : content, true);
     },
     polishTypography: () => {
@@ -201,6 +215,7 @@ export function createWriterEditor(opts: WriterEditorOptions): WriterEditor {
       return changed;
     },
     setMarkdown: (markdown: string) => {
+      plainMode = false;
       editor.commands.setContent(markdown, false);
       resetHistory();
     },

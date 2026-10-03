@@ -32,7 +32,7 @@ export class ProjectService {
     let visited = 0;
     while (queue.length) {
       const next = queue.shift()!;
-      if (++visited > 200 || next.depth > 4) throw Error('Workspace scan limit reached; project order was not loaded.');
+      if (++visited > 2000 || next.depth > 4) throw Error('Workspace scan limit reached; project order was not loaded.');
       const listing = next.listing ?? await this.io.list(base, next.folder);
       for (const item of listing.entries) {
         const rel = next.rel ? next.rel + '/' + item.name : item.name;
@@ -40,7 +40,7 @@ export class ProjectService {
         else if (safeChapter(rel)) paths.push(rel);
       }
     }
-    paths.sort((a,b) => a.localeCompare(b));
+    paths.sort((a,b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0));
     const raw = await this.io.order(base);
     const order = orderFiles(paths, raw === null ? null : manifest(JSON.parse(raw)));
     const found = new Map<string, ProjectEntry>();

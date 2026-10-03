@@ -1,6 +1,23 @@
 import { DialogFocus } from './dialog-focus';
 import { findMatches, nextMatch, matchAtOrAfter, type Match } from '../core/find';
 import type { Editor } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Debouncer, browserScheduler } from '../core/debounce';
+
+const HIGHLIGHTS = new PluginKey<DecorationSet>('goodPageFindHighlights');
+/** Softly marks every match and the current one more strongly; works while focus sits in the query box. */
+const highlightPlugin = () => new Plugin<DecorationSet>({
+  key: HIGHLIGHTS,
+  state: {
+    init: () => DecorationSet.empty,
+    apply(tr, set) {
+      const next = tr.getMeta(HIGHLIGHTS) as DecorationSet | undefined;
+      return next ?? (tr.docChanged ? set.map(tr.mapping, tr.doc) : set);
+    },
+  },
+  props: { decorations: (state) => HIGHLIGHTS.getState(state) },
+});
 
 export interface FindElements {
   root: HTMLElement; query: HTMLInputElement; replacement: HTMLInputElement; count: HTMLElement;
@@ -12,19 +29,21 @@ export class FindPanel {
   private matches: Match[] = [];
   private index = -1;
   private replacing = false;
+  private readonly typing = new Debouncer(() => this.refresh(), 120, browserScheduler);
   private readonly focus: DialogFocus;
   constructor(private readonly els: FindElements, private readonly editor: Editor) {
     this.focus = new DialogFocus(els.root);
     els.root.tabIndex = -1;
     els.root.setAttribute('aria-hidden', 'true');
-    els.query.addEventListener('input', () => this.refresh());
+    editor.registerPlugin(highlightPlugin());
+    els.query.addEventListener('input', () => this.typing.trigger());
     els.matchCase.addEventListener('change', () => this.refresh());
     els.wholeWord.addEventListener('change', () => this.refresh());
     els.replacement.addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); this.replaceOne(); this.els.replacement.focus(); }
     });
     els.query.addEventListener('keydown', event => {
-      if (event.key === 'Enter') { event.preventDefault(); this.move(event.shiftKey ? -1 : 1); }
+      if (event.key === 'Enter') { event.preventDefault(); this.typing.flush(); this.move(event.shiftKey ? -1 : 1); }
     });
     els.previous.addEventListener('click', () => this.move(-1));
     els.next.addEventListener('click', () => this.move(1));
@@ -51,6 +70,8 @@ export class FindPanel {
   }
   hide(): void {
     if (!this.isOpen) return;
+    this.typing.cancel();
+    this.paint(true);
     this.els.root.classList.remove('is-open'); this.els.root.setAttribute('aria-hidden', 'true');
     this.focus.close();
   }
@@ -58,12 +79,21 @@ export class FindPanel {
     return findMatches(this.editor.state.doc, this.els.query.value,
       { matchCase: this.els.matchCase.checked, wholeWord: this.els.wholeWord.checked });
   }
+  /** Draws the highlights for the current matches; `clear` removes them. */
+  private paint(clear = false): void {
+    const doc = this.editor.state.doc;
+    const marks = clear ? [] : this.matches.map((m, i) =>
+      Decoration.inline(m.from, m.to, { class: i === this.index ? 'find-hit find-current' : 'find-hit' }));
+    this.editor.view.dispatch(this.editor.state.tr.setMeta(HIGHLIGHTS, DecorationSet.create(doc, marks)).setMeta('addToHistory', false));
+  }
   private refresh(jump = true): void {
+    this.typing.cancel();
     this.matches = this.find();
     const cursor = this.editor.state.selection.from;
     this.index = matchAtOrAfter(this.matches, cursor);
     this.updateCount();
     if (jump && this.matches.length) this.reveal();
+    this.paint();
   }
   private updateCount(): void {
     this.els.count.textContent = !this.els.query.value ? 'Type to find' : this.matches.length ? (this.index + 1) + ' of ' + this.matches.length + ' matches' : 'No matches';
@@ -74,6 +104,7 @@ export class FindPanel {
     this.index = nextMatch(this.matches, this.matches[this.index]?.from ?? this.editor.state.selection.from, direction);
     this.els.count.textContent = (this.index + 1) + ' of ' + this.matches.length + ' matches';
     this.reveal();
+    this.paint();
   }
   private reveal(): void {
     const match = this.matches[this.index]; if (!match) return;
@@ -91,6 +122,7 @@ export class FindPanel {
     this.index = matchAtOrAfter(this.matches, match.from + replacement.length);
     this.updateCount();
     if (this.index >= 0) this.reveal();
+    this.paint();
   }
   private replaceAll(): void {
     if (!this.matches.length) return;

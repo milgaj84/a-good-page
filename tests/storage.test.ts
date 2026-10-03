@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAFT_KEY, LocalDraftStore, SafeStore, type StorageLike } from '../src/adapters/storage';
+import { DRAFT_KEY, DebouncedDraftStore, LocalDraftStore, SafeStore, type StorageLike } from '../src/adapters/storage';
 
 class MapStorage implements StorageLike {
   data = new Map<string, string>();
@@ -54,5 +54,29 @@ describe('LocalDraftStore', () => {
     drafts.save('words');
     drafts.save('   \n ');
     expect(backend.getItem(DRAFT_KEY)).toBeNull();
+  });
+});
+
+describe('draft save failures', () => {
+  const full: StorageLike = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => {} };
+  it('reports a draft that could not be stored', () => {
+    expect(new LocalDraftStore(new SafeStore(full)).save('words')).toBe(false);
+    expect(new LocalDraftStore(new SafeStore(new MapStorage())).save('words')).toBe(true);
+  });
+  it('tells the caller once, not at every pause, until a save works again', () => {
+    let tasks: Array<() => void> = [];
+    const scheduler = { set: (fn: () => void) => { tasks.push(fn); return tasks.length; }, clear: () => {} };
+    const backend = new MapStorage();
+    let broken = true;
+    const flaky: StorageLike = { getItem: (k) => backend.getItem(k), removeItem: (k) => backend.removeItem(k),
+      setItem: (k, v) => { if (broken) throw new Error('quota'); backend.setItem(k, v); } };
+    let fails = 0;
+    const drafts = new DebouncedDraftStore(new LocalDraftStore(new SafeStore(flaky)), scheduler, 10, () => { fails++; });
+    for (const text of ['a', 'ab', 'abc']) { drafts.save(text); drafts.flush(); }
+    expect(fails).toBe(1);
+    broken = false; drafts.save('abcd'); drafts.flush();
+    broken = true; drafts.save('abcde'); drafts.flush();
+    expect(fails).toBe(2);
+    tasks = [];
   });
 });

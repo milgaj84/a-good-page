@@ -8,6 +8,8 @@ import type { SearchFile } from '../core/project-replace';
 import { nameFromPath } from '../core/paths';
 import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
 import { importDocx, type DocxParts } from '../import/docx';
+import { mapLimit } from '../core/concurrency';
+import { friendly } from '../core/friendly';
 import type { Menu, MenuItem } from '../ui/menu';
 import type { TrashItem } from '../adapters/tauri';
 import type { SearchHit, Sidebar, SidebarRow } from '../ui/sidebar';
@@ -46,7 +48,7 @@ export interface LibraryDeps {
     restore(root: string, path: string): Promise<string>;
     pickWord(): Promise<string | null>;
     readWord(path: string): Promise<DocxParts>;
-    importFolder(root: string): Promise<string | null>;
+    importFolder(root: string): Promise<{ project: string; pages: number; skipped: string[]; converted: string[] } | null>;
   };
   /** A toast with one button, used to undo moving something to the trash. */
   offerUndo(message: string, label: string, run: () => void): void;
@@ -71,7 +73,21 @@ export interface LibraryDeps {
   rendered?(): void;
 }
 
-const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const message = friendly;
+
+/** What Word held that comes across as nothing: said plainly so no one wonders where it went. */
+function skippedNote(book: { pictures: number; footnotes?: number; comments?: number }): string {
+  const plural = (n: number, word: string): string => n + ' ' + word + (n === 1 ? '' : 's');
+  const parts = [book.pictures && plural(book.pictures, 'picture'), book.footnotes && plural(book.footnotes, 'footnote'), book.comments && plural(book.comments, 'comment')].filter(Boolean);
+  return parts.length ? ' ' + parts.join(', ') + ' not imported.' : '';
+}
+
+/** "12 pages · 31,400 words" under a project's name. */
+function projectMeta(chapters: ReadonlyArray<{ file: { words: number } | null }>): string {
+  const pages = chapters.length + (chapters.length === 1 ? ' page' : ' pages');
+  const words = chapters.reduce((sum, c) => sum + (c.file?.words ?? 0), 0);
+  return words ? pages + ' · ' + words.toLocaleString() + ' words' : pages;
+}
 const stem = (path: string): string => nameFromPath(path);
 
 /** Owns the Library: what is on disk, what the sidebar shows, and every create / rename / move / delete. */
@@ -125,10 +141,11 @@ export class LibraryController {
   /** First launch only: a short, real page that teaches by being read. Returns its path if it was created. */
   async welcomeIfNew(): Promise<string | null> {
     if (!this.root || this.d.store.get(WELCOMED_KEY) || this.rows.length) return null;
-    this.d.store.set(WELCOMED_KEY, '1');
     const project = await this.d.io.create(this.root, null, 'Getting started', 'folder');
     const path = await this.d.io.create(this.root, project, WELCOME_TITLE, 'file');
     await this.d.io.write(path, WELCOME_TEXT);
+    // Only once the guide really exists is it counted as shown, so a failure tries again next launch.
+    this.d.store.set(WELCOMED_KEY, '1');
     this.expanded.add(project);
     await this.refresh();
     return path;
@@ -281,7 +298,7 @@ export class LibraryController {
         selected: row.kind === 'loose' ? this.selected.has(row.path) : projectPages.length > 0 && picked === projectPages.length,
         partial: row.kind === 'project' && picked > 0 && picked < projectPages.length,
         path: row.path, kind: row.kind, label: row.name, current: row.kind === 'loose' && row.path === current,
-        expanded: opened, meta: row.kind === 'project' && service ? service.chapters.length + (service.chapters.length === 1 ? ' page' : ' pages') : undefined,
+        expanded: opened, meta: row.kind === 'project' && service ? projectMeta(service.chapters) : undefined,
       });
       if (!opened) continue;
       chapters.forEach((entry, index) => {
@@ -405,7 +422,7 @@ export class LibraryController {
       await this.refresh();
       if (firstPage) await this.open(firstPage);
       const count = book.pages.length;
-      this.d.notify('Imported “' + name + '”: ' + count + (count === 1 ? ' page.' : ' pages.') + (book.pictures ? ' Pictures are not imported.' : ''));
+      this.d.notify('Imported “' + name + '”: ' + count + (count === 1 ? ' page.' : ' pages.') + skippedNote(book));
     } catch (error) { this.d.notify('Could not import that document: ' + message(error)); }
   }
 
@@ -414,11 +431,14 @@ export class LibraryController {
     if (!this.root) return;
     try {
       this.d.flushAutosave();
-      const project = await this.d.io.importFolder(this.root);
-      if (!project) return;
-      this.expanded.add(project);
+      const done = await this.d.io.importFolder(this.root);
+      if (!done) return;
+      this.expanded.add(done.project);
       await this.refresh();
-      this.d.notify('Imported “' + stem(project) + '” as a project.');
+      const list = (names: string[]): string => names.slice(0, 3).join(', ') + (names.length > 3 ? ', and ' + (names.length - 3) + ' more' : '');
+      this.d.notify('Imported “' + stem(done.project) + '”: ' + done.pages + (done.pages === 1 ? ' page.' : ' pages.') +
+        (done.converted.length ? ' Converted from an older text format: ' + list(done.converted) + '.' : '') +
+        (done.skipped.length ? ' ' + done.skipped.length + (done.skipped.length === 1 ? ' file was' : ' files were') + ' skipped: ' + list(done.skipped) + '.' : ''));
     } catch (error) { this.d.notify('Could not import that folder: ' + message(error)); }
   }
 
@@ -464,7 +484,7 @@ export class LibraryController {
     this.renamingBusy = true;
     try {
       const current = this.d.doc.snapshot().path;
-      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && current.startsWith(path))));
+      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && relativeTo(path, current) !== null)));
       if (touchesCurrent) {
         this.d.flushAutosave();
         if (this.d.doc.isDirty && !(await this.d.doc.save())) { this.d.notify('Save failed, so the rename was not done.'); return false; }
@@ -509,14 +529,14 @@ export class LibraryController {
 
   // ---------- moving between projects ----------
   /** Moves a page into a project (or out to the Library when `dest` is null). Never overwrites; Rust numbers a clash. */
-  async moveTo(path: string, kind: SidebarRow['kind'], dest: string | null, label: string, index?: number, quiet = false): Promise<void> {
-    if (!this.root || kind === 'project') return;
+  async moveTo(path: string, kind: SidebarRow['kind'], dest: string | null, label: string, index?: number, quiet = false): Promise<boolean> {
+    if (!this.root || kind === 'project') return false;
     try {
       const current = this.d.doc.snapshot().path;
       const touchesCurrent = current === path;
       if (touchesCurrent) {
         this.d.flushAutosave();
-        if (this.d.doc.isDirty && !(await this.d.doc.save())) { this.d.notify('Save failed, so the page was not moved.'); return; }
+        if (this.d.doc.isDirty && !(await this.d.doc.save())) { this.d.notify('Save failed, so the page was not moved.'); return false; }
         await this.d.doc.settleWrites();
       }
       const from = kind === 'file' ? bookOf(this.root, path) : null;
@@ -536,7 +556,8 @@ export class LibraryController {
         if (target && rel) { await target.moveTo(rel, index).catch(() => undefined); this.render(); }
       }
       if (!quiet) this.d.notify('Moved “' + label + '” ' + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
-    } catch (error) { this.d.notify('Could not move it: ' + message(error)); }
+      return true;
+    } catch (error) { this.d.notify('Could not move it: ' + message(error)); return false; }
   }
 
   /** A page dropped on a project, between its pages, or on Unfiled pages. */
@@ -621,11 +642,13 @@ export class LibraryController {
 
   async moveSelected(dest: string | null): Promise<void> {
     const paths = this.selectedPaths();
-    for (const path of paths) await this.moveTo(path, this.kindOf(path), dest, stem(path), undefined, true);
+    let moved = 0;
+    for (const path of paths) if (await this.moveTo(path, this.kindOf(path), dest, stem(path), undefined, true)) moved++;
     this.selected.clear();
     this.announceSelection();
     this.render();
-    if (paths.length) this.d.notify('Moved ' + paths.length + (paths.length === 1 ? ' page ' : ' pages ') + (dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.'));
+    const where = dest ? 'into “' + nameFromPath(dest) + '”.' : 'out to Unfiled pages.';
+    if (moved) this.d.notify('Moved ' + moved + (moved === 1 ? ' page ' : ' pages ') + where + (moved < paths.length ? ' ' + (paths.length - moved) + ' could not be moved.' : ''));
   }
 
   async trashSelected(): Promise<void> {
@@ -717,7 +740,7 @@ export class LibraryController {
     if (!this.root) return null;
     try {
       const current = this.d.doc.snapshot().path;
-      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && current.startsWith(path))));
+      const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && relativeTo(path, current) !== null)));
       if (touchesCurrent) { this.d.flushAutosave(); await this.d.doc.settleWrites(); }
       const book = kind === 'file' ? bookOf(this.root, path) : null;
       const neighbour = touchesCurrent && book ? await this.neighbourOf(book, path) : null;
@@ -809,6 +832,13 @@ export class LibraryController {
   }
 
   // ---------- going places (palette) ----------
+  /** Reads the pages of collapsed projects once, so the palette can find a page in any project. */
+  async warmPlaces(): Promise<void> {
+    const cold = this.rows.filter(r => r.kind === 'project' && !this.books.has(r.path));
+    if (!cold.length || cold.length > 40) return;
+    await mapLimit(cold, 3, row => this.loadBook(row.path));
+  }
+
   places(query: string): PaletteEntry[] {
     if (!this.root) return [];
     const current = this.d.doc.snapshot().path;

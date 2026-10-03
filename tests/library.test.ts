@@ -36,6 +36,8 @@ describe('library paths', () => {
     expect(relativeTo('/lib', '/lib/book/a.md')).toBe('book/a.md');
     expect(relativeTo('/lib', '/other/a.md')).toBeNull();
     expect(relativeTo('/lib', '/library2/a.md')).toBeNull();
+    expect(relativeTo('C:\\Lib', 'c:\\lib\\Book\\a.md')).toBe('Book/a.md');
+    expect(relativeTo('/lib', '/LIB/a.md')).toBeNull();
   });
   it('finds the book a page belongs to', () => {
     expect(bookOf('/lib', '/lib/Novel/01.md')).toBe('/lib/Novel');

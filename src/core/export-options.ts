@@ -19,15 +19,19 @@ export interface ExportOptions {
   title: string;
   subtitle: string;
   author: string;
+  /** BCP-47 tag for the Word and e-book files. */
+  language: string;
 }
 
 export const DEFAULT_EXPORT_OPTIONS: Readonly<ExportOptions> = Object.freeze({
-  format: 'pdf', titlePage: false, contents: false, pageNumbers: true, title: '', subtitle: '', author: '',
+  format: 'pdf', titlePage: false, contents: false, pageNumbers: true, title: '', subtitle: '', author: '', language: 'en',
 });
 
 const MAX_TEXT = 200;
 const clean = (value: unknown): string => (typeof value === 'string' ? value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, MAX_TEXT) : '');
 const flag = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
+
+const language = (value: unknown, fallback: string): string => (typeof value === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(value.trim()) ? value.trim() : fallback);
 
 export function sanitizeExportOptions(raw: unknown): ExportOptions {
   const o = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -40,6 +44,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     title: clean(o.title),
     subtitle: clean(o.subtitle),
     author: clean(o.author),
+    language: language(o.language, d.language),
   };
 }
 

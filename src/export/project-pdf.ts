@@ -12,7 +12,7 @@ import type { ProjectFile } from '../core/project';
 /** Remove only a leading display title; later headings stay in the chapter. */
 export function chapterBody(file: ProjectFile): string {
   if (/\.txt$/i.test(file.path)) return file.text;
-  return file.text.replace(/^\uFEFF?\s*#{1,3}\s+[^\n]*\n?/, '');
+  return file.text.replace(/^\uFEFF?\s*#{1,3}\s+([^\n]*)\n?/, (all, heading: string) => (heading.trim().replace(/\s+#+$/, '') === file.title.trim() ? '' : all));
 }
 /** Compile a fixed, ordered snapshot; never modify chapter sources. */
 export function compiledMarkdown(chapters: readonly ProjectFile[]): string {
@@ -25,7 +25,18 @@ export function compiledMarkdown(chapters: readonly ProjectFile[]): string {
   }).join(String.fromCharCode(10,10) + '---' + String.fromCharCode(10,10));
 }
 /** Chapter text as prose, the same way for PDF and Word. */
-export function parseChapter(file: ProjectFile): ProseNode { return parse(chapterBody(file), /\.txt$/i.test(file.path)); }
+const parsed = new Map<string, ProseNode>();
+const CACHE_LIMIT = 400;
+/** Layout toggles re-run pdfmake only: a chapter that has not changed is not parsed again. */
+export function parseChapter(file: ProjectFile): ProseNode {
+  const key = file.path + '\u0000' + file.title + '\u0000' + file.text;
+  const hit = parsed.get(key);
+  if (hit) return hit;
+  const node = parse(chapterBody(file), /\.txt$/i.test(file.path));
+  if (parsed.size >= CACHE_LIMIT) parsed.delete(parsed.keys().next().value as string);
+  parsed.set(key, node);
+  return node;
+}
 
 function parse(text: string, plain: boolean): ProseNode {
   const element = document.createElement('div');

@@ -25,12 +25,12 @@ fn navigation_allowed(url: &tauri::Url) -> bool {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 fn is_docx(path: &std::path::Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("docx"))
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri::Manager;
     tauri::Builder::default()

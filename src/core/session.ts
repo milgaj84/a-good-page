@@ -37,7 +37,8 @@ export interface Prompter {
 
 export interface DraftStore {
   load(): string | null;
-  save(markdown: string): void;
+  /** Returns false when the draft could not be stored (for example a full disk). */
+  save(markdown: string): boolean | void;
   clear(): void;
   /** Optional: stores a draft whose markdown is read later, keeping serialisation off the keystroke path. */
   saveLazy?(read: () => string): void;
@@ -50,6 +51,10 @@ export interface SessionEvents {
   onOutside?(state: OutsideState | null): void;
   onResolved?(message: string): void;
   onDiscard?(path: string): void;
+  /** A version of the page must be kept before it is replaced (silent reload of a clean page, or a simplified load). */
+  onKeepVersion?(path: string, content: string): void;
+  /** The file was loaded and A Good Page's serialised form differs materially from it (tables, images, HTML, footnotes, front matter). */
+  onSimplified?(path: string): void;
 }
 
 export interface SessionDeps {
@@ -63,6 +68,17 @@ export interface SessionDeps {
 export interface OpenOptions {
   /** Suppress error messages, e.g. when silently reopening the last file at launch. */
   quiet?: boolean;
+}
+
+function normalizeMarkdown(text: string): string {
+  return text.replace(/\r\n?/g, '\n').split('\n').map(line => line.replace(/\s+$/, '')
+    .replace(/^(\s*)[*+](\s)/, '$1-$2').replace(/^\s*([-*_])(\s*\1){2,}$/, '---'))
+    .filter(line => line.length > 0).join('\n');
+}
+
+/** True when the editor's markdown differs from the file in more than whitespace, blank lines and list markers. */
+export function simplifiesMarkdown(original: string, serialized: string): boolean {
+  return normalizeMarkdown(original) !== normalizeMarkdown(serialized);
 }
 
 export function describeError(err: unknown): string {
@@ -92,6 +108,9 @@ export class DocumentSession {
   private conflictPath: string | null = null;
   private outside: OutsideState | null = null;
   private checking = false;
+  private autosaveFails = 0;
+  /** True when the page now open was loaded with formatting the editor simplifies. */
+  simplified = false;
 
   constructor(private readonly deps: SessionDeps) {}
 
@@ -230,6 +249,15 @@ export class DocumentSession {
     finally { this.checking = false; }
     if (id !== this.documentId || path !== this.path || expected !== this.baseline) return this.outside;
     const next = detectOutside(path, expected, probe);
+    if (next?.kind === 'changed' && !this.isDirty && this.inflight === 0 && !this.conflictBusy) {
+      // Nothing of mine is unsaved: take the new file quietly, after keeping a copy of the page as it was.
+      const revision = this.revision;
+      this.deps.events.onKeepVersion?.(path, this.currentText(path));
+      if (await this.load(path, true, id, revision)) {
+        this.deps.events.onResolved?.('Reloaded: this page changed on disk. The earlier version is in Time Machine.');
+        return null;
+      }
+    }
     this.outside = next;
     if (next) { this.conflictHold = true; this.failed = true; this.emit(); }
     else if (this.conflictHold) { this.conflictHold = false; this.failed = false; this.emit(); }
@@ -242,7 +270,7 @@ export class DocumentSession {
     const state = await this.checkOutside();
     if (!state || !this.deps.events.onConflict || !this.deps.files.probe) return false;
     const id = this.documentId, revision = this.revision, path = this.path;
-    const mine = isPlainTextPath(path) ? this.deps.editor.getPlainText?.() ?? this.deps.editor.getMarkdown() : this.deps.editor.getMarkdown();
+    const mine = this.currentText(path);
     const choice = await this.deps.events.onConflict({ path: state.path, mine, disk: state.disk,
       deleted: state.kind !== 'changed', canReload: state.kind === 'changed' });
     if (id !== this.documentId || path !== this.path) return false;
@@ -267,6 +295,10 @@ export class DocumentSession {
     return false;
   }
 
+  private currentText(path: string | null): string {
+    return isPlainTextPath(path) ? this.deps.editor.getPlainText?.() ?? this.deps.editor.getMarkdown() : this.deps.editor.getMarkdown();
+  }
+
   private unchanged(id: number, revision: number): boolean {
     return id === this.documentId && revision === this.revision;
   }
@@ -282,6 +314,14 @@ export class DocumentSession {
       if (this.unchanged(id, revision) && !quiet) this.deps.events.onError(describeError(err));
       return false;
     }
+  }
+
+  /** Repeated background save failures speak up on the 1st, 5th, 25th... failure, not at every pause. */
+  private autosaveFailed(): boolean {
+    this.autosaveFails += 1;
+    let n = this.autosaveFails;
+    while (n > 1 && n % 5 === 0) n /= 5;
+    return n === 1;
   }
 
   private state(): SaveState {
@@ -310,6 +350,12 @@ export class DocumentSession {
     this.outside = null;
     this.deps.events.onOutside?.(null);
     this.deps.drafts.clear();
+    this.simplified = path !== null && !isPlainTextPath(path) && simplifiesMarkdown(content, this.deps.editor.getMarkdown());
+    if (this.simplified && path !== null) {
+      // The editor will rewrite this file in its own shape on the next save: keep the original first.
+      this.deps.events.onKeepVersion?.(path, content);
+      this.deps.events.onSimplified?.(path);
+    }
     this.emit();
     this.deps.editor.focus();
   }
@@ -334,7 +380,7 @@ export class DocumentSession {
       ? this.deps.editor.getPlainText?.() ?? this.deps.editor.getMarkdown()
       : this.deps.editor.getMarkdown();
     const job = this.queue.then(() =>
-      !explicit && this.conflictHold ? false : this.performWrite(target, content, revision, documentId, adoptPath));
+      !explicit && this.conflictHold ? false : this.performWrite(target, content, revision, documentId, adoptPath, explicit));
     this.queue = job;
     const result = job.then(async (ok) => {
       if (!ok && this.conflictPath === target && !this.conflictBusy && this.deps.events.onConflict &&
@@ -379,7 +425,7 @@ export class DocumentSession {
     return result;
   }
 
-  private async performWrite(target: string, content: string, revision: number, documentId: number, adoptPath: boolean): Promise<boolean> {
+  private async performWrite(target: string, content: string, revision: number, documentId: number, adoptPath: boolean, explicit = true): Promise<boolean> {
     if (documentId !== this.documentId || (!adoptPath && this.path !== target)) return false;
     this.inflight += 1;
     this.emit();
@@ -398,6 +444,7 @@ export class DocumentSession {
       this.outside = null;
       this.deps.events.onOutside?.(null);
       this.failed = false;
+      this.autosaveFails = 0;
       if (!this.isDirty) this.deps.drafts.clear();
       return true;
     } catch (err) {
@@ -408,7 +455,7 @@ export class DocumentSession {
           this.conflictPath = target;
           if (!adoptPath && target === this.path) void this.checkOutside();
           if (this.conflictBusy) this.deps.events.onError('That copy destination changed or already exists. Choose a new filename.');
-        } else this.deps.events.onError(describeError(err));
+        } else if (explicit || this.autosaveFailed()) this.deps.events.onError(describeError(err));
       }
       return false;
     } finally {

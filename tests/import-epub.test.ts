@@ -126,7 +126,7 @@ describe('E-book (EPUB) export', () => {
     expect(opf.getElementsByTagName('dc:title')[0].textContent).toBe('Sea & Sky');
     expect(opf.getElementsByTagName('dc:creator')[0].textContent).toBe('Mara');
     const nav = new DOMParser().parseFromString(f['OEBPS/nav.xhtml'], 'application/xml');
-    const targets = [...nav.getElementsByTagName('a')].map(a => a.getAttribute('href')!);
+    const targets = [...nav.getElementsByTagName('nav')[0].getElementsByTagName('a')].map(a => a.getAttribute('href')!);
     expect(targets).toEqual(['chapter-1.xhtml', 'chapter-1.xhtml#c1-s1', 'chapter-2.xhtml']);
     for (const target of targets) {
       const [file, id] = target.split('#');

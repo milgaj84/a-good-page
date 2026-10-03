@@ -109,7 +109,7 @@
 .popover--link { display: flex; align-items: center; gap: 6px; width: min(380px, calc(100vw - 24px)); padding: 6px; }
 .popover--link.is-invalid { border-color: var(--danger); }
 .popover--link .text-input { flex: 1; border-color: transparent; background: transparent; }
-.focus-choices { top: auto; left: auto; right: 16px; bottom: 52px; width: 290px; padding: 6px; }
+.focus-choices { top: auto; left: auto; right: 16px; bottom: 52px; width: min(290px, calc(100vw - 16px)); padding: 6px; }
 .focus-choices button { display: block; width: 100%; padding: 9px 12px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--ink); text-align: left; font: 600 13px var(--sans); }
 .focus-choices button:hover { background: var(--bg-soft); }
 .focus-choices button[aria-pressed="true"], .focus-choices button.is-current { color: var(--accent); }
@@ -227,3 +227,6 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 .backup-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .backup-actions .btn { border-color: var(--line); color: var(--ink); }
 .drawer-section select.text-input { height: 36px; }
+
+/* Short windows: give the page the height. The formatting bar returns when there is room. */
+@media (max-height: 560px) { .formatbar { display: none; } }

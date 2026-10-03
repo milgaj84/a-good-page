@@ -14,6 +14,8 @@ export interface DocxOptions {
   titlePage?: boolean;
   contents?: boolean;
   pageNumbers?: boolean;
+  /** BCP-47 tag for spelling and hyphenation in Word; defaults to English. */
+  language?: string;
 }
 
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -107,8 +109,8 @@ function blocks(nodes: ProseNode[], build: Build, ctx: { quote?: boolean; list?:
   }
 }
 
-const STYLES = XML + '<w:styles ' + NS + '>' +
-  '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:eastAsia="Georgia" w:cs="Georgia"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>' +
+const styles = (lang: string): string => XML + '<w:styles ' + NS + '>' +
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:eastAsia="Georgia" w:cs="Georgia"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="' + esc(lang) + '"/></w:rPr></w:rPrDefault>' +
   '<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="324" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
   '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:before="0" w:after="240"/><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:sz w:val="64"/><w:szCs w:val="64"/></w:rPr></w:style>' +
@@ -127,6 +129,9 @@ const STYLES = XML + '<w:styles ' + NS + '>' +
   '<w:style w:type="paragraph" w:styleId="Footer"><w:name w:val="footer"/><w:basedOn w:val="Normal"/><w:pPr><w:jc w:val="center"/></w:pPr><w:rPr><w:sz w:val="18"/><w:color w:val="9A9086"/></w:rPr></w:style>' +
   '<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>' +
   '</w:styles>';
+
+/** A BCP-47 tag, or the fallback when it is missing or malformed. */
+export const safeLanguage = (tag: string | undefined, fallback: string): string => (tag && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(tag) ? tag : fallback);
 
 function numbering(orderedLists: number): string {
   const level = (i: number, fmt: string, text: string): string =>
@@ -176,6 +181,8 @@ export function docxBytes(chapters: readonly DocxChapter[], options: DocxOptions
     for (const entry of toc) front.push(para(run(entry.text), entry.level === 1 ? 'Contents1' : 'Contents2'));
     front.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
   }
+  // The title page and contents already end with a page break; the first chapter must not add a second.
+  if (front.length && bodies[0]?.[0]) bodies[0][0] = bodies[0][0].replace('<w:pageBreakBefore/>', '');
   const content = [...front, ...bodies.flat()];
   // A chapter heading that opens the document needs no page break of its own after a title page; harmless otherwise.
   const sect = '<w:sectPr>' + (options.pageNumbers !== false ? '<w:footerReference w:type="default" r:id="rIdFooter"/>' : '') +
@@ -198,7 +205,7 @@ export function docxBytes(chapters: readonly DocxChapter[], options: DocxOptions
       '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>'),
     file('_rels/.rels', XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>'),
     file('word/document.xml', document),
-    file('word/styles.xml', STYLES),
+    file('word/styles.xml', styles(safeLanguage(options.language, 'en-US'))),
     file('word/numbering.xml', numbering(build.numbers)),
     file('word/_rels/document.xml.rels', XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + rels.join('') + '</Relationships>'),
     file('docProps/core.xml', XML + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>' + esc(title) + '</dc:title>' +

@@ -12,19 +12,19 @@
 }
 
 [data-theme="paper"] {
-  --bg: #fbf8f3; --bg-soft: #f3ede4; --ink: #2b2622; --ink-soft: #5a514a; --muted: #857b70;
+  --bg: #fbf8f3; --bg-soft: #f3ede4; --ink: #2b2622; --ink-soft: #5a514a; --muted: #70675c;
   --line: rgba(43, 38, 34, 0.1); --accent: #b4622f; --select: rgba(194, 112, 61, 0.2);
   --bubble: #2b2622; --bubble-ink: #fbf8f3; --bubble-hover: rgba(255, 255, 255, 0.12); --bubble-accent: #f2a65a;
   --shadow: 0 8px 24px rgba(60, 40, 20, 0.14); color-scheme: light;
 }
 [data-theme="sepia"] {
-  --bg: #f1e7d6; --bg-soft: #e8dcc6; --ink: #3b2f24; --ink-soft: #66533f; --muted: #7f6b52;
+  --bg: #f1e7d6; --bg-soft: #e8dcc6; --ink: #3b2f24; --ink-soft: #66533f; --muted: #6f5c45;
   --line: rgba(59, 47, 36, 0.12); --accent: #9a4f20; --select: rgba(166, 90, 42, 0.22);
   --bubble: #3b2f24; --bubble-ink: #f6eddd; --bubble-hover: rgba(255, 255, 255, 0.12); --bubble-accent: #e9a567;
   --shadow: 0 8px 24px rgba(70, 45, 20, 0.18); color-scheme: light;
 }
 [data-theme="sage"] {
-  --bg: #edf3ec; --bg-soft: #e0e9de; --ink: #24362d; --ink-soft: #50695b; --muted: #627b6c;
+  --bg: #edf3ec; --bg-soft: #e0e9de; --ink: #24362d; --ink-soft: #50695b; --muted: #52695a;
   --line: rgba(36, 54, 45, 0.13); --accent: #35694c; --select: rgba(62, 120, 88, 0.22);
   --bubble: #243c30; --bubble-ink: #f0f6ed; --bubble-hover: rgba(255, 255, 255, 0.12); --bubble-accent: #b3d89f;
   --shadow: 0 8px 24px rgba(37, 71, 45, 0.16); color-scheme: light; --danger: #a9473d;
@@ -150,3 +150,25 @@ kbd { display: inline-block; min-width: 24px; padding: 4px 6px; border: 1px soli
   transition: none !important; animation: none !important; scroll-behavior: auto !important; text-shadow: none !important;
 }
 [data-effects="light"] .bubble, [data-effects="light"] .toast { box-shadow: none; border: 1px solid var(--line); }
+
+/* Book-style paragraphs: first line indented, no gap between paragraphs. */
+.indent .ProseMirror p + p { text-indent: 1.5em; }
+.indent .ProseMirror p:has(+ p) { margin-bottom: 0; }
+/* Windows high contrast and similar: keep borders and focus rings visible. */
+@media (forced-colors: active) {
+  .drawer, .overlay .dialog, .menu, .toast, .bubble, .sidebar { border: 1px solid CanvasText; }
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
+/* Find: every match softly, the current one stronger (0.8.2). */
+.prose .find-hit { background: color-mix(in srgb, var(--accent, #c9a227) 28%, transparent); border-radius: 2px; }
+.prose .find-hit.find-current { background: color-mix(in srgb, var(--accent, #c9a227) 62%, transparent); outline: 1px solid var(--accent, #c9a227); }
+
+/* Contents panel: the collapse control is a real button beside the heading button (0.8.2). */
+.outline-row { display: flex; align-items: center; }
+.outline-row[data-depth="1"] { padding-left: 12px; }
+.outline-row[data-depth="2"] { padding-left: 24px; }
+.outline-row[data-depth="2"] .outline-item { color: var(--muted); }
+.outline-row .outline-item { flex: 1; width: auto; min-width: 0; }
+.outline-row .outline-toggle { flex: none; width: 20px; height: 24px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; }
+.outline-row button.outline-toggle:hover { color: var(--ink); }

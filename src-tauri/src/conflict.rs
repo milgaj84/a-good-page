@@ -68,8 +68,8 @@ fn create_new(path: &Path, content: &str) -> Result<String, String> {
         file.write_all(content.as_bytes())?;
         file.sync_all()?;
         drop(file);
-        // A hard link publishes the fully written file only if the destination does not exist.
-        fs::hard_link(&temp, path)
+        // Publishes the fully written file only if the destination does not exist.
+        crate::document::publish_new(&temp, path)
     })();
     let _ = fs::remove_file(&temp);
     written.map_err(|error| {

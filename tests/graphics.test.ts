@@ -30,10 +30,13 @@ describe('visual effects choice', () => {
     expect(resolveEffects('light', false)).toBe('light');
     expect(resolveEffects('auto', true)).toBe('light');
     expect(resolveEffects('auto', false)).toBe('full');
+    expect(resolveEffects('auto', false, true)).toBe('light');
+    expect(resolveEffects('full', false, true)).toBe('full');
   });
   it('explains what is happening in plain words', () => {
     expect(describeEffects('auto', true)).toContain('software');
     expect(describeEffects('auto', false)).toContain('acceleration');
+    expect(describeEffects('auto', false, true)).toContain('less motion');
     expect(describeEffects('light', false)).toContain('off');
     expect(describeEffects('full', true)).toContain('on');
   });

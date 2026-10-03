@@ -55,7 +55,10 @@ const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '');
 /** The Library path relative to its root, or null when the file lives elsewhere. */
 export function relativeTo(root: string, path: string): string | null {
   const r = norm(root), p = norm(path);
-  return p.startsWith(r + '/') ? p.slice(r.length + 1) : null;
+  // Windows paths (drive letter or backslashes) are not case-sensitive.
+  const windows = /^[a-z]:/i.test(r) || root.includes('\\');
+  const same = windows ? p.toLowerCase().startsWith(r.toLowerCase() + '/') : p.startsWith(r + '/');
+  return same ? p.slice(r.length + 1) : null;
 }
 
 /** The book (first-level folder) a file belongs to, or null for a page sitting directly in the Library. */

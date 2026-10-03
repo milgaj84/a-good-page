@@ -1,4 +1,6 @@
 import { isWritingFile } from './paths';
+/** Most chapters one project can hold; Rust enforces the same number. */
+export const MAX_CHAPTERS = 2000;
 export interface ProjectManifest { version: 1; chapters: string[] }
 export interface ProjectFile { path: string; title: string; text: string; words: number; headings: { title: string; line: number; level: number }[] }
 export interface ProjectMatch { path: string; title: string; line: number; context: string }
@@ -9,18 +11,18 @@ export function safeChapter(path: string): boolean {
 export function manifest(value: unknown): ProjectManifest {
   if (!value || typeof value !== 'object') throw Error('Invalid project order file.');
   const v = value as Partial<ProjectManifest>;
-  if (v.version !== 1 || !Array.isArray(v.chapters) || v.chapters.length > 200 ||
+  if (v.version !== 1 || !Array.isArray(v.chapters) || v.chapters.length > MAX_CHAPTERS ||
       v.chapters.some(p => typeof p !== 'string' || !safeChapter(p)) ||
       new Set(v.chapters).size !== v.chapters.length) throw Error('Invalid project order file.');
   return { version: 1, chapters: [...v.chapters] };
 }
 export function orderFiles(paths: readonly string[], existing: ProjectManifest | null): ProjectManifest {
-  if (paths.length > 200) throw Error('This project has more than 200 chapters. Choose a smaller folder.');
+  if (paths.length > MAX_CHAPTERS) throw Error('This project has more than 2000 chapters. Choose a smaller folder.');
   const set = new Set(paths);
   if (set.size !== paths.length || paths.some(p => !safeChapter(p))) throw Error('Invalid chapter path in workspace.');
   const old = existing?.chapters ?? [];
   const chapters = [...old, ...paths.filter(p => !old.includes(p))];
-  if (chapters.length > 200) throw Error('Project order exceeds 200 chapters. Remove missing entries first.');
+  if (chapters.length > MAX_CHAPTERS) throw Error('Project order exceeds 2000 chapters. Remove missing entries first.');
   return { version: 1, chapters };
 }
 export function moveChapter(order: ProjectManifest, path: string, direction: -1 | 1): ProjectManifest {
@@ -55,11 +57,17 @@ export function chapterInfo(path: string, text: string): ProjectFile {
   const words = (text.match(/[\p{L}\p{N}]+(?:['’_-][\p{L}\p{N}]+)*/gu) ?? []).length;
   return { path, text, title: headings[0]?.title ?? path.split('/').pop()!.replace(/\.(md|markdown|txt)$/i, ''), words, headings };
 }
+/** A short stretch of the line with the match in view; a paragraph is one long line, so the start is not enough. */
+function around(line: string, at: number, length: number): string {
+  const from = Math.max(0, at - 70), to = Math.min(line.length, at + length + 110);
+  return (from > 0 ? '…' : '') + line.slice(from, to).trim() + (to < line.length ? '…' : '');
+}
 export function searchProject(files: readonly ProjectFile[], query: string): ProjectMatch[] {
   const needle = query.trim().toLocaleLowerCase(); if (!needle) return [];
   const hits: ProjectMatch[] = [];
   for (const file of files) file.text.split(String.fromCharCode(10)).forEach((line, i) => {
-    if (line.toLocaleLowerCase().includes(needle)) hits.push({ path: file.path, title: file.title, line: i + 1, context: line.trim().slice(0, 200) });
+    const at = line.toLocaleLowerCase().indexOf(needle);
+    if (at >= 0) hits.push({ path: file.path, title: file.title, line: i + 1, context: around(line, at, needle.length) });
   });
   return hits;
 }

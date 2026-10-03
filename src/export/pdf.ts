@@ -24,6 +24,9 @@ export interface ProseNode {
   content?: ProseNode[];
 }
 
+// pdfmake ships only Roboto, so code is set apart by size and a soft background instead of a monospace face.
+const CODE_LOOK = { fontSize: 10, background: '#efe9e1' };
+
 function inline(node: ProseNode): Content[] {
   if (node.type === 'hardBreak') return [{ text: '\n' }];
   if (node.type === 'text') {
@@ -31,7 +34,8 @@ function inline(node: ProseNode): Content[] {
     const link = marks.find((m) => m.type === 'link')?.attrs?.href;
     return [{ text: node.text ?? '', bold: marks.some((m) => m.type === 'bold'),
       italics: marks.some((m) => m.type === 'italic'),
-      decoration: marks.some((m) => m.type === 'strike' || m.type === 'underline') ? 'lineThrough' : undefined,
+      decoration: marks.some((m) => m.type === 'underline') ? 'underline' : marks.some((m) => m.type === 'strike') ? 'lineThrough' : undefined,
+      ...(marks.some((m) => m.type === 'code') ? CODE_LOOK : {}),
       link: typeof link === 'string' && /^(https?:|mailto:)/.test(link) ? link : undefined }];
   }
   return (node.content ?? []).flatMap(inline);
@@ -46,6 +50,23 @@ export interface PdfOptions {
   pageNumbers?: boolean;
 }
 
+function list(node: ProseNode, toc: boolean): Content {
+  const entries = (node.content ?? []).map((item) => {
+    let first = true;
+    const stack: Content[] = [];
+    for (const child of item.content ?? []) {
+      if (child.type === 'bulletList' || child.type === 'orderedList' || child.type === 'taskList') stack.push(list(child, toc));
+      else if (child.type === 'paragraph') {
+        const prefix = first && node.type === 'taskList' ? (item.attrs?.checked ? '[x] ' : '[ ] ') : '';
+        stack.push({ text: [{ text: prefix }, ...(child.content ?? []).flatMap(inline)] });
+        first = false;
+      } else stack.push(...blocks([child], toc));
+    }
+    return { stack };
+  });
+  return node.type === 'orderedList' ? { ol: entries, margin: [0, 0, 0, 12] } : { ul: entries, margin: [0, 0, 0, 12] };
+}
+
 function blocks(nodes: ProseNode[], toc = false): Content[] {
   const result: Content[] = [];
   for (const node of nodes) {
@@ -57,18 +78,13 @@ function blocks(nodes: ProseNode[], toc = false): Content[] {
       const text = children.flatMap(inline);
       result.push({ text: text.length ? text : ' ', margin: [0, 0, 0, 9] });
     } else if (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'taskList') {
-      const entries = children.map((item) => {
-        const text = item.content?.flatMap((child) => child.content ? child.content.flatMap(inline) : inline(child)) ?? [];
-        const prefix = node.type === 'taskList' ? (item.attrs?.checked ? '[x] ' : '[ ] ') : '';
-        return { text: [{ text: prefix }, ...text] };
-      });
-      result.push(node.type === 'orderedList' ? { ol: entries, margin: [0, 0, 0, 12] } : { ul: entries, margin: [0, 0, 0, 12] });
+      result.push(list(node, toc));
     } else if (node.type === 'blockquote') {
-      result.push({ text: children.flatMap((c) => c.content?.flatMap(inline) ?? inline(c)), style: 'quote' });
+      result.push(...blocks(children, false).map((b) => ({ ...(b as object), italics: true, color: '#685d51', margin: [18, 0, 0, 9] }) as Content));
     } else if (node.type === 'horizontalRule') {
       result.push({ text: '* * *', alignment: 'center', color: '#9a8674', margin: [0, 12, 0, 18] });
     } else if (node.type === 'codeBlock') {
-      result.push({ text: node.text ?? children.map((c) => c.text ?? '').join(''), fontSize: 10, margin: [12, 8, 12, 16] });
+      result.push({ text: node.text ?? children.map((c) => c.text ?? '').join(''), ...CODE_LOOK, margin: [12, 8, 12, 16] });
     } else if (children.length) result.push(...blocks(children, toc));
   }
   return result;

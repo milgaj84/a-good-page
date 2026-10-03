@@ -47,8 +47,9 @@ export async function exportDocumentFile(suggestedName: string, bytes: Uint8Arra
 /** Word import: pick or receive a .docx and read its text parts. Rust only reads; nothing is changed on disk. */
 export const pickWordFile = (): Promise<string | null> => invoke<string | null>('pick_open_file', { kind: 'docx' });
 export const readWordFile = (path: string): Promise<DocxParts> => invoke<DocxParts>('read_docx_file', { path });
-/** Asks for a folder of pages and copies them into a new project. Returns the project, or null when cancelled. */
-export const importPagesFolder = (root: string): Promise<string | null> => invoke<string | null>('import_folder', { root });
+/** Asks for a folder of pages and copies them into a new project. Returns what was imported, or null when cancelled. */
+export interface FolderImport { project: string; pages: number; skipped: string[]; converted: string[] }
+export const importPagesFolder = (root: string): Promise<FolderImport | null> => invoke<FolderImport | null>('import_folder', { root });
 
 /** Save a selected historic version separately. A cancelled dialog never changes the open document. */
 export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {

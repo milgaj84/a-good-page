@@ -28,6 +28,7 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 - **Find and replace across pages.** **Ctrl/Cmd+Alt+F** (or *All pages…* in Find) searches every page of a project or the whole Library, shows each match with what it would become, lets you tick which to change, and keeps a version of each page in History. Undo puts it all back.
 - **Backups.** *Settings → Backup* makes a zip of your Library (only your writing files and project order, never the trash) on demand or every day or week, keeps the newest few, and can **restore** one next to your current work without overwriting it.
 - **Bring a book in.** Drop a Word (`.docx`) file on the window, or use **New ▾ → Import a Word document…**: each Heading 1 becomes a page of a new project, with bold, italic, headings, lists and links kept. **Import a folder of pages…** copies a folder of `.md` or `.txt` files into a project. Your original files are never changed.
+- **Set up the page your way.** **Settings → Writing** indents paragraphs like a book, turns spell-check on or off, and sets the language of your writing (also used in Word and e-book exports).
 - **Export as PDF, Word, E-book or Markdown.** Add a **title page** (title, subtitle, author), a **contents**, and page numbers; the PDF preview shows exactly what you will get.
 - **Export follows your projects.** Export a single page, or a project in page order, and **tick just the pages you want** (All / None / individual). Use ⋯ → **Export project…** on a project or ⋯ → **Export this page…** on a page. Word counts, search, Ctrl+P and History all work across the same structure.
 - **Go anywhere.** **Ctrl/Cmd+P** searches pages and every command. The **contents** button (top right) lists the headings on this page. Try "focus", "export" or "theme".
@@ -100,6 +101,6 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 
 1. Update `CHANGELOG.md` and the version in those files.
 2. Work through `RELEASE_CHECKLIST.md` in the installed app on each platform.
-3. Commit, then `git tag v0.8.1 && git push origin v0.8.0`.
+3. Commit, then `git tag v0.8.2 && git push origin v0.8.0`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).

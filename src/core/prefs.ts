@@ -32,6 +32,12 @@ export interface Preferences {
   typewriter: boolean;
   /** Fades, shadows and animations: automatic, always on, or off for the fastest drawing. */
   effects: EffectMode;
+  /** Underline misspelled words. */
+  spellcheck: boolean;
+  /** Language of my writing for spelling (BCP-47 such as "en-GB"); empty follows the system. */
+  lang: string;
+  /** Indent the first line of each paragraph and close the gap between paragraphs, the way books are set. */
+  indent: boolean;
 }
 
 export const DEFAULT_PREFS: Readonly<Preferences> = Object.freeze({
@@ -45,6 +51,9 @@ export const DEFAULT_PREFS: Readonly<Preferences> = Object.freeze({
   ghost: true,
   typewriter: false,
   effects: 'auto',
+  spellcheck: true,
+  lang: '',
+  indent: false,
 });
 
 export function clampSize(value: unknown): number {
@@ -66,6 +75,10 @@ function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+export function sanitizeLang(value: unknown): string {
+  return typeof value === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(value.trim()) ? value.trim() : '';
+}
+
 export function sanitizePrefs(raw: unknown): Preferences {
   const o = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
@@ -79,6 +92,9 @@ export function sanitizePrefs(raw: unknown): Preferences {
     ghost: bool(o.ghost, DEFAULT_PREFS.ghost),
     typewriter: bool(o.typewriter, DEFAULT_PREFS.typewriter),
     effects: pick(EFFECT_MODES, o.effects, DEFAULT_PREFS.effects),
+    spellcheck: bool(o.spellcheck, DEFAULT_PREFS.spellcheck),
+    lang: sanitizeLang(o.lang),
+    indent: bool(o.indent, DEFAULT_PREFS.indent),
   };
 }
 

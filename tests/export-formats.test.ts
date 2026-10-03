@@ -99,7 +99,8 @@ describe('Word export', () => {
   it('starts each chapter on a new page and lists chapters in the contents', () => {
     const chapters = [{ title: 'One', doc: { type: 'doc', content: [{ type: 'paragraph', content: [text('a')] }] } }, { title: 'Two', doc: { type: 'doc', content: [{ type: 'paragraph', content: [text('b')] }] } }];
     const d = parts(docxBytes(chapters, { title: 'Book', contents: true }))['word/document.xml'];
-    expect(d.match(/pageBreakBefore/g)).toHaveLength(2);
+    // The contents page ends with a break, so only the second chapter adds its own.
+    expect(d.match(/pageBreakBefore/g)).toHaveLength(1);
     expect(d.indexOf('Contents1')).toBeLessThan(d.indexOf('pageBreakBefore'));
     expect(d).toMatch(/Contents1[\s\S]*One[\s\S]*Contents1[\s\S]*Two/);
   });

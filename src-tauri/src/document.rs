@@ -46,6 +46,33 @@ impl Storage for FsStorage {
 
 /// Write to a unique sibling temp file, fsync, then rename over the target.
 /// Shared by manuscript saves and PDF export so both get the same crash safety.
+/// Publishes the fully written `temp` file as `dest` only if `dest` does not exist yet.
+/// A hard link does it atomically; where links are unsupported (exFAT, some network shares)
+/// it falls back to `create_new` + copy. Either way an existing `dest` is never overwritten:
+/// that case is reported as `AlreadyExists`.
+pub fn publish_new(temp: &Path, dest: &Path) -> io::Result<()> {
+    publish_new_with(temp, dest, |a, b| fs::hard_link(a, b))
+}
+
+fn publish_new_with(
+    temp: &Path,
+    dest: &Path,
+    link: impl Fn(&Path, &Path) -> io::Result<()>,
+) -> io::Result<()> {
+    match link(temp, dest) {
+        Err(e) if e.kind() != io::ErrorKind::AlreadyExists => {}
+        other => return other,
+    }
+    let bytes = fs::read(temp)?;
+    let mut file = OpenOptions::new().write(true).create_new(true).open(dest)?;
+    let written = file.write_all(&bytes).and_then(|_| file.sync_all());
+    drop(file);
+    if written.is_err() {
+        let _ = fs::remove_file(dest);
+    }
+    written
+}
+
 pub fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let file_name = path
         .file_name()
@@ -228,6 +255,32 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::sync::Mutex;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("agp-doc-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn publish_new_falls_back_when_links_are_unsupported_and_never_overwrites() {
+        let d = scratch("publish");
+        let temp = d.join("t.tmp");
+        fs::write(&temp, "fresh").unwrap();
+        let no_links = |_: &Path, _: &Path| Err(io::Error::from(io::ErrorKind::Unsupported));
+        publish_new_with(&temp, &d.join("a.md"), no_links).unwrap();
+        assert_eq!(fs::read_to_string(d.join("a.md")).unwrap(), "fresh");
+        fs::write(d.join("b.md"), "mine").unwrap();
+        let err = publish_new_with(&temp, &d.join("b.md"), no_links).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        let err = publish_new(&temp, &d.join("b.md")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(d.join("b.md")).unwrap(), "mine");
+        publish_new(&temp, &d.join("c.md")).unwrap();
+        assert_eq!(fs::read_to_string(d.join("c.md")).unwrap(), "fresh");
+        fs::remove_dir_all(d).unwrap();
+    }
 
     #[derive(Default)]
     struct MemoryStorage {

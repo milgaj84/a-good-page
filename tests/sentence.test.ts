@@ -12,3 +12,15 @@ describe('sentence focus boundaries', () => {
     expect(sentenceAt('Pi is 3.14 today. Next.', 8)).toEqual({ from: 0, to: 17 });
   });
 });
+describe('sentence ends followed by closing quotes or brackets', () => {
+  it('splits dialogue after a closing quote', () => {
+    const text = '“I’m done.” She left.';
+    expect(sentenceAt(text, 3)).toEqual({ from: 0, to: 11 });
+    expect(sentenceAt(text, 16)).toEqual({ from: 12, to: text.length });
+    expect(sentenceAt('"I\'m done." She left.', 3)).toEqual({ from: 0, to: 11 });
+  });
+  it('splits after a closing bracket', () => {
+    expect(sentenceAt('(See above.) Next one.', 14)).toEqual({ from: 13, to: 22 });
+    expect(sentenceAt('(See above.) Next one.', 3)).toEqual({ from: 0, to: 12 });
+  });
+});

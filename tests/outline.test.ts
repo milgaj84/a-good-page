@@ -11,7 +11,7 @@ describe('buildOutline', () => {
       { level: 1, text: '   ', pos: 0 },
       { level: 1, text: '  The   Beginning ', pos: 10 },
     ]);
-    expect(items).toEqual([{ level: 1, text: 'The Beginning', pos: 10, depth: 0 }]);
+    expect(items).toEqual([{ level: 1, text: 'The Beginning', pos: 10, depth: 0, key: 'The Beginning#0', hasChildren: false }]);
   });
 
   it('indents relative to the highest heading used', () => {
@@ -64,7 +64,7 @@ describe('activeIndex', () => {
  describe('chapter navigation and collapsed outline', () => {
    const items = buildOutline([{ level: 1, text: 'One', pos: 1 }, { level: 2, text: 'A', pos: 5 }, { level: 1, text: 'Two', pos: 20 }, { level: 2, text: 'B', pos: 24 }]);
    it('hides descendants only under collapsed headings', () => {
-     expect(visibleOutline(items, new Set([1])).map(x => x.text)).toEqual(['One', 'Two', 'B']);
+     expect(visibleOutline(items, new Set(['One#0'])).map(x => x.text)).toEqual(['One', 'Two', 'B']);
      expect(visibleOutline(items, new Set()).length).toBe(4);
    });
    it('jumps between top-level chapters without wrapping', () => {

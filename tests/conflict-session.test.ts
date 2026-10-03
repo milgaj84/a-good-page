@@ -42,7 +42,7 @@ function setup(initial = 'On disk') {
 
 describe('conflict-aware session', () => {
   it('notices an outside edit before saving and does not open a modal automatically', async () => {
-    const t = setup(); await t.session.open(); t.disk.set('story.md', 'New outside text');
+    const t = setup(); await t.session.open(); t.editor.text = 'My unsaved words'; t.session.markEdited(); t.disk.set('story.md', 'New outside text');
     expect(await t.session.checkOutside()).toMatchObject({ kind: 'changed', disk: 'New outside text' });
     expect(t.events).toHaveLength(0);
     expect(t.outside[t.outside.length - 1]).toMatchObject({ kind: 'changed' });

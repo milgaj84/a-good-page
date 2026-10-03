@@ -16,14 +16,28 @@ fn extension_for(kind: &str) -> Option<&'static str> {
     }
 }
 
+fn contains(bytes: &[u8], needle: &[u8]) -> bool {
+    bytes.windows(needle.len()).any(|part| part == needle)
+}
+
+fn name_of(kind: &str) -> &'static str {
+    match kind {
+        "pdf" => "PDF",
+        "docx" => "Word",
+        "epub" => "EPUB",
+        _ => "Markdown",
+    }
+}
+
 fn looks_like(kind: &str, bytes: &[u8]) -> bool {
     match kind {
         "pdf" => bytes.starts_with(b"%PDF-") && bytes.windows(5).any(|part| part == b"%%EOF"),
-        // A .docx is a zip file: it begins with a local file header.
-        "docx" => bytes.starts_with(b"PK\x03\x04"),
+        // A .docx is a zip file that names word/document.xml (in its local header and central directory).
+        "docx" => bytes.starts_with(b"PK\x03\x04") && contains(bytes, b"word/document.xml"),
         // An .epub is a zip whose first entry is the stored "mimetype" file.
         "epub" => {
             bytes.starts_with(b"PK\x03\x04")
+                && contains(bytes, b"META-INF/container.xml")
                 && bytes
                     .get(30..)
                     .is_some_and(|b| b.starts_with(b"mimetypeapplication/epub+zip"))
@@ -52,7 +66,10 @@ pub fn export_document(raw_path: &str, bytes: &[u8], kind: &str) -> Result<Strin
         return Err("The export is larger than the 60 MB limit.".into());
     }
     if !looks_like(kind, bytes) {
-        return Err("The generated file is not valid, so nothing was saved.".into());
+        return Err(format!(
+            "The {} file is not valid, so nothing was saved.",
+            name_of(kind)
+        ));
     }
     write_atomic_bytes(&path, bytes).map_err(|err| format!("Could not save the export: {err}"))?;
     Ok(path.to_string_lossy().into_owned())
@@ -76,8 +93,9 @@ mod tests {
     }
 
     const PDF: &[u8] = b"%PDF-1.4\ncontent\n%%EOF";
-    const DOCX: &[u8] = b"PK\x03\x04rest of a zip";
-    const EPUB: &[u8] = b"PK\x03\x04aaaaaaaaaaaaaaaaaaaaaaaaaamimetypeapplication/epub+zipPK";
+    const DOCX: &[u8] = b"PK\x03\x04rest word/document.xml of a zip";
+    const EPUB: &[u8] =
+        b"PK\x03\x04aaaaaaaaaaaaaaaaaaaaaaaaaamimetypeapplication/epub+zipPK META-INF/container.xml";
 
     #[test]
     fn saves_each_format_unchanged_to_its_own_extension() {
@@ -107,6 +125,16 @@ mod tests {
         assert!(export_document(&p("a.pdf"), DOCX, "pdf").is_err());
         assert!(export_document(&p("a.docx"), PDF, "docx").is_err());
         assert!(export_document(&p("a.epub"), DOCX, "epub").is_err());
+        // A zip that is not a Word file, or an e-book without its container, is refused by name.
+        let err = export_document(&p("a.docx"), b"PK\x03\x04empty zip", "docx").unwrap_err();
+        assert!(err.starts_with("The Word file is not valid"), "{err}");
+        let err = export_document(
+            &p("a.epub"),
+            b"PK\x03\x04aaaaaaaaaaaaaaaaaaaaaaaaaamimetypeapplication/epub+zipPK",
+            "epub",
+        )
+        .unwrap_err();
+        assert!(err.starts_with("The EPUB file is not valid"), "{err}");
         assert!(export_document(&p("a.md"), &[0xff, 0xfe, 0xfd], "md").is_err());
         assert!(export_document(&p("a.rtf"), PDF, "rtf").is_err());
         assert!(export_document(" ", PDF, "pdf").is_err());
