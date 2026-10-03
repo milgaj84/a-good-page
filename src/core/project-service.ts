@@ -4,6 +4,7 @@ import { ProjectChangeError } from './project-preview';
 import { rankRelinks, relinkOrder, type RelinkCandidate } from './project-relink';
 import { projectHealth, type ProjectHealth } from './project-health';
 import { mapLimit } from './concurrency';
+import { friendly } from './friendly';
 export interface ProjectPorts {
   list(root: string, folder?: string): Promise<FolderListing>;
   read(root: string, path: string): Promise<{ content: string }>;
@@ -43,21 +44,22 @@ export class ProjectService {
     paths.sort((a,b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0));
     const raw = await this.io.order(base);
     const order = orderFiles(paths, raw === null ? null : manifest(JSON.parse(raw)));
+    const present = new Set(paths);
     const found = new Map<string, ProjectEntry>();
     const sep = base.includes(String.fromCharCode(92)) ? String.fromCharCode(92) : '/';
     // Pages are read several at a time; the order of `found` still follows the project order.
     const entries = await mapLimit(order.chapters, 8, async (rel): Promise<[string, ProjectEntry]> => {
-      if (!paths.includes(rel)) return [rel, { path: rel, file: null, issue: 'Missing from workspace' }];
+      if (!present.has(rel)) return [rel, { path: rel, file: null, issue: 'Missing from workspace' }];
       const full = (base.endsWith(sep) ? base : base + sep) + rel.split('/').join(sep);
       try {
         const doc = await this.io.read(base, full);
         return [rel, { path: rel, file: chapterInfo(rel, doc.content), issue: null }];
-      } catch (error) { return [rel, { path: rel, file: null, issue: 'Cannot read: ' + String(error) }]; }
+      } catch (error) { return [rel, { path: rel, file: null, issue: 'Cannot read: ' + friendly(error) }]; }
     });
     for (const [rel, entry] of entries) found.set(rel, entry);
     const existing = raw === null ? null : manifest(JSON.parse(raw));
     const changed = raw === null || JSON.stringify(existing) !== JSON.stringify(order);
-    const missing = order.chapters.some(path=>!paths.includes(path));
+    const missing = order.chapters.some(path=>!present.has(path));
     const stored = persistOrder && order.chapters.length && changed && !missing ? await this.io.saveOrder(base, raw, JSON.stringify(order)) : raw;
     this.root = base; this.raw = stored; this.order = order; this.files = found; this.available = paths;
     this.recorded = new Set(stored !== null ? manifest(JSON.parse(stored)).chapters : []);

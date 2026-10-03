@@ -1,3 +1,5 @@
+import { groupHits, rowTitle, splitMatches, treeKey, type NavItem } from './sidebar-logic';
+
 /** A project is a folder in the Library; a file is a page inside one; a loose page sits directly in the Library. */
 export type RowKind = 'project' | 'file' | 'loose';
 
@@ -42,6 +44,10 @@ export interface SidebarEvents {
   query(text: string): void;
   rename(row: SidebarRow, name: string): void;
   hit(hit: SearchHit): void;
+  /** F2 on a row: start renaming it. Without this the row menu opens instead. */
+  startRename?(row: SidebarRow): void;
+  /** Delete on a row: move it to the trash (undoable). Without this the row menu opens instead. */
+  trash?(row: SidebarRow): void;
 }
 
 export interface SidebarView {
@@ -53,6 +59,8 @@ export interface SidebarView {
   /** True when the Library has nothing in it at all, so a welcome with one clear next step is shown. */
   blank?: boolean;
   selecting?: boolean;
+  /** The text being searched for, used to highlight it in the results. Falls back to the search field. */
+  query?: string;
 }
 
 const SVG = (body: string): string => '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
@@ -61,6 +69,8 @@ const ICONS = {
   file: SVG('<path d="M7 3.5h6.5L18 8v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8H18"/>'),
   plus: SVG('<path d="M12 5.5v13M5.5 12h13"/>'),
   select: SVG('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>'),
+  chevron: SVG('<path d="M9.5 6.5l5.5 5.5-5.5 5.5"/>'),
+  clear: SVG('<path d="M7 7l10 10M17 7L7 17"/>'),
   more: SVG('<circle cx="6" cy="12" r="1.1"/><circle cx="12" cy="12" r="1.1"/><circle cx="18" cy="12" r="1.1"/>'),
 };
 function icon(name: keyof typeof ICONS, className: string): HTMLElement {
@@ -76,10 +86,29 @@ export class Sidebar {
   private rebuilding = false;
   private view: SidebarView = { rows: [], hits: [], renaming: null, empty: '' };
 
+  private activePath: string | null = null;
+  private readonly rowOf = new WeakMap<HTMLElement, SidebarRow>();
+
   constructor(private readonly els: SidebarElements, private readonly events: SidebarEvents) {
-    els.search.addEventListener('input', () => events.query(els.search.value));
+    const clear = els.search.nextElementSibling instanceof HTMLButtonElement && els.search.nextElementSibling.classList.contains('side-search-clear') ? els.search.nextElementSibling : null;
+    const sync = (): void => { if (clear) clear.hidden = !els.search.value; };
+    sync();
+    els.search.addEventListener('input', () => { sync(); events.query(els.search.value); });
+    clear?.addEventListener('click', () => { els.search.value = ''; sync(); events.query(''); els.search.focus(); });
     els.search.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && els.search.value) { els.search.value = ''; events.query(''); event.stopPropagation(); }
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        if (els.search.value) { els.search.value = ''; sync(); events.query(''); }
+        else { els.search.blur(); document.querySelector<HTMLElement>('.ProseMirror')?.focus(); }
+      } else if (event.key === 'ArrowDown') {
+        const target = this.rowEls().find(r => r.tabIndex === 0) ?? this.rowEls()[0];
+        if (target) { event.preventDefault(); target.focus(); }
+      }
+    });
+    els.tree.addEventListener('keydown', (event) => this.onKey(event));
+    els.tree.addEventListener('focusin', (event) => {
+      const row = (event.target as HTMLElement).closest<HTMLElement>('.row');
+      if (row?.dataset.path) this.setActive(row);
     });
   }
 
@@ -100,6 +129,7 @@ export class Sidebar {
     const old = tree.querySelector<HTMLInputElement>('.row-input');
     const carry = old && view.renaming !== null && old.closest('.row')?.getAttribute('data-path') === view.renaming
       ? { value: old.value, start: old.selectionStart, end: old.selectionEnd } : null;
+    const hadFocus = Boolean(document.activeElement && tree.contains(document.activeElement) && document.activeElement.tagName !== 'INPUT');
     const parts: Node[] = [];
     const loose = view.rows.filter(r => r.kind === 'loose');
     const projects = view.rows.filter(r => r.kind !== 'loose');
@@ -109,39 +139,122 @@ export class Sidebar {
       if (!view.rows.length && !view.hits.length) {
         const empty = document.createElement('p');
         empty.className = 'tree-empty';
-        empty.textContent = view.empty;
+        empty.setAttribute('role', 'status');
+        empty.textContent = view.empty || 'No matches';
         parts.push(empty);
       }
       if (projects.length || (!view.hits.length && !this.query.trim())) parts.push(this.heading('Projects', true));
-      for (const row of projects) parts.push(this.row(row));
+      if (projects.length) parts.push(this.group('Projects and their pages', projects));
       if (loose.length) {
         parts.push(this.heading('Unfiled pages', false));
-        for (const row of loose) parts.push(this.row(row));
+        parts.push(this.group('Unfiled pages', loose));
       }
     }
     if (view.hits.length) {
       parts.push(this.heading('In your text', false));
-      for (const hit of view.hits) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'search-hit';
-        const title = document.createElement('b');
-        title.textContent = hit.title;
-        button.append(title, document.createTextNode(hit.context));
-        button.addEventListener('click', () => this.events.hit(hit));
-        parts.push(button);
+      const term = view.query ?? this.query;
+      for (const group of groupHits(view.hits)) {
+        const box = document.createElement('div');
+        box.className = 'search-group';
+        const title = document.createElement('button');
+        title.type = 'button';
+        title.className = 'search-title';
+        title.textContent = group.title;
+        title.title = group.title;
+        title.addEventListener('click', () => this.events.hit(group.hits[0]));
+        box.append(title);
+        for (const hit of group.hits) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'search-hit';
+          for (const seg of splitMatches(hit.context, term)) {
+            if (seg.hit) { const mark = document.createElement('mark'); mark.textContent = seg.text; button.append(mark); }
+            else button.append(document.createTextNode(seg.text));
+          }
+          button.addEventListener('click', () => this.events.hit(hit));
+          box.append(button);
+        }
+        parts.push(box);
       }
     }
     this.rebuilding = true;
     tree.replaceChildren(...parts);
     this.rebuilding = false;
     tree.scrollTop = scroll;
+    const rows = this.rowEls();
+    const active = rows.find(r => r.dataset.path === this.activePath) ?? rows.find(r => r.getAttribute('aria-current') === 'true') ?? rows[0];
+    for (const r of rows) r.tabIndex = r === active ? 0 : -1;
+    if (active && hadFocus && view.renaming === null) active.focus();
     const input = tree.querySelector<HTMLInputElement>('.row-input');
     if (input) {
       if (carry) { input.value = carry.value; input.focus(); input.setSelectionRange(carry.start ?? carry.value.length, carry.end ?? carry.value.length); }
       else { input.focus(); input.select(); }
     }
   }
+
+  private group(label: string, rows: readonly SidebarRow[]): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'tree-group';
+    el.setAttribute('role', 'tree');
+    el.setAttribute('aria-label', label);
+    if (this.view.selecting) el.setAttribute('aria-multiselectable', 'true');
+    for (const row of rows) el.append(this.row(row));
+    return el;
+  }
+
+  private rowEls(): HTMLElement[] { return Array.from(this.els.tree.querySelectorAll<HTMLElement>('.row[data-path]')); }
+
+  private setActive(row: HTMLElement): void {
+    this.activePath = row.dataset.path ?? null;
+    for (const r of this.rowEls()) r.tabIndex = r === row ? 0 : -1;
+  }
+
+  private onKey(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'checkbox') return;
+    if (event.key === 'Escape' && this.view.selecting) { event.stopPropagation(); this.events.selectMode(); return; }
+    const el = target.closest<HTMLElement>('.row');
+    const row = el ? this.rowOf.get(el) : undefined;
+    if (!el || !row) return;
+    const els = this.rowEls();
+    const rows = els.map(e => this.rowOf.get(e)!);
+    const at = els.indexOf(el);
+    const key = event.key;
+    const own = target === el || (target as HTMLInputElement).type === 'checkbox';
+    const stop = (): void => { event.preventDefault(); event.stopPropagation(); };
+    if (key === 'F2') { stop(); if (this.events.startRename && !row.missing) this.events.startRename(row); else this.events.menu(row, this.moreOf(el)); return; }
+    if (key === 'Delete') {
+      stop();
+      if (row.missing) return;
+      if (this.events.trash) {
+        const near = rows[at + 1] ?? rows[at - 1];
+        if (near) this.activePath = near.path;
+        this.events.trash(row);
+      } else this.events.menu(row, this.moreOf(el));
+      return;
+    }
+    if (key === 'ContextMenu' || (key === 'F10' && event.shiftKey)) { stop(); this.events.menu(row, this.moreOf(el)); return; }
+    if (event.altKey && (key === 'ArrowUp' || key === 'ArrowDown') && row.kind === 'file' && row.book !== undefined) {
+      stop();
+      const next = rows[at + (key === 'ArrowUp' ? -1 : 1)];
+      if (next?.kind === 'file' && next.book === row.book && next.index !== undefined) this.events.reorder(row.book, row.path, next.index);
+      return;
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if ((key === 'Enter' || key === ' ') && !own) return; // a focused inner button does its own thing
+    if (key === ' ' && this.view.selecting && (target as HTMLInputElement).type === 'checkbox') return;
+    const move = treeKey(rows as NavItem[], at, key);
+    if (!move) return;
+    stop();
+    if ('to' in move) els[move.to].focus();
+    else if ('toggle' in move) {
+      if (key === ' ' && this.view.selecting) this.events.select(row);
+      else this.events.toggle(row);
+    } else if (this.view.selecting) this.events.select(row);
+    else this.events.open(row);
+  }
+
+  private moreOf(el: HTMLElement): HTMLElement { return el.querySelector<HTMLElement>('.row-btn.more') ?? el; }
 
   private welcome(): HTMLElement {
     const box = document.createElement('div');
@@ -191,11 +304,14 @@ export class Sidebar {
       add.addEventListener('click', () => this.events.newProject());
       const select = document.createElement('button');
       select.type = 'button';
-      select.className = 'tree-add';
-      select.title = 'Select several pages';
-      select.setAttribute('aria-label', 'Select several pages');
+      select.className = 'tree-add tree-select';
+      select.title = this.view.selecting ? 'Stop selecting pages (Esc)' : 'Select pages: tick several to move, export or trash';
+      select.setAttribute('aria-label', 'Select pages');
       select.setAttribute('aria-pressed', String(Boolean(this.view.selecting)));
       select.innerHTML = ICONS.select;
+      const word = document.createElement('span');
+      word.textContent = 'Select';
+      select.append(word);
       select.addEventListener('click', () => this.events.selectMode());
       const group = document.createElement('span');
       group.className = 'tree-add-group';
@@ -208,6 +324,14 @@ export class Sidebar {
   private row(row: SidebarRow): HTMLElement {
     const el = document.createElement('div');
     el.className = 'row';
+    this.rowOf.set(el, row);
+    el.setAttribute('role', 'treeitem');
+    el.tabIndex = -1;
+    el.setAttribute('aria-level', row.kind === 'file' ? '2' : '1');
+    el.setAttribute('aria-label', row.label);
+    if (row.kind === 'project') el.setAttribute('aria-expanded', String(Boolean(row.expanded)));
+    el.setAttribute('aria-selected', String(this.view.selecting ? Boolean(row.selected) : row.current));
+    if (this.view.selecting && (row.selected || row.partial)) el.dataset.selected = row.selected ? 'true' : 'partial';
     el.dataset.path = row.path;
     el.dataset.kind = row.kind;
     el.dataset.depth = row.kind === 'file' ? '1' : '0';
@@ -220,6 +344,7 @@ export class Sidebar {
       const current = row.fileName ?? row.label;
       input.value = current;
       input.setAttribute('aria-label', 'Name');
+      input.title = 'Enter to save, Esc to cancel';
       let done = false;
       const finish = (commit: boolean): void => {
         if (done) return;
@@ -232,7 +357,13 @@ export class Sidebar {
         if (event.key === 'Enter') { event.preventDefault(); finish(true); }
         else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
       });
-      input.addEventListener('blur', () => { if (!this.rebuilding) finish(true); });
+      // Keep the typed name when focus goes to a menu or dialog, or the whole window is switched away from.
+      input.addEventListener('blur', (event) => {
+        if (this.rebuilding || done) return;
+        const to = (event as FocusEvent).relatedTarget as HTMLElement | null;
+        if (!document.hasFocus() || to?.closest('.menu, [role="dialog"], .overlay')) return;
+        finish(true);
+      });
       el.append(input);
       return el;
     }
@@ -242,6 +373,7 @@ export class Sidebar {
       box.className = 'row-check';
       box.checked = Boolean(row.selected);
       box.indeterminate = Boolean(row.partial);
+      box.tabIndex = -1;
       box.setAttribute('aria-label', 'Select ' + row.label);
       box.addEventListener('change', () => this.events.select(row));
       el.append(box);
@@ -249,10 +381,12 @@ export class Sidebar {
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'open';
+    open.tabIndex = -1;
+    open.title = rowTitle(row.kind, row.label, row.fileName, row.meta);
     if (row.kind === 'project') {
       const chev = document.createElement('span');
       chev.className = 'chev';
-      chev.textContent = row.expanded ? '▾' : '▸';
+      chev.innerHTML = ICONS.chevron;
       open.append(chev);
       open.setAttribute('aria-expanded', String(Boolean(row.expanded)));
     }
@@ -260,7 +394,6 @@ export class Sidebar {
     const label = document.createElement('span');
     label.className = 'label';
     label.textContent = row.label;
-    label.title = row.fileName && row.fileName !== row.label ? row.label + ' — file: ' + row.fileName : row.label;
     open.append(label);
     if (row.meta) {
       const meta = document.createElement('span');
@@ -278,6 +411,7 @@ export class Sidebar {
       const add = document.createElement('button');
       add.type = 'button';
       add.className = 'row-btn add';
+      add.tabIndex = -1;
       add.title = 'Add a page to ' + row.label;
       add.setAttribute('aria-label', 'Add a page to ' + row.label);
       add.innerHTML = ICONS.plus;
@@ -287,7 +421,8 @@ export class Sidebar {
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'row-btn more';
-    more.title = 'More actions';
+    more.tabIndex = -1;
+    more.title = 'More actions for ' + row.label + ' (right-click or Shift+F10)';
     more.innerHTML = ICONS.more;
     more.setAttribute('aria-label', 'Actions for ' + row.label);
     more.setAttribute('aria-haspopup', 'menu');

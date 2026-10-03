@@ -1,4 +1,6 @@
 /** Letter-by-letter fuzzy matching for the quick switcher: "chtw" finds "Chapter Two". */
+import { fold } from './paths';
+
 export interface FuzzyMatch {
   score: number;
   /** Indexes in the text of the matched letters, for highlighting. */
@@ -28,10 +30,10 @@ function startsWord(text: string, index: number): boolean {
  * Returns null when the letters do not all appear. Spaces in the query are ignored.
  */
 export function fuzzyMatch(query: string, text: string): FuzzyMatch | null {
-  const q = query.toLocaleLowerCase().replace(/\s+/g, '');
+  const q = fold(query).replace(/\s+/g, '');
   if (!q) return { score: 0, positions: [] };
   const original = text.slice(0, MAX_TEXT);
-  const t = original.toLocaleLowerCase();
+  const t = fold(original);
   const n = q.length;
   const m = t.length;
   if (n > m) return null;

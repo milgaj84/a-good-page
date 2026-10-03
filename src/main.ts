@@ -23,7 +23,7 @@ import { protectReload } from './core/file-conflict';
 import { snapshotBackend } from './adapters/snapshot-store';
 import { createReader } from './editor/reader';
 import { isEditorCommand, type Action, type AppAction } from './core/commands';
-import { isPlainTextPath, isWritingFile, nameFromPath } from './core/paths';
+import { fold, isPlainTextPath, isWritingFile, nameFromPath } from './core/paths';
 import { DebouncedDraftStore, LocalDraftStore, SafeStore, browserStorage } from './adapters/storage';
 import { ChangeLatch, FrameTask, browserFrames } from './core/frame';
 import { bindAutoscroll } from './ui/autoscroll';
@@ -314,7 +314,9 @@ const sidebar = new Sidebar({ tree: el('tree'), search: el<HTMLInputElement>('si
   select: (row) => void library?.toggleSelected(row),
   selectMode: () => library?.toggleSelectMode(),
   rename: (row, name) => void library?.commitRename(row, name),
-  hit: (hit) => { void library?.open(hit.path, sidebar.query.trim()); if (SMALL()) setSidebar(false); },
+  startRename: (row) => library?.startRename(row.path),
+  trash: (row) => void library?.trash(row.path, row.kind, row.label),
+  hit: (hit) => { void library?.open(hit.path, sidebar.query.trim(), (hit as { occurrence?: number }).occurrence); if (SMALL()) setSidebar(false); },
 });
 function setSidebar(show: boolean): void {
   app.classList.toggle('sidebar-hidden', !show);
@@ -448,11 +450,18 @@ library = new LibraryController({
   offerUndo: (message, label, run) => chrome.toastAction(message, label, run),
   notify: (message) => chrome.toast(message, 4200),
   markdown: () => editor.getMarkdown(),
-  jumpToPhrase: (phrase) => {
-    const needle = phrase.toLocaleLowerCase();
+  jumpToPhrase: (phrase, occurrence = 0) => {
+    // Accents and case are ignored, as in the search that found it; the nth match is the one that was clicked.
+    const needle = fold(phrase);
+    if (!needle) return;
     let pos: number | null = null;
+    let seen = 0;
     editor.instance.state.doc.descendants((node, at) => {
-      if (pos === null && node.isText) { const offset = (node.text ?? '').toLocaleLowerCase().indexOf(needle); if (offset >= 0) pos = at + offset; }
+      if (pos !== null || !node.isText) return;
+      const text = fold(node.text ?? '');
+      for (let offset = text.indexOf(needle); offset >= 0; offset = text.indexOf(needle, offset + needle.length)) {
+        if (seen++ === occurrence) { pos = at + offset; return; }
+      }
     });
     if (pos !== null) editor.jumpTo(pos);
   },
@@ -463,7 +472,7 @@ library = new LibraryController({
     settings.render(prefs, themes.theme, library?.root ?? null);
     const folder = library?.root ? nameFromPath(library.root) : '';
     el('library-name').textContent = folder === 'Untitled' ? '' : folder;
-    el('library-menu').title = library?.root ? library.root + ' — click to change your Library folder' : 'Choose your Library folder';
+    el('library-menu').title = library?.root ? 'Switch Library folder: ' + library.root : 'Choose your Library folder';
   },
   moved: (from, to) => { projects?.historyMoved(from, to); views.move(from, to); },
   rendered: () => updateNext(),
@@ -837,7 +846,9 @@ function dispatch(action: Action): void {
   else APP[action]();
 }
 
-bindShortcuts(window, { resolve: resolveShortcut, closeLayers, dispatch });
+// F2 and Delete belong to the Library row that has focus, not to the open page.
+const inTree = (event: Event): boolean => event.target instanceof Element && event.target.closest('#tree') !== null;
+bindShortcuts(window, { resolve: (event) => ((event.key === 'F2' || event.key === 'Delete') && inTree(event) ? null : resolveShortcut(event)), closeLayers, dispatch });
 bindButtons(el, (action) => APP[action]());
 el('btn-sidebar').addEventListener('click', () => APP.sidebar());
 el('library-menu').addEventListener('click', () => lib.libraryMenu(el('library-menu')));

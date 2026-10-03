@@ -14,6 +14,7 @@ export interface MenuAnchor { left: number; top: number; right: number; bottom: 
 export class Menu {
   private el: HTMLElement | null = null;
   private opener: HTMLElement | null = null;
+  private returnTo: HTMLElement | null = null;
 
   constructor() {
     document.addEventListener('mousedown', (event) => {
@@ -30,6 +31,7 @@ export class Menu {
     const el = document.createElement('div');
     el.className = 'menu';
     el.setAttribute('role', 'menu');
+    el.setAttribute('aria-orientation', 'vertical');
     for (const item of items) {
       if (item.separator) { el.append(document.createElement('hr')); continue; }
       if (item.heading) {
@@ -53,8 +55,13 @@ export class Menu {
     el.addEventListener('keydown', (event) => {
       const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>('button'));
       const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      if (event.key === 'ArrowDown') { event.preventDefault(); buttons[(at + 1) % buttons.length]?.focus(); }
-      else if (event.key === 'ArrowUp') { event.preventDefault(); buttons[(at - 1 + buttons.length) % buttons.length]?.focus(); }
+      const go = (index: number): void => { event.preventDefault(); buttons[(index + buttons.length) % buttons.length]?.focus(); };
+      if (event.key === 'ArrowDown') go(at + 1);
+      else if (event.key === 'ArrowUp') go(at < 0 ? -1 : at - 1);
+      else if (event.key === 'Home') go(0);
+      else if (event.key === 'End') go(-1);
+      else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.close(); }
+      else if (event.key === 'Tab') this.close(); // focus goes back to the opener and Tab carries on from there
     });
     document.body.append(el);
     const box = el.getBoundingClientRect();
@@ -64,6 +71,7 @@ export class Menu {
     el.style.top = Math.max(8, Math.min(window.innerHeight - box.height - 8, top)) + 'px';
     this.el = el;
     this.opener = opener;
+    this.returnTo = opener ?? (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
     opener?.setAttribute('aria-expanded', 'true');
     el.querySelector<HTMLButtonElement>('button')?.focus();
   }
@@ -73,8 +81,9 @@ export class Menu {
     this.el.remove();
     this.el = null;
     this.opener?.setAttribute('aria-expanded', 'false');
-    if (restoreFocus) this.opener?.focus();
+    if (restoreFocus && this.returnTo?.isConnected) this.returnTo.focus();
     this.opener = null;
+    this.returnTo = null;
     return true;
   }
 }

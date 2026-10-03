@@ -6,6 +6,33 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-10-05
+
+The left-hand side, made easier. No new features: the Library sidebar is clearer, can be used from the keyboard, and surprises you less.
+
+### Improved: looking and finding
+
+- **The Library switcher is a real button** with a folder icon, the folder's name and a chevron ("Switch Library folder"). The arrow beside **+ New page** is larger and says what it holds: a new project, or importing a Word document or a folder.
+- **Row actions are always reachable.** The ⋯ button shows on the open page and on touch screens, appears for keyboard focus, and the same menu opens with a right-click, the Menu key or Shift+F10. Project chevrons are larger and turn as a project opens.
+- **Long names can be read.** Hovering a row shows its full name, file name and word count; names are cut with an ellipsis the same way everywhere.
+- **Selecting pages is labelled.** A **Select** button with a pressed state replaces the tick-box icon; ticked rows are highlighted; the bar shows how many are selected, "Esc to finish", and tooltips.
+- **Search is easier to read and to use.** Matches are highlighted in each snippet, results are grouped under their page, the field has a clear button, Esc clears it (a second Esc returns to the page), and an empty search says "No matches". A click now lands on the match you clicked, not always the first.
+- **Search ignores accents and case:** "sto" finds "što", "cafe" finds "café" (also in Ctrl+P).
+
+### Improved: the keyboard
+
+- **The Library is a real tree.** One Tab stop; Up, Down, Home and End move; Left and Right collapse, expand or jump to the parent or first child; Enter or Space opens a page or toggles a project; **F2** renames; **Delete** moves to the trash (undoable); **Alt+Up/Down** moves a page within its project. Focus stays on the same row after the list redraws.
+- Menus take Home and End, return focus to where you were on Esc, and close on Tab.
+- A name you are typing is no longer committed (or lost) when a menu, dialog or another window takes focus.
+
+### Improved: fewer surprises
+
+- A name that had to change because of characters files cannot contain says so: "Saved as “Chapter 3- Fog” because file names cannot contain :". A name clash says which name is taken and suggests another ("“Draft” already exists here. Try “Draft 2”."). A new page that names itself from its first line gets a number quietly when the title is taken.
+- Undoing a trash of a page you were not on no longer opens it and takes over the editor. Trashing, restoring or moving several pages tells you how many could not be done.
+- Creating, renaming, moving, trashing or restoring a page re-reads only its own project, so big Libraries respond faster. Search loads projects in parallel.
+- If the first-run guide cannot be created, you get a clear note instead of an empty sidebar.
+
+
 ## [0.8.3] - 2026-10-05
 
 The right-hand side, made easier. No new features: the same things, easier to find and understand.

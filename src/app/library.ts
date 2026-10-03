@@ -5,14 +5,14 @@ import type { PaletteEntry } from '../core/palette';
 import { ProjectService, type ProjectPorts } from '../core/project-service';
 import { chapterInfo, searchProject, type ProjectFile } from '../core/project';
 import type { SearchFile } from '../core/project-replace';
-import { nameFromPath } from '../core/paths';
-import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
+import { fold, nameFromPath } from '../core/paths';
+import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, nextName, parentOf, relativeTo, rootRows, savedAsNotice, type TreeRow } from '../core/library';
 import { importDocx, type DocxParts } from '../import/docx';
 import { mapLimit } from '../core/concurrency';
 import { friendly } from '../core/friendly';
 import type { Menu, MenuItem } from '../ui/menu';
 import type { TrashItem } from '../adapters/tauri';
-import type { SearchHit, Sidebar, SidebarRow } from '../ui/sidebar';
+import type { SearchHit, Sidebar, SidebarRow, SidebarView } from '../ui/sidebar';
 
 export const LIBRARY_KEY = 'agp.library.v1';
 const EXPANDED_KEY = 'agp.library.open.v1';
@@ -54,7 +54,8 @@ export interface LibraryDeps {
   offerUndo(message: string, label: string, run: () => void): void;
   notify(message: string): void;
   markdown(): string;
-  jumpToPhrase(phrase: string): void;
+  /** `occurrence` says which match of the phrase to land on (0 is the first). */
+  jumpToPhrase(phrase: string, occurrence?: number): void;
   focusEditor(): void;
   flushAutosave(): void;
   /** Words in the open page, for the sidebar's live count. */
@@ -74,6 +75,9 @@ export interface LibraryDeps {
 }
 
 const message = friendly;
+
+/** A search hit as the sidebar gets it; `occurrence` lets a click land on this match, not the first. */
+export type LibraryHit = SearchHit & { occurrence?: number };
 
 /** What Word held that comes across as nothing: said plainly so no one wonders where it went. */
 function skippedNote(book: { pictures: number; footnotes?: number; comments?: number }): string {
@@ -104,6 +108,9 @@ export class LibraryController {
   private searchStamp = 0;
   private renamingBusy = false;
   private focusAfterRename = false;
+  private nameTaken = false;
+  /** Trashed items that held the open page, so Undo brings that page back. */
+  private readonly wasOpen = new Set<string>();
 
   constructor(private readonly d: LibraryDeps) {
     let saved: string[] = [];
@@ -141,14 +148,20 @@ export class LibraryController {
   /** First launch only: a short, real page that teaches by being read. Returns its path if it was created. */
   async welcomeIfNew(): Promise<string | null> {
     if (!this.root || this.d.store.get(WELCOMED_KEY) || this.rows.length) return null;
-    const project = await this.d.io.create(this.root, null, 'Getting started', 'folder');
-    const path = await this.d.io.create(this.root, project, WELCOME_TITLE, 'file');
-    await this.d.io.write(path, WELCOME_TEXT);
-    // Only once the guide really exists is it counted as shown, so a failure tries again next launch.
-    this.d.store.set(WELCOMED_KEY, '1');
-    this.expanded.add(project);
-    await this.refresh();
-    return path;
+    try {
+      const project = await this.d.io.create(this.root, null, 'Getting started', 'folder');
+      const path = await this.d.io.create(this.root, project, WELCOME_TITLE, 'file');
+      await this.d.io.write(path, WELCOME_TEXT);
+      // Only once the guide really exists is it counted as shown, so a failure tries again next launch.
+      this.d.store.set(WELCOMED_KEY, '1');
+      this.expanded.add(project);
+      await this.refresh();
+      return path;
+    } catch (error) {
+      this.d.notify('Could not create the guide (' + message(error) + ') Use the + beside Projects to start your first project.');
+      await this.refresh();
+      return null;
+    }
   }
 
   /** An unsaved untitled draft from an older version becomes a real page, so no words are left without a file. */
@@ -243,7 +256,8 @@ export class LibraryController {
   }
 
   // ---------- reading ----------
-  async refresh(): Promise<void> {
+  /** Re-reads the Library listing and the open books. With `only`, just those books are re-read (plus any open book not loaded yet). */
+  async refresh(only?: ReadonlyArray<string | null | undefined>): Promise<void> {
     if (!this.root) return;
     try {
       this.rows = rootRows((await this.d.io.list(this.root)).entries);
@@ -255,7 +269,8 @@ export class LibraryController {
     const home = current && this.root ? bookOf(this.root, current) : null;
     if (home) this.expanded.add(home);
     for (const key of [...this.books.keys()]) if (!this.rows.some(r => r.path === key)) this.books.delete(key);
-    await Promise.all(this.rows.filter(r => r.kind === 'project' && this.expanded.has(r.path)).map(r => this.loadBook(r.path)));
+    const touched = only ? new Set(only) : null;
+    await Promise.all(this.rows.filter(r => r.kind === 'project' && this.expanded.has(r.path) && (!touched || touched.has(r.path) || !this.books.has(r.path))).map(r => this.loadBook(r.path)));
     this.render();
   }
 
@@ -290,7 +305,7 @@ export class LibraryController {
       const chapters = service ? service.chapters : [];
       const opened = row.kind === 'project' && (this.expanded.has(row.path) || Boolean(q));
       const nameHit = rows.some(r => r.path === row.path);
-      const chapterHits = chapters.filter(c => !q || (stem(c.path) + ' ' + (c.file?.title ?? '')).toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+      const chapterHits = chapters.filter(c => !q || fold(stem(c.path) + ' ' + (c.file?.title ?? '')).includes(fold(q)));
       if (q && !nameHit && !chapterHits.length) continue;
       const projectPages = chapters.filter(c => c.file).map(c => this.chapterPath(row.path, c.path));
       const picked = projectPages.filter(x => this.selected.has(x)).length;
@@ -314,28 +329,30 @@ export class LibraryController {
     }
     // Current page's live word count for loose pages too.
     for (const r of out) if (r.kind === 'loose' && r.current) r.meta = live.toLocaleString();
-    this.d.sidebar.render({
+    const view: SidebarView & { query: string } = {
+      query: q,
       rows: out, hits: q.length >= 2 ? this.textHits(q) : [], renaming: this.renaming,
       empty: q ? 'Nothing here matches “' + q + '”.' : '',
       blank: !q && this.rows.length === 0,
       selecting: this.selecting,
-    });
+    };
+    this.d.sidebar.render(view);
     this.d.rendered?.();
   }
 
-  private textHits(q: string): SearchHit[] {
-    const hits: SearchHit[] = [];
+  private textHits(q: string): LibraryHit[] {
+    const hits: LibraryHit[] = [];
     for (const [book, service] of this.books) {
       const files = service.chapters.flatMap(c => (c.file ? [c.file as ProjectFile] : []));
       for (const hit of searchProject(files, q).slice(0, 8)) {
-        hits.push({ path: this.chapterPath(book, hit.path), book, title: displayName(stem(hit.path), hit.title), context: hit.context });
+        hits.push({ path: this.chapterPath(book, hit.path), book, title: displayName(stem(hit.path), hit.title), context: hit.context, occurrence: hit.occurrence });
         if (hits.length >= 30) return hits;
       }
     }
     for (const [path, text] of this.looseText) {
       const name = path.split(/[\\/]/).pop() ?? path;
       for (const hit of searchProject([chapterInfo(name, text)], q).slice(0, 3)) {
-        hits.push({ path, book: null, title: displayName(stem(path), hit.title), context: hit.context });
+        hits.push({ path, book: null, title: displayName(stem(path), hit.title), context: hit.context, occurrence: hit.occurrence });
         if (hits.length >= 30) return hits;
       }
     }
@@ -347,25 +364,28 @@ export class LibraryController {
     this.query = text;
     if (text.trim().length >= 2 && this.root) {
       const stale = Date.now() - this.searchStamp > 60_000;
-      if (stale) { this.looseText.clear(); for (const key of [...this.books.keys()]) await this.loadBook(key); }
+      if (stale) this.looseText.clear();
       this.searchStamp = Date.now();
-      for (const row of this.rows) {
-        if (row.kind === 'project' && !this.books.has(row.path)) await this.loadBook(row.path);
-        else if (row.kind === 'loose' && !this.looseText.has(row.path) && this.looseText.size < 200) {
-          try { this.looseText.set(row.path, (await this.d.io.open(this.root, row.path)).content); } catch { /* unreadable pages are simply not searched */ }
-        }
-      }
+      const root = this.root;
+      const projects = this.rows.filter(r => r.kind === 'project' && (stale || !this.books.has(r.path)));
+      const loose = this.rows.filter(r => r.kind === 'loose' && !this.looseText.has(r.path)).slice(0, Math.max(0, 200 - this.looseText.size));
+      await Promise.all([
+        mapLimit(projects, 3, row => this.loadBook(row.path)),
+        mapLimit(loose, 6, async row => {
+          try { this.looseText.set(row.path, (await this.d.io.open(root, row.path)).content); } catch { /* unreadable pages are simply not searched */ }
+        }),
+      ]);
       if (this.query !== text) return; // the writer kept typing; the newer search will draw
     }
     this.render();
   }
 
   // ---------- opening ----------
-  async open(path: string, phrase?: string): Promise<boolean> {
+  async open(path: string, phrase?: string, occurrence?: number): Promise<boolean> {
     if (!this.root) return false;
     this.d.flushAutosave();
     const ok = await this.d.doc.openWorkspacePath(this.root, path, this.d.io.open);
-    if (ok && phrase) this.d.jumpToPhrase(phrase);
+    if (ok && phrase) this.d.jumpToPhrase(phrase, occurrence);
     if (ok) this.render();
     return ok;
   }
@@ -392,7 +412,7 @@ export class LibraryController {
       this.d.flushAutosave();
       const path = await this.d.io.create(this.root, inBook, 'Untitled', 'file');
       if (inBook) this.expanded.add(inBook);
-      await this.refresh();
+      await this.refresh([inBook]);
       await this.open(path);
       this.d.focusEditor();
     } catch (error) { this.d.notify('Could not create a page: ' + message(error)); }
@@ -468,7 +488,7 @@ export class LibraryController {
     this.renaming = null;
     const focus = this.focusAfterRename;
     this.focusAfterRename = false;
-    if (name) await this.renamePath(row.path, row.kind, name);
+    if (name) await this.renamePath(row.path, row.kind, name, true);
     else this.render();
     if (focus) this.d.focusEditor();
   }
@@ -476,12 +496,14 @@ export class LibraryController {
   async renameCurrent(name: string): Promise<void> {
     const path = this.d.doc.snapshot().path;
     if (!path || !this.root) return;
-    await this.renamePath(path, 'file', name);
+    await this.renamePath(path, 'file', name, true);
   }
 
-  private async renamePath(path: string, kind: SidebarRow['kind'], name: string): Promise<boolean> {
+  /** `typed` is true when the writer chose the name, so a changed name is explained; automatic names stay quiet. */
+  private async renamePath(path: string, kind: SidebarRow['kind'], name: string, typed = false): Promise<boolean> {
     if (!this.root || this.renamingBusy) return false;
     this.renamingBusy = true;
+    this.nameTaken = false;
     try {
       const current = this.d.doc.snapshot().path;
       const touchesCurrent = Boolean(current && (current === path || (kind === 'project' && relativeTo(path, current) !== null)));
@@ -504,11 +526,17 @@ export class LibraryController {
       }
       this.d.moved(path, next);
       if (touchesCurrent && current) this.d.doc.adoptRenamedPath(next + current.slice(path.length));
-      await this.refresh();
+      await this.refresh([bookPath]);
       this.d.changed();
+      const used = nameFromPath(next);
+      const said = typed ? savedAsNotice(name, used) : null;
+      if (said) this.d.notify(said);
       return true;
     } catch (error) {
-      this.d.notify(message(error));
+      if (/already exists/i.test(message(error))) {
+        this.nameTaken = true;
+        if (typed) this.d.notify('“' + name.trim() + '” already exists here. Try “' + nextName(name) + '”.');
+      } else this.d.notify(message(error));
       return false;
     } finally { this.renamingBusy = false; }
   }
@@ -524,7 +552,8 @@ export class LibraryController {
     if (!(await this.d.doc.save())) return;
     const still = this.d.doc.snapshot();
     if (still.path !== snap.path || autoRenameTarget(still.name, this.d.markdown()) === null) return;
-    await this.renamePath(snap.path, 'file', title);
+    // A title another page already has gets a number, quietly; the page's heading still shows its own title.
+    if (!(await this.renamePath(snap.path, 'file', title)) && this.nameTaken) await this.renamePath(snap.path, 'file', nextName(title));
   }
 
   // ---------- moving between projects ----------
@@ -549,7 +578,7 @@ export class LibraryController {
       this.d.moved(path, next);
       if (touchesCurrent) this.d.doc.adoptRenamedPath(next);
       if (dest) { this.expanded.add(dest); this.books.delete(dest); }
-      await this.refresh();
+      await this.refresh([from, dest]);
       if (dest && index !== undefined) {
         const target = this.books.get(dest);
         const rel = target ? relativeTo(target.path ?? dest, next) : null;
@@ -666,7 +695,13 @@ export class LibraryController {
     this.render();
     if (!items.length) return;
     const ordered = [...items].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
-    this.d.offerUndo('Moved ' + items.length + (items.length === 1 ? ' page' : ' pages') + ' to the trash.', 'Undo', () => void (async () => { for (const item of ordered) await this.restore(item); })());
+    const failed = paths.length - items.length;
+    this.d.offerUndo('Moved ' + items.length + (items.length === 1 ? ' page' : ' pages') + ' to the trash.' + (failed ? ' ' + failed + ' could not be moved.' : ''), 'Undo', () => void (async () => {
+      let back = 0;
+      for (const item of ordered) if (await this.restoreItem(item, true)) back++;
+      const lost = ordered.length - back;
+      this.d.notify('Restored ' + back + (back === 1 ? ' page.' : ' pages.') + (lost ? ' ' + lost + ' could not be restored.' : ''));
+    })());
   }
 
   /** Hands the ticked pages of one project to Export; pages from several places cannot be exported together. */
@@ -696,23 +731,27 @@ export class LibraryController {
   // ---------- the trash ----------
   async trashItems(): Promise<TrashItem[]> { return this.root ? this.d.io.listTrash(this.root) : []; }
 
-  /** Puts an item back where it was and, when it is a page, opens it. */
-  async restore(item: TrashItem): Promise<void> {
-    if (!this.root) return;
+  /** Puts an item back where it was. It is opened only when it is the page you were on when it was trashed (Undo); otherwise it just reappears in the list. */
+  async restore(item: TrashItem): Promise<void> { await this.restoreItem(item, false); }
+
+  private async restoreItem(item: TrashItem, quiet: boolean): Promise<boolean> {
+    if (!this.root) return false;
     try {
       const path = await this.d.io.restore(this.root, item.item);
       const home = item.is_dir ? null : bookOf(this.root, path);
+      if (home) this.expanded.add(home);
+      if (item.is_dir) this.expanded.add(path);
       if (home && typeof item.position === 'number') {
         // A fresh read adds the restored page at the end; put it back where it was.
         const service = await this.loadBook(home);
         const rel = service ? relativeTo(service.path ?? home, path) : null;
-        if (service && rel) { await service.moveTo(rel, item.position).catch(() => undefined); this.expanded.add(home); }
-      }
-      await this.refresh();
-      if (!item.is_dir) await this.open(path);
-      else { this.expanded.add(path); await this.refresh(); }
-      this.d.notify('Restored “' + item.original.replace(/\.(md|markdown|txt)$/i, '') + '”.');
-    } catch (error) { this.d.notify('Could not restore: ' + message(error)); }
+        if (service && rel) await service.moveTo(rel, item.position).catch(() => undefined);
+        await this.refresh([]);
+      } else await this.refresh([home]);
+      if (this.wasOpen.delete(item.item) && !item.is_dir) await this.open(path);
+      if (!quiet) this.d.notify('Restored “' + item.original.replace(/\.(md|markdown|txt)$/i, '') + '”.');
+      return true;
+    } catch (error) { this.d.notify('Could not restore: ' + message(error)); return false; }
   }
 
   // ---------- moving and removing ----------
@@ -752,7 +791,8 @@ export class LibraryController {
         const rel = relativeTo(service?.path ?? book, path);
         if (service && rel) await service.dropChapter(rel).catch(() => undefined);
       }
-      await this.refresh();
+      if (touchesCurrent && kind === 'file') this.wasOpen.add(trashed);
+      await this.refresh([book]);
       if (touchesCurrent) { if (neighbour) await this.open(neighbour); else await this.openSomething(path); }
       return { item: trashed, name: nameFromPath(path), original, position: position ?? null, trashed_at: Date.now(), is_dir: kind === 'project' };
     } catch (error) { this.d.notify('Could not move to the trash: ' + message(error)); return null; }

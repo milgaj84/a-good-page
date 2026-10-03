@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { fold } from '../src/core/paths';
+import { fuzzyMatch } from '../src/core/fuzzy';
+import { savedAsNotice, nextName } from '../src/core/library';
 import { chapterInfo, manifest, moveChapter, orderFiles, safeChapter, searchProject } from '../src/core/project';
 
 describe('whole manuscript project rules', () => {
@@ -42,5 +45,37 @@ describe('search snippets', () => {
   });
   it('leaves a short line whole', () => {
     expect(searchProject([chapterInfo('a.md', 'A short lighthouse line.')], 'light')[0].context).toBe('A short lighthouse line.');
+  });
+});
+
+describe('accent-insensitive matching', () => {
+  it('folds one character at a time, so indexes stay aligned', () => {
+    expect(fold('Što Žuč Ćevap Đak Café')).toBe('sto zuc cevap dak cafe');
+    expect(fold('Š').length).toBe(1);
+  });
+  it('finds što by sto and keeps the original text in the snippet', () => {
+    const [hit] = searchProject([chapterInfo('a.md', 'Reci mi, ŠTO je to?')], 'sto');
+    expect(hit.context).toBe('Reci mi, ŠTO je to?');
+    expect(searchProject([chapterInfo('a.md', 'café')], 'cafe')).toHaveLength(1);
+    expect(searchProject([chapterInfo('a.md', 'Đurđa i čaj')], 'durda')).toHaveLength(1);
+    expect(searchProject([chapterInfo('a.md', 'Đurđa i čaj')], 'durd')).toHaveLength(1);
+    expect(searchProject([chapterInfo('a.md', 'kaša')], 'kasa')).toHaveLength(1);
+  });
+  it('numbers occurrences across lines', () => {
+    const hits = searchProject([chapterInfo('a.md', 'fog fog\nnone\nfog')], 'fog');
+    expect(hits.map(h => [h.line, h.occurrence])).toEqual([[1, 0], [3, 2]]);
+  });
+  it('the palette matcher ignores accents too', () => {
+    expect(fuzzyMatch('sto', 'Što je to')).not.toBeNull();
+  });
+});
+
+describe('name notices', () => {
+  it('explains changed names and stays quiet otherwise', () => {
+    expect(savedAsNotice('Chapter 3: Fog', 'Chapter 3- Fog')).toBe('Saved as “Chapter 3- Fog” because file names cannot contain :.');
+    expect(savedAsNotice('  Chapter   3 ', 'Chapter 3')).toBeNull();
+    expect(savedAsNotice('Draft.md', 'Draft')).toBeNull();
+    expect(nextName('Draft')).toBe('Draft 2');
+    expect(nextName('Draft 2')).toBe('Draft 3');
   });
 });

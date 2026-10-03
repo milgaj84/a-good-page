@@ -24,3 +24,20 @@ export function isWritingFile(path: string | null | undefined): boolean {
 export function isPlainTextPath(path: string | null | undefined): boolean {
   return /\.txt$/i.test(path ?? '');
 }
+
+const EXTRA_FOLD: Record<string, string> = { 'đ': 'd', 'ł': 'l', 'ø': 'o', 'ħ': 'h' };
+
+/**
+ * Lower-cases and strips accents for MATCHING only ("Što" -> "sto", "Café" -> "cafe"). Each character is folded
+ * on its own and always stays one character, so an index in the folded text is the same index in the original.
+ */
+export function fold(text: string): string {
+  let out = '';
+  for (const ch of text) {
+    let low = ch.toLowerCase();
+    if (low.length !== ch.length) low = ch;
+    const plain = EXTRA_FOLD[low] ?? low.normalize('NFD').replace(/\p{M}/gu, '');
+    out += plain.length === ch.length ? plain : low;
+  }
+  return out;
+}

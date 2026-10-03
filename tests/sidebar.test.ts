@@ -155,7 +155,7 @@ describe('Sidebar selection and cross-project drops', () => {
   it('has no tick boxes, and a tick-box button beside Projects, when not selecting', () => {
     const t = setup(rows);
     expect(t.tree.querySelector('.row-check')).toBeNull();
-    (t.tree.querySelector('.tree-add[aria-label="Select several pages"]') as HTMLElement).click();
+    (t.tree.querySelector('.tree-add[aria-label="Select pages"]') as HTMLElement).click();
     expect(t.events.selectMode).toHaveBeenCalled();
   });
   it('drops a page from another project between pages, with the right index', () => {

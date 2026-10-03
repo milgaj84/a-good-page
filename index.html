@@ -9,22 +9,26 @@
   <body>
     <div class="app" id="app">
       <aside class="sidebar" id="sidebar" aria-label="Library">
-        <button type="button" class="side-library" id="library-menu" aria-haspopup="menu" aria-expanded="false" title="Your Library folder: click to change it"><span class="side-library-label">Library</span><small id="library-name"></small><span class="side-caret" aria-hidden="true">▾</span></button>
+        <button type="button" class="side-library" id="library-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Switch Library folder" title="Switch Library folder"><svg class="ico side-library-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg><span class="side-library-text"><span class="side-library-label">Library</span><span id="library-name" class="side-library-name"></span></span><svg class="ico side-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg></button>
         <div class="side-top">
           <div class="split">
             <button type="button" class="btn-primary" id="btn-new" title="New page (Ctrl+N)">+ New page</button>
-            <button type="button" class="btn-primary split-more" id="btn-new-more" aria-label="More ways to start" title="More ways to start" aria-haspopup="menu" aria-expanded="false">▾</button>
+            <button type="button" class="btn-primary split-more" id="btn-new-more" aria-label="More: new project, import a Word document, import a folder" title="More: new project, import a Word document, import a folder" aria-haspopup="menu" aria-expanded="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg></button>
           </div>
         </div>
-        <input class="side-search" id="side-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" spellcheck="false" />
+        <div class="side-search-wrap">
+          <input class="side-search" id="side-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off" spellcheck="false" />
+          <button type="button" class="side-search-clear" aria-label="Clear search" title="Clear search (Esc)" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+        </div>
         <nav class="tree" id="tree" aria-label="Projects and pages"></nav>
-        <div class="select-bar" id="select-bar" hidden>
-          <div class="select-head"><span id="sel-count" role="status">0 selected</span><button type="button" class="btn" id="sel-done">Done</button></div>
+        <div class="select-bar" id="select-bar" role="group" aria-label="Selected pages" hidden>
+          <div class="select-head"><span id="sel-count" role="status">0 selected</span><button type="button" class="btn" id="sel-done" title="Finish selecting (Esc)">Done</button></div>
           <div class="select-actions">
-            <button type="button" class="btn" id="sel-move">Move to…</button>
-            <button type="button" class="btn" id="sel-export">Export</button>
-            <button type="button" class="btn" id="sel-trash">Trash</button>
+            <button type="button" class="btn" id="sel-move" title="Move the ticked pages to another project">Move to…</button>
+            <button type="button" class="btn" id="sel-export" title="Export the ticked pages">Export</button>
+            <button type="button" class="btn" id="sel-trash" title="Move the ticked pages to the trash (you can undo)">Trash</button>
           </div>
+          <small class="select-hint">Esc to finish</small>
         </div>
       </aside>
 

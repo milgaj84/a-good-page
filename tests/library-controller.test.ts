@@ -18,6 +18,8 @@ function fixture(seed: Record<string, string> = {}) {
   let pickedFolder = true;
   let wordParts = { document: '', rels: '', numbering: '' };
   const adopted: string[] = [];
+  const calls = { list: 0, open: 0 };
+  let jumps: Array<[string, number | undefined]> = [];
   const moves: Array<[string, string]> = [];
   const trashed: Array<{ item: string; name: string; original: string; position: number | null; trashed_at: number; is_dir: boolean }> = [];
   const undos: Array<{ message: string; run: () => void }> = [];
@@ -34,6 +36,7 @@ function fixture(seed: Record<string, string> = {}) {
   const io = {
     defaultLibrary: async () => '/lib',
     list: async (root: string, folder?: string) => {
+      calls.list++;
       const dir = folder ?? root;
       const entries = [
         ...[...dirs].filter(d => d !== dir && parent(d) === dir && !d.includes('/.')).map(d => ({ name: d.split('/').pop()!, path: d, is_dir: true })),
@@ -41,7 +44,7 @@ function fixture(seed: Record<string, string> = {}) {
       ];
       return { root, directory: dir, entries };
     },
-    open: async (_r: string, path: string) => { if (!files.has(path)) throw new Error('missing'); return { path, name: path, content: files.get(path)! }; },
+    open: async (_r: string, path: string) => { calls.open++; if (!files.has(path)) throw new Error('missing'); return { path, name: path, content: files.get(path)! }; },
     order: async (root: string) => files.get(root + '/.a-good-page.json') ?? null,
     saveOrder: async (root: string, _e: string | null, value: string) => { files.set(root + '/.a-good-page.json', value); return value; },
     create: async (_root: string, par: string | null, name: string, kind: 'file' | 'folder') => {
@@ -93,11 +96,11 @@ function fixture(seed: Record<string, string> = {}) {
     offerUndo: (message: string, _label: string, run: () => void) => { undos.push({ message, run }); },
     notify: (m: string) => { notes.push(m); },
     markdown: () => session.markdown,
-    jumpToPhrase: () => undefined, focusEditor: () => undefined, flushAutosave: () => undefined, words: () => 0, changed: () => undefined,
+    jumpToPhrase: (phrase: string, occurrence?: number) => { jumps.push([phrase, occurrence]); }, focusEditor: () => undefined, flushAutosave: () => undefined, words: () => 0, changed: () => undefined,
     moved: (from: string, to: string) => { moves.push([from, to]); },
   } as unknown as LibraryDeps;
   const controller = new LibraryController(deps);
-  return { controller, files, dirs, session, views, notes, moves, undos, adopted, forget: () => { remembered = null; }, word: (document: string, picked: string | null = '/home/me/My Novel.docx') => { wordParts = { document, rels: '', numbering: '' }; pickedWord = picked; }, noFolder: () => { pickedFolder = false; }, refuse: () => { refuseAdopt = true; }, setLegacy: (p: string) => { kv.set(LIBRARY_KEY, p); }, last: () => views[views.length - 1] };
+  return { controller, calls, jumps: () => jumps, files, dirs, session, views, notes, moves, undos, adopted, forget: () => { remembered = null; }, word: (document: string, picked: string | null = '/home/me/My Novel.docx') => { wordParts = { document, rels: '', numbering: '' }; pickedWord = picked; }, noFolder: () => { pickedFolder = false; }, refuse: () => { refuseAdopt = true; }, setLegacy: (p: string) => { kv.set(LIBRARY_KEY, p); }, last: () => views[views.length - 1] };
 }
 
 describe('Library controller', () => {
@@ -260,7 +263,7 @@ describe('history and the trash', () => {
     expect(t.moves[t.moves.length - 1]).toEqual(['/lib/Untitled.md', '/lib/Fresh start.md']);
   });
 
-  it('restores a trashed chapter to its book and opens it', async () => {
+  it('restores a trashed chapter to its book without taking over the editor', async () => {
     const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two' });
     await t.controller.start();
     await t.controller.open('/lib/Novel/01.md');
@@ -269,8 +272,124 @@ describe('history and the trash', () => {
     expect(items.map(i => i.original)).toEqual(['Novel/02.md']);
     await t.controller.restore(items[0]);
     expect(t.files.get('/lib/Novel/02.md')).toBe('# Two');
-    expect(t.session.path).toBe('/lib/Novel/02.md');
+    expect(t.session.path).toBe('/lib/Novel/01.md');
+    expect(t.last().rows.map(r => r.label)).toContain('02');
     expect(await t.controller.trashItems()).toEqual([]);
+  });
+});
+
+describe('0.8.4 sidebar behaviour', () => {
+  it('says so when a typed name is changed, naming the characters', async () => {
+    const t = fixture({ '/lib/A.md': 'a' });
+    await t.controller.start();
+    await t.controller.open('/lib/A.md');
+    await t.controller.renameCurrent('Chapter 3- Fog'); // already clean: no notice
+    expect(t.notes).toEqual([]);
+    const io = (t.controller as unknown as { d: LibraryDeps }).d.io;
+    const real = io.rename;
+    io.rename = (r, p, n) => real(r, p, n.replace(/[:?]/g, '-'));
+    await t.controller.renameCurrent('Chapter 4: Why?');
+    expect(t.notes.join('|')).toContain('Saved as “Chapter 4- Why-” because file names cannot contain : ?');
+  });
+
+  it('names the clash and suggests another name', async () => {
+    const t = fixture({ '/lib/Draft.md': 'a', '/lib/Other.md': 'b' });
+    await t.controller.start();
+    await t.controller.open('/lib/Other.md');
+    await t.controller.renameCurrent('Draft');
+    expect(t.notes).toEqual(['“Draft” already exists here. Try “Draft 2”.']);
+  });
+
+  it('numbers an automatic name quietly when the title is taken', async () => {
+    const t = fixture({ '/lib/The Harbour.md': 'x' });
+    await t.controller.start();
+    await t.controller.newPage();
+    t.session.markdown = '# The Harbour\n\nBoats.';
+    await t.controller.maybeAutoRename();
+    expect(t.session.path).toBe('/lib/The Harbour 2.md');
+    expect(t.notes).toEqual([]);
+  });
+
+  it('re-reads only the book that changed after a page operation', async () => {
+    const t = fixture({ '/lib/A/1.md': '# 1', '/lib/B/1.md': '# b', '/lib/B/2.md': '# b2' });
+    await t.controller.start();
+    await t.controller.toggleBook('/lib/A');
+    await t.controller.toggleBook('/lib/B');
+    await t.controller.open('/lib/A/1.md');
+    t.calls.list = 0; t.calls.open = 0;
+    await t.controller.newPage('/lib/A');
+    // Library listing + book A (listing + 2 pages); book B untouched.
+    expect(t.calls.list).toBe(2);
+    expect(t.calls.open).toBeLessThanOrEqual(3);
+    t.calls.list = 0;
+    await t.controller.renameCurrent('Renamed');
+    expect(t.calls.list).toBe(2);
+    t.calls.list = 0; t.calls.open = 0;
+    await t.controller.refresh();
+    expect(t.calls.list).toBe(3);
+  });
+
+  it('puts the search text on the view and carries the clicked occurrence', async () => {
+    const t = fixture({ '/lib/Novel/01.md': '# One\n\nfog and fog\n\nmore fog' });
+    await t.controller.start();
+    await t.controller.search('fog');
+    const view = t.last() as unknown as { query: string; hits: Array<{ occurrence?: number }> };
+    expect(view.query).toBe('fog');
+    expect(view.hits.map(h => h.occurrence)).toEqual([0, 2]);
+    await t.controller.open('/lib/Novel/01.md', 'fog', 2);
+    expect(t.jumps()).toEqual([['fog', 2]]);
+  });
+
+  it('finds text and names regardless of accents', async () => {
+    const t = fixture({ '/lib/Roman/01.md': '# Jedan\n\nŠto je to? Đurđevak u kafeu.' });
+    await t.controller.start();
+    await t.controller.search('sto');
+    expect(t.last().hits).toHaveLength(1);
+    await t.controller.search('djurdj');
+    expect(t.last().hits).toHaveLength(0);
+    await t.controller.search('durd');
+    expect(t.last().hits).toHaveLength(1);
+  });
+
+  it('Undo of trashing a page you were not on does not open it; one you were on comes back open', async () => {
+    const t = fixture({ '/lib/Novel/01.md': '# One', '/lib/Novel/02.md': '# Two', '/lib/Novel/03.md': '# Three' });
+    await t.controller.start();
+    await t.controller.open('/lib/Novel/01.md');
+    await t.controller.trash('/lib/Novel/03.md', 'file', '03');
+    t.undos[0].run();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.files.has('/lib/Novel/03.md')).toBe(true);
+    expect(t.session.path).toBe('/lib/Novel/01.md');
+    await t.controller.trash('/lib/Novel/01.md', 'file', '01');
+    expect(t.session.path).toBe('/lib/Novel/02.md');
+    t.undos[1].run();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.session.path).toBe('/lib/Novel/01.md');
+  });
+
+  it('reports pages that could not be trashed or restored', async () => {
+    const t = fixture({ '/lib/A.md': 'a', '/lib/B.md': 'b' });
+    await t.controller.start();
+    const io = (t.controller as unknown as { d: LibraryDeps }).d.io;
+    const real = io.trash;
+    io.trash = async (r, p, pos) => { if (p.endsWith('B.md')) throw new Error('locked'); return real(r, p, pos); };
+    await t.controller.toggleSelected({ path: '/lib/A.md', kind: 'loose' } as SidebarRow);
+    await t.controller.toggleSelected({ path: '/lib/B.md', kind: 'loose' } as SidebarRow);
+    await t.controller.trashSelected();
+    expect(t.undos[0].message).toBe('Moved 1 page to the trash. 1 could not be moved.');
+    io.restore = async () => { throw new Error('gone'); };
+    t.undos[0].run();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.notes.at(-1)).toBe('Restored 0 pages. 1 could not be restored.');
+  });
+
+  it('never leaves the sidebar silent when the guide cannot be created', async () => {
+    const t = fixture();
+    await t.controller.start();
+    (t.controller as unknown as { d: LibraryDeps }).d.io.create = async () => { throw new Error('Permission denied'); };
+    expect(await t.controller.welcomeIfNew()).toBeNull();
+    expect(t.notes.join(' ')).toContain('Use the + beside Projects');
+    expect(t.last().blank).toBe(true);
   });
 });
 

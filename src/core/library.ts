@@ -1,4 +1,4 @@
-import { nameFromPath } from './paths';
+import { fold, nameFromPath } from './paths';
 
 /** Names the app gives a brand-new page; the first words you write replace them. */
 export function isAutoName(name: string): boolean {
@@ -78,8 +78,8 @@ export function rootRows(entries: readonly { name: string; path: string; is_dir:
 }
 
 export function filterRows<T extends { name: string }>(rows: readonly T[], query: string): T[] {
-  const q = query.trim().toLocaleLowerCase();
-  return q ? rows.filter(r => r.name.toLocaleLowerCase().includes(q)) : [...rows];
+  const q = fold(query.trim());
+  return q ? rows.filter(r => fold(r.name).includes(q)) : [...rows];
 }
 
 export const WELCOME_TITLE = 'Welcome to A Good Page';
@@ -117,3 +117,20 @@ The gear at the top right holds themes, type, goals and the Library folder. **Fo
 
 To see this guide again, press Ctrl/Cmd+P and type "welcome".
 `;
+
+const BAD_NAME_CHARS = /[\\/:*?"<>|]/g;
+const squashSpaces = (text: string): string => text.trim().replace(/\s+/g, ' ');
+
+/** A short notice when the name a page ended up with is not what was typed (and why), else null. */
+export function savedAsNotice(typed: string, used: string): string | null {
+  const wanted = squashSpaces(typed).replace(/\.(md|markdown|txt)$/i, '');
+  if (!wanted || wanted === used) return null;
+  const bad = [...new Set(typed.match(BAD_NAME_CHARS) ?? [])];
+  return 'Saved as “' + used + '”' + (bad.length ? ' because file names cannot contain ' + bad.join(' ') : '') + '.';
+}
+
+/** "Draft" -> "Draft 2", "Draft 2" -> "Draft 3": a name to suggest when one is taken. */
+export function nextName(name: string): string {
+  const m = /^(.*\S)\s+(\d+)$/.exec(name.trim());
+  return m ? m[1] + ' ' + (Number(m[2]) + 1) : name.trim() + ' 2';
+}

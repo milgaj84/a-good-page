@@ -24,7 +24,7 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 - **It remembers where you were.** Each page reopens at your caret and scroll position, and a page you haven't opened yet is ready to type at its end.
 - **Nothing to save.** **New page** creates a real file at once and autosaves it. The page names itself from your first heading or line. There is no Save As, no "Untitled draft" and no folder picker.
 - **Library → projects → pages.** The Library is your working folder. A **project** is a folder in it (a novel, an essay, a set of notes) with one or many `.md` or `.txt` pages. The **+** beside Projects starts one with a first page; the **+** on a project adds a page. Drag pages into order, or use ⋯ → Move up/down. Pages that sit outside any project are listed under **Unfiled pages**, and ⋯ → Move to puts them in a project. Order is kept in `.a-good-page.json` inside the project.
-- **Working with many pages.** Click the tick-box icon beside *Projects* to **select** several pages, then move, export or trash them together. Drag a page onto another project, between its pages, or onto *Unfiled pages*. The sidebar search looks inside every page of every project, including unfiled ones.
+- **Working with many pages.** Click **Select** beside *Projects* (Esc to finish) to choose several pages, then move, export or trash them together. Drag a page onto another project, between its pages, or onto *Unfiled pages*. The sidebar search ignores accents and case, highlights what it found, and looks inside every page of every project, including unfiled ones.
 - **Find and replace across pages.** **Ctrl/Cmd+Alt+F** (or *All pages…* in Find) searches every page of a project or the whole Library, shows each match with what it would become, lets you tick which to change, and keeps a version of each page in History. Undo puts it all back.
 - **Backups.** *Settings → Library → Backups* makes a zip of your Library (only your writing files and project order, never the trash) on demand or every day or week, keeps the newest few, and can **restore** one next to your current work without overwriting it.
 - **Bring a book in.** Drop a Word (`.docx`) file on the window, or use **New ▾ → Import a Word document…**: each Heading 1 becomes a page of a new project, with bold, italic, headings, lists and links kept. **Import a folder of pages…** copies a folder of `.md` or `.txt` files into a project. Your original files are never changed.
@@ -32,6 +32,7 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 - **Export as PDF, Word, E-book or Markdown.** Add a **title page** (title, subtitle, author), a **contents**, and page numbers; the PDF preview shows exactly what you will get.
 - **Export follows your projects.** Export a single page, or a project in page order, and **tick just the pages you want** (All / None / individual). Use ⋯ → **Export project…** on a project or ⋯ → **Export this page…** on a page. Word counts, search, Ctrl+P and History all work across the same structure.
 - **Go anywhere.** **Ctrl/Cmd+P** searches pages and every command. The **contents** button (top right) lists the headings on this page. Try "focus", "export" or "theme".
+- **Keyboard.** The Library works without a mouse: arrow keys move through it, Enter opens, **F2** renames, **Delete** moves to the trash, **Alt+↑/↓** reorders a page, and the Menu key or right-click opens a row's actions.
 - **Rename, trash.** Click the title, press **F2**, or use a row's ⋯ menu. Move to trash happens at once with an **Undo** button (a restored page returns to its old position), and puts things in a hidden `.trash` folder inside your Library. **Tools → Trash…** lists them and puts each back where it was. Nothing is erased.
 
 ## What's where
@@ -101,6 +102,6 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 
 1. Update `CHANGELOG.md` and the version in those files.
 2. Work through `RELEASE_CHECKLIST.md` in the installed app on each platform.
-3. Commit, then `git tag v0.8.3 && git push origin v0.8.3`.
+3. Commit, then `git tag v0.8.4 && git push origin v0.8.4`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).

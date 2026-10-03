@@ -1,9 +1,9 @@
-import { isWritingFile } from './paths';
+import { fold, isWritingFile } from './paths';
 /** Most chapters one project can hold; Rust enforces the same number. */
 export const MAX_CHAPTERS = 2000;
 export interface ProjectManifest { version: 1; chapters: string[] }
 export interface ProjectFile { path: string; title: string; text: string; words: number; headings: { title: string; line: number; level: number }[] }
-export interface ProjectMatch { path: string; title: string; line: number; context: string }
+export interface ProjectMatch { path: string; title: string; line: number; context: string; /** How many matches come before this one in the page, so a click can land on this one. */ occurrence: number }
 export function safeChapter(path: string): boolean {
   return path.length > 0 && path.length <= 512 && !path.includes(String.fromCharCode(92)) && !path.startsWith('/') &&
     path.split('/').every(segment => !!segment && segment !== '.' && segment !== '..' && ![...segment].some(ch => ch.charCodeAt(0) < 32)) && isWritingFile(path);
@@ -21,7 +21,8 @@ export function orderFiles(paths: readonly string[], existing: ProjectManifest |
   const set = new Set(paths);
   if (set.size !== paths.length || paths.some(p => !safeChapter(p))) throw Error('Invalid chapter path in workspace.');
   const old = existing?.chapters ?? [];
-  const chapters = [...old, ...paths.filter(p => !old.includes(p))];
+  const known = new Set(old);
+  const chapters = [...old, ...paths.filter(p => !known.has(p))];
   if (chapters.length > MAX_CHAPTERS) throw Error('Project order exceeds 2000 chapters. Remove missing entries first.');
   return { version: 1, chapters };
 }
@@ -63,11 +64,17 @@ function around(line: string, at: number, length: number): string {
   return (from > 0 ? '…' : '') + line.slice(from, to).trim() + (to < line.length ? '…' : '');
 }
 export function searchProject(files: readonly ProjectFile[], query: string): ProjectMatch[] {
-  const needle = query.trim().toLocaleLowerCase(); if (!needle) return [];
+  const needle = fold(query.trim()); if (!needle) return [];
   const hits: ProjectMatch[] = [];
-  for (const file of files) file.text.split(String.fromCharCode(10)).forEach((line, i) => {
-    const at = line.toLocaleLowerCase().indexOf(needle);
-    if (at >= 0) hits.push({ path: file.path, title: file.title, line: i + 1, context: around(line, at, needle.length) });
-  });
+  for (const file of files) {
+    let seen = 0;
+    file.text.split(String.fromCharCode(10)).forEach((line, i) => {
+      const lower = fold(line);
+      const at = lower.indexOf(needle);
+      if (at < 0) return;
+      hits.push({ path: file.path, title: file.title, line: i + 1, context: around(line, at, needle.length), occurrence: seen });
+      for (let from = at; from >= 0; from = lower.indexOf(needle, from + needle.length)) seen++;
+    });
+  }
   return hits;
 }
