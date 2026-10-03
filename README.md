@@ -101,6 +101,6 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 
 1. Update `CHANGELOG.md` and the version in those files.
 2. Work through `RELEASE_CHECKLIST.md` in the installed app on each platform.
-3. Commit, then `git tag v0.8.2 && git push origin v0.8.0`.
+3. Commit, then `git tag v0.8.2 && git push origin v0.8.2`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).
