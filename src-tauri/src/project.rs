@@ -28,6 +28,9 @@ fn target(root: &str) -> Result<PathBuf, String> {
 }
 fn contents(path: &Path) -> Result<Option<String>, String> {
     if let Ok(meta) = fs::metadata(path) {
+        if !meta.is_file() {
+            return Err("Project order is not an ordinary file.".into());
+        }
         if meta.len() > LIMIT as u64 {
             return Err("Project order is too large.".into());
         }

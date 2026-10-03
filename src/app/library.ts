@@ -34,6 +34,12 @@ export interface LibraryDeps {
     /** Saves only if the file still holds `expected`; throws if it changed meanwhile. */
     writeGuarded(path: string, content: string, expected: string): Promise<unknown>;
     pickFolder(): Promise<string | null>;
+    /** The Library Rust remembers, if any. */
+    current(): Promise<string | null>;
+    /** Carry over a Library an older version remembered; Rust asks you to confirm it. */
+    adopt(path: string): Promise<string>;
+    /** Switch to a Library used before. */
+    use(path: string): Promise<string>;
     move(root: string, path: string, to: string | null): Promise<string>;
     listTrash(root: string): Promise<TrashItem[]>;
     restore(root: string, path: string): Promise<string>;
@@ -91,7 +97,13 @@ export class LibraryController {
 
   /** Finds (or creates) the Library folder and draws the sidebar. Safe to call again after a folder change. */
   async start(): Promise<void> {
-    let root = this.d.store.get(LIBRARY_KEY);
+    // The program, not the page, remembers which folder is your Library. An older version kept it in the page:
+    // that is carried over once, after Rust asks you to confirm it.
+    let root: string | null = await this.d.io.current().catch(() => null);
+    if (!root) {
+      const legacy = this.d.store.get(LIBRARY_KEY);
+      if (legacy) root = await this.d.io.adopt(legacy).catch(() => null);
+    }
     try {
       if (!root) throw new Error('none');
       root = (await this.d.io.list(root)).root;
@@ -165,6 +177,7 @@ export class LibraryController {
   /** Makes a folder the Library: saves what is open, shows the new folder, and opens its first page if it has one. */
   async useFolder(picked: string): Promise<void> {
     if (picked === this.root) return;
+    picked = await this.d.io.use(picked);
     this.d.flushAutosave();
     if (this.d.doc.isDirty) { await this.d.doc.save(); await this.d.doc.settleWrites(); }
     this.d.store.set(LIBRARY_KEY, picked);
@@ -221,7 +234,7 @@ export class LibraryController {
     const home = current && this.root ? bookOf(this.root, current) : null;
     if (home) this.expanded.add(home);
     for (const key of [...this.books.keys()]) if (!this.rows.some(r => r.path === key)) this.books.delete(key);
-    for (const row of this.rows) if (row.kind === 'project' && this.expanded.has(row.path)) await this.loadBook(row.path);
+    await Promise.all(this.rows.filter(r => r.kind === 'project' && this.expanded.has(r.path)).map(r => this.loadBook(r.path)));
     this.render();
   }
 

@@ -24,7 +24,15 @@ pub struct FsStorage;
 
 impl Storage for FsStorage {
     fn size(&self, path: &Path) -> io::Result<u64> {
-        Ok(fs::metadata(path)?.len())
+        let meta = fs::metadata(path)?;
+        // A named pipe or device would block forever when read; only ordinary files are opened.
+        if !meta.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Only ordinary files can be opened.",
+            ));
+        }
+        Ok(meta.len())
     }
 
     fn read(&self, path: &Path) -> io::Result<String> {
@@ -489,5 +497,66 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), bytes);
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod special_files {
+    use super::*;
+
+    fn dir() -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "agp-special-{}-{}",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, Ordering::SeqCst)
+        ));
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn a_folder_named_like_a_page_is_refused_instead_of_misread() {
+        let d = dir();
+        fs::create_dir(d.join("chapter.md")).unwrap();
+        let service = DocumentService::new(FsStorage);
+        assert!(service
+            .open(d.join("chapter.md").to_str().unwrap())
+            .is_err());
+        assert!(matches!(
+            crate::disk_probe::probe(d.join("chapter.md").to_str().unwrap()),
+            crate::disk_probe::DiskProbe::Unreadable
+        ));
+        assert!(crate::conflict::guarded_save(
+            d.join("chapter.md").to_str().unwrap(),
+            "x",
+            Some("")
+        )
+        .is_err());
+        fs::remove_dir_all(d).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_named_pipe_is_refused_without_waiting_for_it() {
+        let d = dir();
+        let fifo = d.join("pipe.md");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if made {
+            let started = std::time::Instant::now();
+            assert!(DocumentService::new(FsStorage)
+                .open(fifo.to_str().unwrap())
+                .is_err());
+            assert!(matches!(
+                crate::disk_probe::probe(fifo.to_str().unwrap()),
+                crate::disk_probe::DiskProbe::Unreadable
+            ));
+            assert!(crate::conflict::guarded_save(fifo.to_str().unwrap(), "x", None).is_err());
+            assert!(started.elapsed().as_secs() < 5);
+        }
+        fs::remove_dir_all(d).unwrap();
     }
 }

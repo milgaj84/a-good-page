@@ -55,11 +55,20 @@ Select text for a quick formatting bubble, or type `/` on an empty line for head
 ## Your words are safe
 
 - **History follows renames.** Renaming a page or a project keeps its earlier versions.
+- **Fast on any computer.** Heavy parts (PDF and Word export) load only when you export; projects load their pages several at a time; and on a computer that draws the window in software, fades, shadows and animations switch off by themselves (*Settings → More options → Visual effects*).
 - **Autosave** writes to a temporary file, syncs, then renames. If a write fails, the page stays marked and says so.
 - **Outside edits.** If a file changes on disk, autosave pauses and you choose: review, keep a safety snapshot and reload, save yours as a copy, or keep writing.
 - **Crash recovery.** After a forced quit you can resume, save a copy, or discard. Recovery and History are local safety nets, not backups; back up your Library folder.
 - **Plain files.** `.md` keeps headings, lists and links. `.txt` opens and saves as plain text. PDF export is a separate copy and never changes your page.
 - **Other files.** Open a file from elsewhere, or drop one on the window. It edits in place and isn't listed in the sidebar.
+
+## Security and privacy
+
+- **Nothing leaves your computer.** There is no account, no cloud, no analytics, and the app is not allowed to contact the internet.
+- **The app only touches what you chose.** Your Library folder, the backup folder, and files you opened, saved or dropped on the window. Every file and folder picker runs in the app's trusted core, which remembers your choices and refuses any other path, including `..` and symlink tricks.
+- **The window cannot be sent elsewhere.** Links do not open, and nothing can replace the app with another page.
+- **Content is treated as text.** Raw HTML in a page is shown as text, unsafe link addresses are dropped, and a strict content policy blocks scripts from anywhere but the app itself.
+- **Writes are careful.** Saves go to a temporary file and are renamed into place; special files such as named pipes are refused; backups and restores check every path, size and checksum and never overwrite.
 
 ## Install
 
@@ -89,7 +98,7 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must share one version, and a test checks it.
 
 1. Update `CHANGELOG.md` and the version in those files.
-2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md`, `RELEASE_0.7.0.md`, `RELEASE_0.7.1.md`, `RELEASE_0.7.2.md`, `RELEASE_0.7.3.md` and `RELEASE_CHECKLIST.md`.
-3. Commit, then `git tag v0.7.3 && git push origin v0.7.3`.
+2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md`, `RELEASE_0.7.0.md`, `RELEASE_0.7.1.md`, `RELEASE_0.7.2.md`, `RELEASE_0.7.3.md`, `RELEASE_0.8.0.md` and `RELEASE_CHECKLIST.md`.
+3. Commit, then `git tag v0.8.0 && git push origin v0.8.0`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).

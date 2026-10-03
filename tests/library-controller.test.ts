@@ -12,6 +12,9 @@ function fixture(seed: Record<string, string> = {}) {
   const session = { path: null as string | null, name: 'Untitled', dirty: false, markdown: '' };
   const views: SidebarView[] = [];
   const notes: string[] = [];
+  let remembered: string | null = '/lib';
+  let refuseAdopt = false;
+  const adopted: string[] = [];
   const moves: Array<[string, string]> = [];
   const trashed: Array<{ item: string; name: string; original: string; position: number | null; trashed_at: number; is_dir: boolean }> = [];
   const undos: Array<{ message: string; run: () => void }> = [];
@@ -67,6 +70,9 @@ function fixture(seed: Record<string, string> = {}) {
     write: async (path: string, content: string) => { files.set(path, content); },
     writeGuarded: async (path: string, content: string, expected: string) => { if (files.get(path) !== expected) throw new Error('changed'); files.set(path, content); },
     pickFolder: async () => null,
+    current: async () => remembered,
+    adopt: async (path: string) => { adopted.push(path); if (refuseAdopt) throw new Error('declined'); remembered = path; return path; },
+    use: async (path: string) => { remembered = path; return path; },
     move: async (_root: string, path: string, to: string | null) => {
       const dest = to ?? '/lib'; const name = path.split('/').pop()!; let target = `${dest}/${name}`; let i = 2;
       while (files.has(target)) target = `${dest}/${name.replace(/\.md$/, '')} ${i++}.md`;
@@ -85,7 +91,7 @@ function fixture(seed: Record<string, string> = {}) {
     moved: (from: string, to: string) => { moves.push([from, to]); },
   } as unknown as LibraryDeps;
   const controller = new LibraryController(deps);
-  return { controller, files, dirs, session, views, notes, moves, undos, last: () => views[views.length - 1] };
+  return { controller, files, dirs, session, views, notes, moves, undos, adopted, forget: () => { remembered = null; }, refuse: () => { refuseAdopt = true; }, setLegacy: (p: string) => { kv.set(LIBRARY_KEY, p); }, last: () => views[views.length - 1] };
 }
 
 describe('Library controller', () => {
@@ -528,6 +534,41 @@ describe('finding and replacing in many pages', () => {
     await t.controller.afterBulkEdit();
     await t.controller.search('fog');
     expect(t.last().hits.map(h => h.title)).not.toContain('Loose');
+  });
+});
+
+describe('which folder is the Library', () => {
+  it('uses the folder the program remembers, without asking the page', async () => {
+    const t = fixture({ '/lib/A.md': 'a' });
+    await t.controller.start();
+    expect(t.controller.root).toBe('/lib');
+    expect(t.adopted).toEqual([]);
+  });
+
+  it('carries over a folder an older version kept in the page, once, and only through the program\'s own question', async () => {
+    const t = fixture({ '/lib2/Poems/a.md': 'a' });
+    t.dirs.add('/lib2'); t.dirs.add('/lib2/Poems');
+    t.forget();
+    t.setLegacy('/lib2');
+    await t.controller.start();
+    expect(t.adopted).toEqual(['/lib2']);
+    expect(t.controller.root).toBe('/lib2');
+  });
+
+  it('falls back to the default Library when the writer declines, or when nothing was ever chosen', async () => {
+    const declined = fixture({ '/lib/A.md': 'a' });
+    declined.forget();
+    declined.refuse();
+    declined.setLegacy('/elsewhere');
+    await declined.controller.start();
+    expect(declined.adopted).toEqual(['/elsewhere']);
+    expect(declined.controller.root).toBe('/lib');
+    const fresh = fixture({ '/lib/A.md': 'a' });
+    fresh.forget();
+    fresh.setLegacy('');
+    await fresh.controller.start();
+    expect(fresh.adopted).toEqual([]);
+    expect(fresh.controller.root).toBe('/lib');
   });
 });
 

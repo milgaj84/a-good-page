@@ -6,6 +6,37 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-03
+
+Safer, and faster to start and to use.
+
+### Security
+
+- **The app only touches places you chose.** Rust now keeps a list of your Library folders, backup folders and files you opened, saved or dropped on the window, remembered between launches, and refuses every other path the page sends: opening, saving, probing, exporting, listing, Library edits, project order, backup and restore. All checks use canonical paths, so `..` and symlinks cannot lead out of a granted place. Before this, a compromised page could name any `.md`, `.txt`, PDF, Word or zip location on your computer.
+- **Pickers moved into Rust.** Open, Save, folder, export and backup pickers run in the trusted core, so a choice is recorded at the moment you make it; the page no longer has permission to open pickers at all (`dialog:default` was narrowed to the confirmation question only).
+- **A Library from an older version is carried over once, with a question.** Earlier versions remembered the Library folder inside the page. On first launch of this version, Rust asks "Keep using this folder as your Library?" with the folder shown (the default folder needs no question); declining falls back to the default Library.
+- **The window is locked to the app.** It is now created in Rust with a navigation check: links, redirects and drops cannot replace the app with another page (which could have lost unsaved work). Clicking a link in the page does nothing and says so once; new windows and stray drops are blocked.
+- **Stricter content policy.** Added `script-src`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-src 'none'` and `frame-ancestors 'none'`, plus `blob:` for images and `data:` for fonts. The built app was run under the policy with no violations, including PDF preview and Word export. Inline styles are still allowed only because the editor library injects its own stylesheet; the policy blocks every external fetch, so a style cannot leak anything.
+- **Special files cannot hang the app.** A named pipe, device or folder with a page-like name is refused when opening, checking, saving or reading a project order, instead of waiting forever.
+- Checked and confirmed: no HTML is built from text anywhere in the app, raw HTML in a page is shown as text, and unsafe link addresses (`javascript:`, `data:`, `file:` and others) never become links. These are now covered by tests, together with the policy, the permissions and the Rust checks.
+
+### Performance
+
+- **Startup script 78% smaller.** The first script the app must load and parse dropped from 3.3 MB to 0.74 MB. PDF export (pdfmake and its fonts) and the PDF preview (pdf.js) load the first time you press Export.
+- **Projects load several pages at a time** (eight, in order) instead of one after another, and projects shown in the sidebar load together at launch.
+- **Visual effects: Automatic, Full or Light.** The app detects a computer that draws the window in software (where every fade and shadow is repainted on the processor and typing feels heavy) and then switches fades, shadows and animations off by itself. Settings → More options → Visual effects shows what is happening and lets you choose.
+
+### Changed
+
+- The first launch after updating asks once to confirm your Library folder (see Security).
+- A file you used in an earlier version from outside the Library reopens at launch only if you opened or saved it with this version; otherwise open it again once.
+
+### Known limits
+
+- The real window was not available for testing: the Rust checks, the policy and every browser flow were verified, but the native pickers, the one-time Library question and navigation locking need the real-window pass in `RELEASE_0.8.0.md`.
+- Large exports still travel from the page to Rust as a list of numbers; fine for normal documents, slower for very large PDFs.
+- Painting speed on a software-rendered session is addressed (Light effects) but could not be measured outside the real window.
+
 ## [0.7.3] - 2026-10-03
 
 Change many pages at once, and keep your work safe.

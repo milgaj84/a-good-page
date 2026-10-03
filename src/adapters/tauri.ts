@@ -1,26 +1,19 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { ask, open, save } from '@tauri-apps/plugin-dialog';
+import { ask } from '@tauri-apps/plugin-dialog';
 import type { FileGateway, OpenedDocument, Prompter } from '../core/session';
-import { WRITING_EXTENSIONS } from '../core/paths';
-import { suggestedSavePath } from '../core/workspace';
 import { exportRecoveryCopyWith } from '../core/recovery';
 import { FileChangedError, type DiskProbe } from '../core/file-conflict';
 
-const OPEN_FILTERS = [{ name: 'Writing', extensions: [...WRITING_EXTENSIONS] }];
-const SAVE_FILTERS = [{ name: 'Writing', extensions: ['md', 'txt'] }];
-const PDF_FILTERS = [{ name: 'PDF', extensions: ['pdf'] }];
+// Every file and folder picker runs in Rust. The page never names a place on its own: what you pick is
+// remembered there, and any other path the page asks for is refused.
+const pickSave = (suggested: string, kind: 'writing' | 'pdf' | 'docx' | 'md'): Promise<string | null> =>
+  invoke<string | null>('pick_save_file', { suggested, kind });
 
 export const tauriFiles: FileGateway = {
-  async pickOpenPath() {
-    const result = await open({ multiple: false, directory: false, filters: OPEN_FILTERS });
-    return typeof result === 'string' ? result : null;
-  },
-  async pickSavePath(suggestedName: string) {
-    const result = await save({ defaultPath: suggestedName, filters: SAVE_FILTERS });
-    return result ?? null;
-  },
+  pickOpenPath: () => invoke<string | null>('pick_open_file', { kind: 'writing' }),
+  pickSavePath: (suggestedName: string) => pickSave(suggestedName, 'writing'),
   read: (path: string) => invoke<OpenedDocument>('open_document', { path }),
   probe: (path: string) => invoke<DiskProbe>('probe_document', { path }),
   write: (path: string, content: string, expected?: string | null) => {
@@ -33,7 +26,7 @@ export const tauriFiles: FileGateway = {
 };
 
 export async function exportPdfFile(suggestedName: string, bytes: Uint8Array, recheck?: () => Promise<void>): Promise<string | null> {
-  const path = await save({ defaultPath: suggestedName + '.pdf', filters: PDF_FILTERS });
+  const path = await pickSave(suggestedName + '.pdf', 'pdf');
   if (!path) return null;
   const target = /\.pdf$/i.test(path) ? path : path + '.pdf';
   if (recheck) await recheck();
@@ -42,10 +35,10 @@ export async function exportPdfFile(suggestedName: string, bytes: Uint8Array, re
 
 /** Saves a Word or Markdown export through the same guarded write as PDF. Returns the path, or null when the dialog was cancelled. */
 export async function exportDocumentFile(suggestedName: string, bytes: Uint8Array, format: 'docx' | 'md', recheck?: () => Promise<void>): Promise<string | null> {
-  const info = format === 'docx' ? { label: 'Word document', extension: 'docx' } : { label: 'Markdown', extension: 'md' };
-  const path = await save({ defaultPath: suggestedName + '.' + info.extension, filters: [{ name: info.label, extensions: [info.extension] }] });
+  const extension = format;
+  const path = await pickSave(suggestedName + '.' + extension, format);
   if (!path) return null;
-  const target = new RegExp('\\.' + info.extension + '$', 'i').test(path) ? path : path + '.' + info.extension;
+  const target = new RegExp('\\.' + extension + '$', 'i').test(path) ? path : path + '.' + extension;
   if (recheck) await recheck();
   return invoke<string>('export_document', { path: target, bytes: Array.from(bytes), kind: format });
 }
@@ -53,7 +46,7 @@ export async function exportDocumentFile(suggestedName: string, bytes: Uint8Arra
 /** Save a selected historic version separately. A cancelled dialog never changes the open document. */
 export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {
   return exportRecoveryCopyWith(name, content, livePath, navigator.userAgent.includes('Windows'),
-    async (suggestedName) => (await save({ defaultPath: suggestedName, filters: SAVE_FILTERS })) ?? null,
+    (suggestedName) => pickSave(suggestedName, 'writing'),
     (path, words) => tauriFiles.write(path, words, null));
 }
 
@@ -77,10 +70,7 @@ export function restoreBackup(root: string, zip: string): Promise<RestoreSummary
   return invoke<RestoreSummary>('restore_backup', { root, zip });
 }
 export function defaultBackupDir(root: string): Promise<string> { return invoke<string>('default_backup_dir', { root }); }
-export async function chooseBackupFile(): Promise<string | null> {
-  const result = await open({ multiple: false, directory: false, filters: [{ name: 'Backup', extensions: ['zip'] }] });
-  return typeof result === 'string' ? result : null;
-}
+export function chooseBackupFile(): Promise<string | null> { return invoke<string | null>('pick_open_file', { kind: 'zip' }); }
 export function trashEntry(root: string, path: string, position?: number): Promise<string> {
   return invoke<string>('trash_entry', { root, path, position: position ?? null });
 }
@@ -158,21 +148,18 @@ export async function setWritingFullscreen(active: boolean): Promise<void> {
 /** Only the selected directory is scanned. No recursive walk or filesystem plugin grant. */
 export interface WorkspaceEntry { name: string; path: string; is_dir: boolean }
 export interface WorkspaceListing { root: string; directory: string; entries: WorkspaceEntry[] }
-export async function chooseWorkingDirectory(): Promise<string | null> {
-  const result = await open({ directory: true, multiple: false });
-  return typeof result === 'string' ? result : null;
-}
+/** Choose a folder to be your Library. Rust remembers the choice. */
+export function pickLibraryFolder(): Promise<string | null> { return invoke<string | null>('pick_folder', { purpose: 'library' }); }
+/** Choose a folder for backups. */
+export function pickBackupFolder(): Promise<string | null> { return invoke<string | null>('pick_folder', { purpose: 'backup' }); }
+/** The Library chosen last time, kept by the program rather than by the page. */
+export function currentLibrary(): Promise<string | null> { return invoke<string | null>('current_library'); }
+/** Switch to a Library used before. */
+export function useLibrary(path: string): Promise<string> { return invoke<string>('use_library', { path }); }
+/** Carry over a Library remembered by an older version, after the program asks you to confirm the folder. */
+export function adoptLibrary(path: string): Promise<string> { return invoke<string>('adopt_library', { path }); }
 export function listWorkingDirectory(root: string, directory?: string): Promise<WorkspaceListing> {
   return invoke<WorkspaceListing>('list_workspace', { root, directory: directory ?? null });
-}
-
-/** Save As starts in the current workspace folder; normal saves retain their own path. */
-export function filesInWorkingDirectory(current: () => string | null): FileGateway {
-  return { ...tauriFiles, async pickSavePath(suggestedName: string) {
-    const folder = current();
-    const defaultPath = suggestedSavePath(folder, suggestedName);
-    return (await save({ defaultPath, filters: SAVE_FILTERS })) ?? null;
-  } };
 }
 
 /** Workspace clicks are revalidated on the Rust side immediately before opening. */

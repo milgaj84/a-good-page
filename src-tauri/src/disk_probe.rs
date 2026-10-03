@@ -16,7 +16,7 @@ pub fn probe(path: &str) -> DiskProbe {
         return DiskProbe::Unreadable;
     }
     if let Ok(metadata) = fs::metadata(path) {
-        if metadata.len() > MAX_DOCUMENT_BYTES {
+        if !metadata.is_file() || metadata.len() > MAX_DOCUMENT_BYTES {
             return DiskProbe::Unreadable;
         }
     }

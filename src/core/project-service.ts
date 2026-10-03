@@ -3,6 +3,7 @@ import type { FolderListing } from './quick-switch';
 import { ProjectChangeError } from './project-preview';
 import { rankRelinks, relinkOrder, type RelinkCandidate } from './project-relink';
 import { projectHealth, type ProjectHealth } from './project-health';
+import { mapLimit } from './concurrency';
 export interface ProjectPorts {
   list(root: string, folder?: string): Promise<FolderListing>;
   read(root: string, path: string): Promise<{ content: string }>;
@@ -44,14 +45,16 @@ export class ProjectService {
     const order = orderFiles(paths, raw === null ? null : manifest(JSON.parse(raw)));
     const found = new Map<string, ProjectEntry>();
     const sep = base.includes(String.fromCharCode(92)) ? String.fromCharCode(92) : '/';
-    for (const rel of order.chapters) {
-      if (!paths.includes(rel)) { found.set(rel, { path: rel, file: null, issue: 'Missing from workspace' }); continue; }
+    // Pages are read several at a time; the order of `found` still follows the project order.
+    const entries = await mapLimit(order.chapters, 8, async (rel): Promise<[string, ProjectEntry]> => {
+      if (!paths.includes(rel)) return [rel, { path: rel, file: null, issue: 'Missing from workspace' }];
       const full = (base.endsWith(sep) ? base : base + sep) + rel.split('/').join(sep);
       try {
         const doc = await this.io.read(base, full);
-        found.set(rel, { path: rel, file: chapterInfo(rel, doc.content), issue: null });
-      } catch (error) { found.set(rel, { path: rel, file: null, issue: 'Cannot read: ' + String(error) }); }
-    }
+        return [rel, { path: rel, file: chapterInfo(rel, doc.content), issue: null }];
+      } catch (error) { return [rel, { path: rel, file: null, issue: 'Cannot read: ' + String(error) }]; }
+    });
+    for (const [rel, entry] of entries) found.set(rel, entry);
     const existing = raw === null ? null : manifest(JSON.parse(raw));
     const changed = raw === null || JSON.stringify(existing) !== JSON.stringify(order);
     const missing = order.chapters.some(path=>!paths.includes(path));

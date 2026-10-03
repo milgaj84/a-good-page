@@ -11,6 +11,8 @@ export type Width = (typeof WIDTHS)[number];
 export const RHYTHMS = ['dense', 'balanced', 'spacious'] as const;
 export type Rhythm = (typeof RHYTHMS)[number];
 
+import { EFFECT_MODES, type EffectMode } from './graphics';
+
 export const MIN_SIZE = 15;
 export const MAX_SIZE = 28;
 export const MAX_GOAL = 1_000_000;
@@ -28,6 +30,8 @@ export interface Preferences {
   ghost: boolean;
   /** Keep the typing line at the middle of the window. */
   typewriter: boolean;
+  /** Fades, shadows and animations: automatic, always on, or off for the fastest drawing. */
+  effects: EffectMode;
 }
 
 export const DEFAULT_PREFS: Readonly<Preferences> = Object.freeze({
@@ -40,6 +44,7 @@ export const DEFAULT_PREFS: Readonly<Preferences> = Object.freeze({
   outline: false,
   ghost: true,
   typewriter: false,
+  effects: 'auto',
 });
 
 export function clampSize(value: unknown): number {
@@ -73,6 +78,7 @@ export function sanitizePrefs(raw: unknown): Preferences {
     outline: bool(o.outline, DEFAULT_PREFS.outline),
     ghost: bool(o.ghost, DEFAULT_PREFS.ghost),
     typewriter: bool(o.typewriter, DEFAULT_PREFS.typewriter),
+    effects: pick(EFFECT_MODES, o.effects, DEFAULT_PREFS.effects),
   };
 }
 

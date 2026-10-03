@@ -1,13 +1,19 @@
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { layoutSpec, type ExportLayout } from './layout';
 
-const pdfMakeRuntime = pdfMake as unknown as { addVirtualFileSystem?: (fonts: unknown) => void; vfs?: unknown };
-if (typeof pdfMakeRuntime.addVirtualFileSystem === 'function') {
-  pdfMakeRuntime.addVirtualFileSystem(pdfFonts);
-} else {
-  pdfMakeRuntime.vfs = (pdfFonts as unknown as { pdfMake?: { vfs: unknown } }).pdfMake?.vfs ?? pdfFonts;
+type PdfMakeRuntime = { createPdf(definition: TDocumentDefinitions): { getBuffer(done: (buffer: Uint8Array) => void): void } };
+let runtime: Promise<PdfMakeRuntime> | null = null;
+
+/** pdfmake and its fonts are large and only needed when you export, so they are loaded then, once. */
+function pdfMakeRuntime(): Promise<PdfMakeRuntime> {
+  runtime ??= Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')]).then(([maker, fonts]) => {
+    const pdfMake = (maker.default ?? maker) as unknown as PdfMakeRuntime & { addVirtualFileSystem?: (fonts: unknown) => void; vfs?: unknown };
+    const vfs = (fonts.default ?? fonts) as unknown;
+    if (typeof pdfMake.addVirtualFileSystem === 'function') pdfMake.addVirtualFileSystem(vfs);
+    else pdfMake.vfs = (vfs as { pdfMake?: { vfs: unknown } }).pdfMake?.vfs ?? vfs;
+    return pdfMake;
+  });
+  return runtime;
 }
 
 export interface ProseNode {
@@ -104,7 +110,8 @@ export function pdfDocument(doc: ProseNode, title: string, layout: ExportLayout 
   };
 }
 
-export function renderPdfDefinition(definition: TDocumentDefinitions): Promise<Uint8Array> {
+export async function renderPdfDefinition(definition: TDocumentDefinitions): Promise<Uint8Array> {
+  const pdfMake = await pdfMakeRuntime();
   return new Promise((resolve, reject) => {
     try { pdfMake.createPdf(definition).getBuffer(buffer => resolve(new Uint8Array(buffer))); }
     catch (error) { reject(error); }

@@ -1,12 +1,19 @@
-import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { ExportLayout } from '../export/layout';
 import { RenderTicket } from '../core/render-ticket';
 import { DialogFocus } from './dialog-focus';
 import { ExportState } from '../core/export-state';
 import { ProjectChangeError } from '../core/project-preview';
 
-GlobalWorkerOptions.workerSrc = workerUrl;
+/** pdf.js is large and only needed to draw the preview, so it is loaded when the preview first opens. */
+let pdfjs: Promise<typeof import('pdfjs-dist')> | null = null;
+function loadPdfJs(): Promise<typeof import('pdfjs-dist')> {
+  pdfjs ??= Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')]).then(([lib, worker]) => {
+    lib.GlobalWorkerOptions.workerSrc = worker.default;
+    return lib;
+  });
+  return pdfjs;
+}
 export interface PreviewElements {
   root: HTMLElement; canvas: HTMLCanvasElement; title: HTMLElement; status: HTMLElement;
   layout: HTMLSelectElement; page: HTMLElement; previous: HTMLButtonElement;
@@ -83,6 +90,7 @@ export class ExportPreview {
       const bytes = await this.build(layout);
       if (token !== this.generation) return;
       // PDF.js may transfer the supplied buffer to its worker; retain original bytes for export.
+      const { getDocument } = await loadPdfJs();
       const pdf = await getDocument({ data: bytes.slice() }).promise;
       if (token !== this.generation) { await pdf.destroy(); return; }
       this.pdf = pdf; this.bytes = bytes; this.currentPage = 1; this.requestedPage = 1;

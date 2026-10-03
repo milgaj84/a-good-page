@@ -142,3 +142,11 @@ kbd { display: inline-block; min-width: 24px; padding: 4px 6px; border: 1px soli
 
 @media (max-width: 640px) { .page { padding: 4vh 18px 30vh; } .ProseMirror { max-width: 100%; } .ProseMirror h1 { font-size: 1.6em; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
+
+/* Light effects: no fades, shadows or animations. On a computer that draws in software every one of them is repainted
+   on the processor, which is what makes typing and scrolling feel heavy. The 1px ring keeps panels readable. */
+[data-effects="light"] { --shadow: 0 0 0 1px var(--line); }
+[data-effects="light"] *, [data-effects="light"] *::before, [data-effects="light"] *::after {
+  transition: none !important; animation: none !important; scroll-behavior: auto !important; text-shadow: none !important;
+}
+[data-effects="light"] .bubble, [data-effects="light"] .toast { box-shadow: none; border: 1px solid var(--line); }

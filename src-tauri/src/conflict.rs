@@ -12,6 +12,9 @@ static WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static NEW_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn disk_text(path: &Path) -> Result<Option<String>, String> {
+    if fs::metadata(path).is_ok_and(|m| !m.is_file()) {
+        return Err("That is not an ordinary file, so it was not overwritten.".into());
+    }
     match fs::read(path) {
         Ok(bytes) => String::from_utf8(bytes)
             .map(|text| Some(normalize_text(&text)))

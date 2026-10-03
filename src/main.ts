@@ -28,7 +28,7 @@ import { DebouncedDraftStore, LocalDraftStore, SafeStore, browserStorage } from 
 import { ChangeLatch, FrameTask, browserFrames } from './core/frame';
 import { bindAutoscroll } from './ui/autoscroll';
 import {
-  chooseWorkingDirectory, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
+  adoptLibrary, currentLibrary, pickBackupFolder, pickLibraryFolder, useLibrary, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
   chooseBackupFile, createBackup, defaultBackupDir, restoreBackup, exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
 } from './adapters/tauri';
@@ -61,6 +61,7 @@ import { docxBytes } from './export/docx';
 import { markdownDocument } from './export/markdown';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
+import { describeEffects, detectSoftware, resolveEffects, type EffectMode } from './core/graphics';
 import type { ProjectService, ProjectSnapshot } from './core/project-service';
 import type { PaletteEntry } from './core/palette';
 
@@ -235,9 +236,17 @@ function setTheme(theme: Theme): void {
   root.dataset.theme = theme;
   settings.render(prefs, themes.theme, library?.root ?? null);
 }
+const software = detectSoftware();
+function applyEffects(mode: EffectMode): void {
+  root.dataset.effects = resolveEffects(mode, software);
+  el<HTMLSelectElement>('effects-choice').value = mode;
+  el('effects-note').textContent = describeEffects(mode, software);
+}
+el<HTMLSelectElement>('effects-choice').addEventListener('change', (event) => applyPrefs(prefsStore.update({ effects: (event.target as HTMLSelectElement).value as EffectMode })));
 function applyPrefs(next: Preferences): void {
   const goalChanged = next.goal !== prefs.goal;
   prefs = next;
+  applyEffects(next.effects);
   applyTypography(root, next);
   app.classList.toggle('no-toolbar', !next.toolbar);
   if (next.toolbar) controlsFrame.schedule();
@@ -413,7 +422,8 @@ library = new LibraryController({
     create: createEntry, rename: renameEntry, trash: trashEntry,
     write: (path, content) => tauriFiles.write(path, content),
     writeGuarded: (path, content, expected) => tauriFiles.write(path, content, expected),
-    pickFolder: chooseWorkingDirectory,
+    pickFolder: pickLibraryFolder,
+    current: currentLibrary, adopt: adoptLibrary, use: useLibrary,
     listTrash, restore: restoreEntry, move: moveEntry,
   },
   offerUndo: (message, label, run) => chrome.toastAction(message, label, run),
@@ -500,7 +510,7 @@ el('find-many').addEventListener('click', () => {
 // ---------- backup ----------
 const backup = new BackupController({
   store, root: () => lib.root,
-  io: { create: createBackup, restore: restoreBackup, defaultDir: defaultBackupDir, pickFolder: chooseWorkingDirectory, pickZip: chooseBackupFile },
+  io: { create: createBackup, restore: restoreBackup, defaultDir: defaultBackupDir, pickFolder: pickBackupFolder, pickZip: chooseBackupFile },
   notify: (message) => chrome.toast(message, 5200), changed: () => renderBackup(), refreshLibrary: () => lib.refresh(), now: () => Date.now(),
 });
 function renderBackup(): void {
@@ -852,6 +862,20 @@ onCloseRequested(async () => {
   }
   return true;
 });
+
+// ---------- the page stays put ----------
+// Nothing may replace the app with another page: links do not open from here, no new windows, no stray drops.
+let linkNoted = false;
+document.addEventListener('click', (event) => {
+  const link = (event.target as Element | null)?.closest?.('a[href]');
+  if (!link) return;
+  event.preventDefault();
+  if (!linkNoted) { linkNoted = true; chrome.toast('Links do not open from inside the app. Select the link and press ' + (IS_MAC ? '⌘' : 'Ctrl') + '+K to copy its address.', 5000); }
+}, true);
+window.open = () => null;
+document.addEventListener('drop', (event) => {
+  if (!event.defaultPrevented && !(event.target as Element | null)?.closest?.('.ProseMirror')) event.preventDefault();
+}, true);
 
 // ---------- start ----------
 root.dataset.theme = themes.theme;

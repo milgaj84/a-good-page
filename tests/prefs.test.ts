@@ -75,7 +75,7 @@ describe('sanitizePrefs', () => {
 
   it('keeps a fully valid object', () => {
     const valid = {
-      font: 'mono', size: 18, width: 'wide', rhythm: 'spacious', goal: 500, toolbar: false, outline: true, ghost: false, typewriter: true,
+      font: 'mono', size: 18, width: 'wide', rhythm: 'spacious', goal: 500, toolbar: false, outline: true, ghost: false, typewriter: true, effects: 'light',
     };
     expect(sanitizePrefs(valid)).toEqual(valid);
   });
@@ -89,7 +89,7 @@ describe('sanitizePrefs', () => {
 
   it('loads preferences saved before spacing existed', () => {
     const old = { font: 'sans', size: 22, width: 'narrow', goal: 0, toolbar: true, outline: false, ghost: true, typewriter: false };
-    expect(sanitizePrefs(old)).toEqual({ ...old, rhythm: 'balanced' });
+    expect(sanitizePrefs(old)).toEqual({ ...old, rhythm: 'balanced', effects: 'auto' });
   });
 
   it('fades the bars by default and leaves the typewriter line off', () => {
