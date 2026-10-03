@@ -11,7 +11,8 @@ describe('0.8.0 release files', () => {
     expect(version).toBe('0.8.0');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
-    expect(file('src-tauri/Cargo.lock')).toContain('name = "a-good-page"\nversion = "' + version + '"');
+    // Windows checks files out with CRLF line endings, so the line break is matched either way.
+    expect(file('src-tauri/Cargo.lock')).toMatch(new RegExp('name = "a-good-page"\\r?\\nversion = "' + version.replace(/\./g, '\\.') + '"'));
   });
   it('records the release in the changelog', () => {
     expect(file('CHANGELOG.md')).toMatch(/^## \[0\.8\.0\] - \d{4}-\d{2}-\d{2}$/m);
