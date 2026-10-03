@@ -30,7 +30,7 @@ import { bindAutoscroll } from './ui/autoscroll';
 import {
   adoptLibrary, currentLibrary, pickBackupFolder, pickLibraryFolder, useLibrary, createEntry, defaultLibrary, exportPdfFile, listWorkingDirectory,
   onCloseRequested, onFileDrop, openWorkingFile, readProjectOrder, renameEntry, setWindowTitle, setWritingFullscreen,
-  chooseBackupFile, createBackup, defaultBackupDir, restoreBackup, exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
+  chooseBackupFile, importPagesFolder, pickWordFile, readWordFile, createBackup, defaultBackupDir, restoreBackup, exportDocumentFile, tauriFiles, tauriPrompter, trashEntry, writeProjectOrder, exportRecoveryCopy, listTrash, restoreEntry, moveEntry,
 } from './adapters/tauri';
 import { createWriterEditor } from './editor/editor';
 import { Chrome } from './ui/chrome';
@@ -58,6 +58,7 @@ import type { ReplaceEdit } from './core/project-replace';
 import type { ReplaceReport } from './ui/project-find';
 import { ExportOptionsStore, FORMAT_INFO, effectiveTitle, sanitizeExportOptions, type ExportOptions } from './core/export-options';
 import { docxBytes } from './export/docx';
+import { epubBytes } from './export/epub';
 import { markdownDocument } from './export/markdown';
 import { bookOf, displayName, relativeTo } from './core/library';
 import { ViewMemory } from './core/view-memory';
@@ -425,6 +426,7 @@ library = new LibraryController({
     pickFolder: pickLibraryFolder,
     current: currentLibrary, adopt: adoptLibrary, use: useLibrary,
     listTrash, restore: restoreEntry, move: moveEntry,
+    pickWord: pickWordFile, readWord: readWordFile, importFolder: importPagesFolder,
   },
   offerUndo: (message, label, run) => chrome.toastAction(message, label, run),
   notify: (message) => chrome.toast(message, 4200),
@@ -565,6 +567,7 @@ const optEls = {
 const HINTS = {
   pdf: '',
   docx: 'The preview shows the PDF layout. The Word file keeps headings, emphasis, lists and links; its contents lists titles, and page numbers are live.',
+  epub: 'The preview shows the PDF layout. The e-book keeps headings, emphasis, lists and links; each page is a chapter, and your reader shows its own contents.',
   md: 'The preview shows the PDF layout. The Markdown file keeps your words exactly as written.',
 } as const;
 function optionsToUi(o: ExportOptions): void {
@@ -579,8 +582,9 @@ function optionsFromUi(): ExportOptions {
 function optionsChrome(): void {
   const o = exportOpts;
   optEls.meta.hidden = !o.titlePage;
-  optEls.pages.disabled = o.format === 'md';
-  optEls.pages.closest('label')?.classList.toggle('is-disabled', o.format === 'md');
+  const fixedPages = o.format === 'md' || o.format === 'epub';
+  optEls.pages.disabled = fixedPages;
+  optEls.pages.closest('label')?.classList.toggle('is-disabled', fixedPages);
   previewLayout.disabled = o.format !== 'pdf';
   el('preview-export').textContent = FORMAT_INFO[o.format].button;
   optEls.hint.textContent = HINTS[o.format];
@@ -644,14 +648,18 @@ async bytes => {
     const files = book.snapshot.chapters;
     const out = o.format === 'docx'
       ? docxBytes(files.map(f => ({ title: f.title, doc: parseChapter(f) })), { ...base, pageNumbers: o.pageNumbers })
-      : new TextEncoder().encode(markdownDocument(base, compiledMarkdown(files), files.map(f => ({ level: 1, text: f.title }))));
+      : o.format === 'epub'
+        ? epubBytes(files.map(f => ({ title: f.title, doc: parseChapter(f) })), base)
+        : new TextEncoder().encode(markdownDocument(base, compiledMarkdown(files), files.map(f => ({ level: 1, text: f.title }))));
     return (await exportDocumentFile(book.fileName, out, o.format, recheck)) !== null;
   }
   const name = doc.snapshot().name;
   if (o.format === 'pdf') return (await exportPdfFile(name, bytes)) !== null;
   const out = o.format === 'docx'
     ? docxBytes([{ doc: editor.getJSON() }], { ...base, pageNumbers: o.pageNumbers })
-    : new TextEncoder().encode(markdownDocument(base, editor.getMarkdown(), editor.headings().filter(h => h.level <= 2).map(h => ({ level: h.level, text: h.text }))));
+    : o.format === 'epub'
+      ? epubBytes([{ doc: editor.getJSON() }], base)
+      : new TextEncoder().encode(markdownDocument(base, editor.getMarkdown(), editor.headings().filter(h => h.level <= 2).map(h => ({ level: h.level, text: h.text }))));
   return (await exportDocumentFile(name, out, o.format)) !== null;
 },
 () => chrome.toast(preview.changedDuringSave ? 'Exported from an earlier snapshot; later edits are not included.' : FORMAT_INFO[exportOpts.format].label.replace(/ \(.*/, '') + ' exported. Your pages are unchanged.'),
@@ -794,6 +802,8 @@ const APP: Record<AppAction, () => void> = {
   findProject: () => void projectFind.open(editor.selectionText() || el<HTMLInputElement>('find-query').value),
   backupNow: () => void backup.backupNow(),
   restoreBackup: () => void backup.restore(),
+  importWord: () => { setSidebar(true); void lib.importWord(); },
+  importFolder: () => { setSidebar(true); void lib.importFolder(); },
   help: () => help.toggle(),
   link: () => linkBar.open(),
   bigger: () => resize(prefs.size + 1),
@@ -819,6 +829,9 @@ el('btn-new-more').addEventListener('click', () => {
   menu.open([
     { label: 'New page', hint: IS_MAC ? '⌘N' : 'Ctrl+N', run: () => APP.new() },
     { label: 'New project', hint: IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N', run: () => APP.newProject() },
+    { separator: true, label: '' },
+    { label: 'Import a Word document…', run: () => APP.importWord() },
+    { label: 'Import a folder of pages…', run: () => APP.importFolder() },
   ], more.getBoundingClientRect(), more);
 });
 el('btn-history').addEventListener('click', () => APP.timeMachine());
@@ -843,7 +856,8 @@ window.addEventListener('beforeunload', () => { viewTimer.flush(); namedWriter.f
 onFileDrop({
   onHover: (active) => app.classList.toggle('is-dropping', active),
   onDrop: (path) => {
-    if (!isWritingFile(path)) { chrome.toast('A Good Page opens .md, .markdown and .txt files.'); return; }
+    if (/\.docx$/i.test(path)) { setSidebar(true); void lib.importWord(path); return; }
+    if (!isWritingFile(path)) { chrome.toast('A Good Page opens .md, .markdown and .txt files, and imports Word (.docx) documents.'); return; }
     autosave.flush();
     void doc.openPath(path);
   },

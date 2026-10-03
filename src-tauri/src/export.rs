@@ -1,4 +1,4 @@
-//! Saving a finished export (PDF, Word or Markdown). The bytes are checked for the format they claim,
+//! Saving a finished export (PDF, Word, EPUB or Markdown). The bytes are checked for the format they claim,
 //! then written next to the target and renamed into place, like every other write in the app.
 use crate::document::write_atomic_bytes;
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ fn extension_for(kind: &str) -> Option<&'static str> {
     match kind {
         "pdf" => Some("pdf"),
         "docx" => Some("docx"),
+        "epub" => Some("epub"),
         "md" => Some("md"),
         _ => None,
     }
@@ -20,6 +21,13 @@ fn looks_like(kind: &str, bytes: &[u8]) -> bool {
         "pdf" => bytes.starts_with(b"%PDF-") && bytes.windows(5).any(|part| part == b"%%EOF"),
         // A .docx is a zip file: it begins with a local file header.
         "docx" => bytes.starts_with(b"PK\x03\x04"),
+        // An .epub is a zip whose first entry is the stored "mimetype" file.
+        "epub" => {
+            bytes.starts_with(b"PK\x03\x04")
+                && bytes
+                    .get(30..)
+                    .is_some_and(|b| b.starts_with(b"mimetypeapplication/epub+zip"))
+        }
         "md" => std::str::from_utf8(bytes).is_ok(),
         _ => false,
     }
@@ -27,7 +35,7 @@ fn looks_like(kind: &str, bytes: &[u8]) -> bool {
 
 pub fn export_document(raw_path: &str, bytes: &[u8], kind: &str) -> Result<String, String> {
     let Some(extension) = extension_for(kind) else {
-        return Err("Choose PDF, Word or Markdown.".into());
+        return Err("Choose PDF, Word, EPUB or Markdown.".into());
     };
     let trimmed = raw_path.trim();
     if trimmed.is_empty() {
@@ -69,6 +77,7 @@ mod tests {
 
     const PDF: &[u8] = b"%PDF-1.4\ncontent\n%%EOF";
     const DOCX: &[u8] = b"PK\x03\x04rest of a zip";
+    const EPUB: &[u8] = b"PK\x03\x04aaaaaaaaaaaaaaaaaaaaaaaaaamimetypeapplication/epub+zipPK";
 
     #[test]
     fn saves_each_format_unchanged_to_its_own_extension() {
@@ -77,6 +86,7 @@ mod tests {
             ("pdf", "a.PDF", PDF),
             ("docx", "b.docx", DOCX),
             ("md", "c.md", "# Title\n\nWörds".as_bytes()),
+            ("epub", "d.epub", EPUB),
         ] {
             let target = d.join(name);
             assert_eq!(
@@ -85,7 +95,7 @@ mod tests {
             );
             assert_eq!(fs::read(&target).unwrap(), bytes);
         }
-        assert_eq!(fs::read_dir(&d).unwrap().count(), 3);
+        assert_eq!(fs::read_dir(&d).unwrap().count(), 4);
         fs::remove_dir_all(d).unwrap();
     }
 
@@ -96,6 +106,7 @@ mod tests {
         assert!(export_document(&p("a.txt"), PDF, "pdf").is_err());
         assert!(export_document(&p("a.pdf"), DOCX, "pdf").is_err());
         assert!(export_document(&p("a.docx"), PDF, "docx").is_err());
+        assert!(export_document(&p("a.epub"), DOCX, "epub").is_err());
         assert!(export_document(&p("a.md"), &[0xff, 0xfe, 0xfd], "md").is_err());
         assert!(export_document(&p("a.rtf"), PDF, "rtf").is_err());
         assert!(export_document(" ", PDF, "pdf").is_err());

@@ -1,11 +1,12 @@
 import type { KeyValueStore } from './ports';
 
-export const EXPORT_FORMATS = ['pdf', 'docx', 'md'] as const;
+export const EXPORT_FORMATS = ['pdf', 'docx', 'epub', 'md'] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 export const FORMAT_INFO: Record<ExportFormat, { label: string; extension: string; button: string }> = {
   pdf: { label: 'PDF', extension: 'pdf', button: 'Export PDF' },
   docx: { label: 'Word (.docx)', extension: 'docx', button: 'Export Word' },
+  epub: { label: 'E-book (.epub)', extension: 'epub', button: 'Export E-book' },
   md: { label: 'Markdown (.md)', extension: 'md', button: 'Export Markdown' },
 };
 

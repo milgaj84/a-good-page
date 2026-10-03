@@ -33,6 +33,8 @@ export const APP_ACTIONS = [
   'openTrash',
   'selectPages',
   'findProject',
+  'importWord',
+  'importFolder',
   'backupNow',
   'restoreBackup',
   'welcome',

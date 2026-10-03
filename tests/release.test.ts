@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 const file = (path: string): string => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const exists = (path: string): boolean => existsSync(new URL('../' + path, import.meta.url));
 
-describe('0.8.0 release files', () => {
+describe('0.8.1 release files', () => {
   it('uses one version everywhere', () => {
     const version = JSON.parse(file('package.json')).version;
-    expect(version).toBe('0.8.0');
+    expect(version).toBe('0.8.1');
     expect(JSON.parse(file('src-tauri/tauri.conf.json')).version).toBe(version);
     expect(file('src-tauri/Cargo.toml')).toContain('version = "' + version + '"');
     // Windows checks files out with CRLF line endings, so the line break is matched either way.
@@ -28,7 +28,7 @@ describe('0.8.0 release files', () => {
       expect(exists(path)).toBe(true);
   });
   it('ships the Library: one folder, sidebar, autosaved pages and books', () => {
-    for (const path of ['src-tauri/src/library.rs', 'src/app/library.ts', 'src/core/library.ts', 'src/ui/sidebar.ts', 'src/ui/menu.ts', 'src/ui/trash.ts', 'src/core/view-memory.ts', 'RELEASE_0.6.0.md', 'RELEASE_0.6.1.md', 'RELEASE_0.6.2.md', 'RELEASE_0.7.0.md', 'RELEASE_0.7.1.md', 'RELEASE_0.7.2.md', 'RELEASE_0.7.3.md', 'RELEASE_0.8.0.md'])
+    for (const path of ['src-tauri/src/library.rs', 'src/app/library.ts', 'src/core/library.ts', 'src/ui/sidebar.ts', 'src/ui/menu.ts', 'src/ui/trash.ts', 'src/core/view-memory.ts', 'RELEASE_CHECKLIST.md'])
       expect(exists(path)).toBe(true);
     const lib = file('src-tauri/src/lib.rs');
     for (const command of ['default_library', 'create_entry', 'rename_entry', 'trash_entry']) expect(lib).toContain('commands::' + command);

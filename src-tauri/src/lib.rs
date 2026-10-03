@@ -5,6 +5,7 @@ mod conflict;
 mod disk_probe;
 pub mod document;
 mod export;
+mod import;
 mod library;
 mod pdf;
 mod project;
@@ -25,6 +26,11 @@ fn navigation_allowed(url: &tauri::Url) -> bool {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+fn is_docx(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("docx"))
+}
+
 pub fn run() {
     use tauri::Manager;
     tauri::Builder::default()
@@ -49,9 +55,12 @@ pub fn run() {
             // A writing file dropped on the window is a file you chose.
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 if let Some(access) = window.try_state::<access::Access>() {
-                    for path in paths.iter().filter(|p| document::is_supported(p)) {
+                    for path in paths
+                        .iter()
+                        .filter(|p| document::is_supported(p) || is_docx(p))
+                    {
                         if let Some(text) = path.to_str() {
-                            let _ = access.grant_file(text, true);
+                            let _ = access.grant_file(text, document::is_supported(path));
                         }
                     }
                 }
@@ -73,6 +82,8 @@ pub fn run() {
             commands::use_library,
             commands::adopt_library,
             commands::pick_open_file,
+            commands::read_docx_file,
+            commands::import_folder,
             commands::pick_save_file,
             commands::pick_folder,
             commands::create_entry,

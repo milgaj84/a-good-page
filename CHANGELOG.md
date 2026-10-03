@@ -6,6 +6,24 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-04
+
+Bring a book in, send a book out.
+
+### Added
+
+- **Import a Word document as a project.** Pick one (New ▾ → *Import a Word document…*, Ctrl+P, or the Library menu) or drop a `.docx` on the window. Every Heading 1 starts a page; if the document has just one Heading 1 (the book's title) and several Heading 2s, those are the chapters. Bold, italic, strikethrough, headings, bullet and numbered lists, quotes, links and tables' text carry over; a line of `* * *` or `#` becomes a scene break; words before the first chapter become a *Front matter* page; a document with no headings becomes one page. Pages are named `01 Title`, `02 Title`… so they stay in order. Pictures are not imported, and you are told. The Word file is only read, never changed.
+- **Import a folder of pages as a project.** *Import a folder of pages…* copies the `.md`, `.markdown` and `.txt` files in a folder into a new project. The folder is left alone and not remembered.
+- **Export as an e-book (EPUB).** A new format in the export dialog for one page or a whole project: one chapter per page, title page and contents if you like, emphasis, lists and links kept. Checked by reading the file back with a separate e-book converter.
+
+### Changed
+
+- The per-version `RELEASE_x.y.z.md` checklists are gone; the checks that still matter are in `RELEASE_CHECKLIST.md`.
+
+### Security
+
+- Reading a Word file happens in Rust, which opens only a file you picked or dropped, limits sizes, verifies checksums, and hands the page just the three text parts it needs. The folder import copies only plain writing files and skips links, hidden files and anything that is not text.
+
 ## [0.8.0] - 2026-10-03
 
 Safer, and faster to start and to use.

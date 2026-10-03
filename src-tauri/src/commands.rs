@@ -284,6 +284,8 @@ pub async fn pick_open_file(
     let dialog = app.dialog().file();
     let dialog = if kind == "zip" {
         dialog.add_filter("Backup", &["zip"])
+    } else if kind == "docx" {
+        dialog.add_filter("Word document", &["docx"])
     } else {
         dialog.add_filter("Writing", &["md", "markdown", "txt"])
     };
@@ -291,7 +293,7 @@ pub async fn pick_open_file(
         return Ok(None);
     };
     let path = text(&picked.into_path().map_err(|e| e.to_string())?);
-    access.grant_file(&path, kind != "zip")?;
+    access.grant_file(&path, kind == "writing")?;
     Ok(Some(path))
 }
 
@@ -307,6 +309,7 @@ pub async fn pick_save_file(
     let (label, extensions): (&str, &[&str]) = match kind.as_str() {
         "pdf" => ("PDF", &["pdf"]),
         "docx" => ("Word document", &["docx"]),
+        "epub" => ("E-book", &["epub"]),
         "md" => ("Markdown", &["md"]),
         _ => ("Writing", &["md", "txt"]),
     };
@@ -341,6 +344,33 @@ pub async fn pick_folder(
         access.grant_library(&path)?
     };
     Ok(Some(text(&granted)))
+}
+
+// ---------- import ----------
+
+/// The parts of a picked or dropped Word file, ready to be turned into pages. Nothing is changed on disk.
+#[tauri::command]
+pub fn read_docx_file(
+    path: String,
+    access: State<'_, Access>,
+) -> Result<crate::import::DocxParts, String> {
+    crate::import::read_docx(&access.file(&path)?)
+}
+
+/// Asks for a folder of .md / .txt pages and copies them into a new project in the Library.
+/// The folder is only read, and is not remembered. Returns the new project, or None if cancelled.
+#[tauri::command]
+pub async fn import_folder(
+    app: tauri::AppHandle,
+    root: String,
+    access: State<'_, Access>,
+) -> Result<Option<String>, String> {
+    let root = text(&access.library_root(&root)?);
+    let Some(picked) = app.dialog().file().blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let source = picked.into_path().map_err(|e| e.to_string())?;
+    crate::import::import_folder(&root, &source).map(Some)
 }
 
 // ---------- backups ----------

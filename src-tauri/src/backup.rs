@@ -285,6 +285,20 @@ fn entry_data(bytes: &[u8], item: &Item) -> Result<Vec<u8>, String> {
     Ok(data)
 }
 
+/// Reads the named entries of a zip (checksums verified, size limits kept). A missing name is simply left out.
+pub(crate) fn read_entries(
+    bytes: &[u8],
+    wanted: &[&str],
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    for item in read_directory(bytes)? {
+        if wanted.contains(&item.name.as_str()) {
+            out.push((item.name.clone(), entry_data(bytes, &item)?));
+        }
+    }
+    Ok(out)
+}
+
 /// A safe relative path made of ordinary names, ending in a writing file or an order file; otherwise None.
 fn safe_parts(name: &str) -> Option<Vec<&str>> {
     let parts: Vec<&str> = name.split('/').collect();

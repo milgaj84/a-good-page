@@ -14,6 +14,9 @@ function fixture(seed: Record<string, string> = {}) {
   const notes: string[] = [];
   let remembered: string | null = '/lib';
   let refuseAdopt = false;
+  let pickedWord: string | null = '/home/me/My Novel.docx';
+  let pickedFolder = true;
+  let wordParts = { document: '', rels: '', numbering: '' };
   const adopted: string[] = [];
   const moves: Array<[string, string]> = [];
   const trashed: Array<{ item: string; name: string; original: string; position: number | null; trashed_at: number; is_dir: boolean }> = [];
@@ -70,6 +73,9 @@ function fixture(seed: Record<string, string> = {}) {
     write: async (path: string, content: string) => { files.set(path, content); },
     writeGuarded: async (path: string, content: string, expected: string) => { if (files.get(path) !== expected) throw new Error('changed'); files.set(path, content); },
     pickFolder: async () => null,
+    pickWord: async () => pickedWord,
+    readWord: async (path: string) => { if (path.endsWith('bad.docx')) throw new Error('That is not a Word (.docx) document.'); return wordParts; },
+    importFolder: async () => { dirs.add('/lib/Sketches'); files.set('/lib/Sketches/a.md', '# A'); return pickedFolder ? '/lib/Sketches' : null; },
     current: async () => remembered,
     adopt: async (path: string) => { adopted.push(path); if (refuseAdopt) throw new Error('declined'); remembered = path; return path; },
     use: async (path: string) => { remembered = path; return path; },
@@ -91,7 +97,7 @@ function fixture(seed: Record<string, string> = {}) {
     moved: (from: string, to: string) => { moves.push([from, to]); },
   } as unknown as LibraryDeps;
   const controller = new LibraryController(deps);
-  return { controller, files, dirs, session, views, notes, moves, undos, adopted, forget: () => { remembered = null; }, refuse: () => { refuseAdopt = true; }, setLegacy: (p: string) => { kv.set(LIBRARY_KEY, p); }, last: () => views[views.length - 1] };
+  return { controller, files, dirs, session, views, notes, moves, undos, adopted, forget: () => { remembered = null; }, word: (document: string, picked: string | null = '/home/me/My Novel.docx') => { wordParts = { document, rels: '', numbering: '' }; pickedWord = picked; }, noFolder: () => { pickedFolder = false; }, refuse: () => { refuseAdopt = true; }, setLegacy: (p: string) => { kv.set(LIBRARY_KEY, p); }, last: () => views[views.length - 1] };
 }
 
 describe('Library controller', () => {
@@ -579,5 +585,56 @@ describe('older untitled drafts', () => {
     const path = await t.controller.rescueDraft('Words I had not saved.');
     expect(t.files.get(path!)).toBe('Words I had not saved.');
     expect(await t.controller.rescueDraft('   ')).toBeNull();
+  });
+});
+
+describe('importing', () => {
+  const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const doc = (body: string) => `<w:document ${NS}><w:body>${body}</w:body></w:document>`;
+  const h1 = (t: string) => `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${t}</w:t></w:r></w:p>`;
+  const para = (t: string) => `<w:p><w:r><w:t>${t}</w:t></w:r></w:p>`;
+
+  it('turns a Word document into a numbered project and opens its first page', async () => {
+    const t = fixture();
+    t.word(doc(h1('The Road') + para('Walking.') + h1('The Sea') + para('Salt.')));
+    await t.controller.start();
+    await t.controller.importWord();
+    expect([...t.files.keys()].filter(f => f.startsWith('/lib/My Novel/') && f.endsWith('.md'))).toEqual(['/lib/My Novel/01 The Road.md', '/lib/My Novel/02 The Sea.md']);
+    expect(t.files.get('/lib/My Novel/02 The Sea.md')).toBe('# The Sea\n\nSalt.\n');
+    expect(t.session.path).toBe('/lib/My Novel/01 The Road.md');
+    expect(t.notes.at(-1)).toBe('Imported “My Novel”: 2 pages.');
+  });
+
+  it('does nothing when the picker is cancelled, and says why when a file cannot be read or is empty', async () => {
+    const t = fixture();
+    await t.controller.start();
+    t.word('', null);
+    await t.controller.importWord();
+    expect(t.notes).toEqual([]);
+    await t.controller.importWord('/home/me/bad.docx');
+    expect(t.notes.at(-1)).toBe('Could not import that document: That is not a Word (.docx) document.');
+    t.word(doc(''));
+    await t.controller.importWord('/home/me/empty.docx');
+    expect(t.notes.at(-1)).toBe('That document has no text to import.');
+    expect([...t.dirs]).toEqual(['/lib']);
+  });
+
+  it('imports a dropped file without asking, and a folder of pages as a project', async () => {
+    const t = fixture();
+    t.word(doc(para('Just words.')), null);
+    await t.controller.start();
+    await t.controller.importWord('/home/me/Notes.docx');
+    expect(t.files.get('/lib/Notes/01 Notes.md')).toBe('# Notes\n\nJust words.\n');
+    await t.controller.importFolder();
+    expect(t.last().rows.map(r => r.label)).toContain('Sketches');
+    expect(t.notes.at(-1)).toBe('Imported “Sketches” as a project.');
+  });
+
+  it('stays quiet when the folder picker is cancelled', async () => {
+    const t = fixture();
+    await t.controller.start();
+    t.noFolder();
+    await t.controller.importFolder();
+    expect(t.notes).toEqual([]);
   });
 });

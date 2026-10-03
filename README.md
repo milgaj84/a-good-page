@@ -27,7 +27,8 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 - **Working with many pages.** Click the tick-box icon beside *Projects* to **select** several pages, then move, export or trash them together. Drag a page onto another project, between its pages, or onto *Unfiled pages*. The sidebar search looks inside every page of every project, including unfiled ones.
 - **Find and replace across pages.** **Ctrl/Cmd+Alt+F** (or *All pages…* in Find) searches every page of a project or the whole Library, shows each match with what it would become, lets you tick which to change, and keeps a version of each page in History. Undo puts it all back.
 - **Backups.** *Settings → Backup* makes a zip of your Library (only your writing files and project order, never the trash) on demand or every day or week, keeps the newest few, and can **restore** one next to your current work without overwriting it.
-- **Export as PDF, Word or Markdown.** Add a **title page** (title, subtitle, author), a **contents**, and page numbers; the PDF preview shows exactly what you will get.
+- **Bring a book in.** Drop a Word (`.docx`) file on the window, or use **New ▾ → Import a Word document…**: each Heading 1 becomes a page of a new project, with bold, italic, headings, lists and links kept. **Import a folder of pages…** copies a folder of `.md` or `.txt` files into a project. Your original files are never changed.
+- **Export as PDF, Word, E-book or Markdown.** Add a **title page** (title, subtitle, author), a **contents**, and page numbers; the PDF preview shows exactly what you will get.
 - **Export follows your projects.** Export a single page, or a project in page order, and **tick just the pages you want** (All / None / individual). Use ⋯ → **Export project…** on a project or ⋯ → **Export this page…** on a page. Word counts, search, Ctrl+P and History all work across the same structure.
 - **Go anywhere.** **Ctrl/Cmd+P** searches pages and every command. The **contents** button (top right) lists the headings on this page. Try "focus", "export" or "theme".
 - **Rename, trash.** Click the title, press **F2**, or use a row's ⋯ menu. Move to trash happens at once with an **Undo** button (a restored page returns to its old position), and puts things in a hidden `.trash` folder inside your Library. **Tools → Trash…** lists them and puts each back where it was. Nothing is erased.
@@ -48,7 +49,7 @@ Built with Tauri 2, Rust and TipTap. Runs on macOS, Windows and Linux.
 | Notes, timed session, sprint ring, typography polish | **Tools** |
 | Go back to an earlier version | **History** (the clock, top right) |
 | Find on the page | The magnifier, top right (Ctrl/Cmd+F) |
-| Share | **Export** (the arrow, top right): this page or a project as **PDF, Word or Markdown**, with a title page and contents if you like, and a real-page preview |
+| Share | **Export** (the arrow, top right): this page or a project as **PDF, Word, E-book (EPUB) or Markdown**, with a title page and contents if you like, and a real-page preview |
 
 Select text for a quick formatting bubble, or type `/` on an empty line for headings, lists and scene breaks. **Ctrl/Cmd+/** lists every shortcut.
 
@@ -98,7 +99,7 @@ Needs Node.js 20+, stable Rust and the [Tauri 2 prerequisites](https://v2.tauri.
 `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` must share one version, and a test checks it.
 
 1. Update `CHANGELOG.md` and the version in those files.
-2. Work through `RELEASE_0.6.0.md`, `RELEASE_0.6.1.md`, `RELEASE_0.6.2.md`, `RELEASE_0.7.0.md`, `RELEASE_0.7.1.md`, `RELEASE_0.7.2.md`, `RELEASE_0.7.3.md`, `RELEASE_0.8.0.md` and `RELEASE_CHECKLIST.md`.
-3. Commit, then `git tag v0.8.0 && git push origin v0.8.0`.
+2. Work through `RELEASE_CHECKLIST.md` in the installed app on each platform.
+3. Commit, then `git tag v0.8.1 && git push origin v0.8.0`.
 
 CI (`.github/workflows/ci.yml`) type-checks, tests and builds on every push, and runs `cargo fmt`, `clippy` and `cargo test` on Linux, macOS and Windows. A `v*` tag runs `release.yml`, which attaches unsigned installers to a **draft** release. A green build is not proof an installer launches. See `CONTRIBUTING.md` and `LICENSE` (MIT).

@@ -7,6 +7,7 @@ import { chapterInfo, searchProject, type ProjectFile } from '../core/project';
 import type { SearchFile } from '../core/project-replace';
 import { nameFromPath } from '../core/paths';
 import { WELCOME_TEXT, WELCOME_TITLE, autoRenameTarget, bookOf, displayName, filterRows, joinPath, parentOf, relativeTo, rootRows, type TreeRow } from '../core/library';
+import { importDocx, type DocxParts } from '../import/docx';
 import type { Menu, MenuItem } from '../ui/menu';
 import type { TrashItem } from '../adapters/tauri';
 import type { SearchHit, Sidebar, SidebarRow } from '../ui/sidebar';
@@ -43,6 +44,9 @@ export interface LibraryDeps {
     move(root: string, path: string, to: string | null): Promise<string>;
     listTrash(root: string): Promise<TrashItem[]>;
     restore(root: string, path: string): Promise<string>;
+    pickWord(): Promise<string | null>;
+    readWord(path: string): Promise<DocxParts>;
+    importFolder(root: string): Promise<string | null>;
   };
   /** A toast with one button, used to undo moving something to the trash. */
   offerUndo(message: string, label: string, run: () => void): void;
@@ -375,6 +379,47 @@ export class LibraryController {
       await this.open(path);
       this.d.focusEditor();
     } catch (error) { this.d.notify('Could not create a page: ' + message(error)); }
+  }
+
+  /** A Word file becomes a project: each chapter heading starts a page. The .docx itself is only read. */
+  async importWord(picked?: string): Promise<void> {
+    if (!this.root) return;
+    try {
+      const file = picked ?? (await this.d.io.pickWord());
+      if (!file) return;
+      this.d.flushAutosave();
+      const fallback = (file.split(/[\\/]/).pop() ?? 'Imported').replace(/\.docx$/i, '');
+      const book = importDocx(await this.d.io.readWord(file), fallback);
+      if (!book.pages.length) { this.d.notify('That document has no text to import.'); return; }
+      const name = book.title ?? fallback;
+      const project = await this.d.io.create(this.root, null, name, 'folder');
+      const width = Math.max(2, String(book.pages.length).length);
+      let firstPage: string | null = null;
+      for (const [i, page] of book.pages.entries()) {
+        // Numbered names keep the chapters in order; the page still shows its own title.
+        const path = await this.d.io.create(this.root, project, String(i + 1).padStart(width, '0') + ' ' + page.title, 'file');
+        await this.d.io.write(path, page.markdown);
+        firstPage ??= path;
+      }
+      this.expanded.add(project);
+      await this.refresh();
+      if (firstPage) await this.open(firstPage);
+      const count = book.pages.length;
+      this.d.notify('Imported “' + name + '”: ' + count + (count === 1 ? ' page.' : ' pages.') + (book.pictures ? ' Pictures are not imported.' : ''));
+    } catch (error) { this.d.notify('Could not import that document: ' + message(error)); }
+  }
+
+  /** A folder of .md / .txt pages is copied into a new project. The folder itself is left alone. */
+  async importFolder(): Promise<void> {
+    if (!this.root) return;
+    try {
+      this.d.flushAutosave();
+      const project = await this.d.io.importFolder(this.root);
+      if (!project) return;
+      this.expanded.add(project);
+      await this.refresh();
+      this.d.notify('Imported “' + stem(project) + '” as a project.');
+    } catch (error) { this.d.notify('Could not import that folder: ' + message(error)); }
   }
 
   /** A project starts with one page, so there is something to write in at once; its name is ready to type over. */

@@ -4,11 +4,12 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ask } from '@tauri-apps/plugin-dialog';
 import type { FileGateway, OpenedDocument, Prompter } from '../core/session';
 import { exportRecoveryCopyWith } from '../core/recovery';
+import type { DocxParts } from '../import/docx';
 import { FileChangedError, type DiskProbe } from '../core/file-conflict';
 
 // Every file and folder picker runs in Rust. The page never names a place on its own: what you pick is
 // remembered there, and any other path the page asks for is refused.
-const pickSave = (suggested: string, kind: 'writing' | 'pdf' | 'docx' | 'md'): Promise<string | null> =>
+const pickSave = (suggested: string, kind: 'writing' | 'pdf' | 'docx' | 'epub' | 'md'): Promise<string | null> =>
   invoke<string | null>('pick_save_file', { suggested, kind });
 
 export const tauriFiles: FileGateway = {
@@ -34,7 +35,7 @@ export async function exportPdfFile(suggestedName: string, bytes: Uint8Array, re
 }
 
 /** Saves a Word or Markdown export through the same guarded write as PDF. Returns the path, or null when the dialog was cancelled. */
-export async function exportDocumentFile(suggestedName: string, bytes: Uint8Array, format: 'docx' | 'md', recheck?: () => Promise<void>): Promise<string | null> {
+export async function exportDocumentFile(suggestedName: string, bytes: Uint8Array, format: 'docx' | 'epub' | 'md', recheck?: () => Promise<void>): Promise<string | null> {
   const extension = format;
   const path = await pickSave(suggestedName + '.' + extension, format);
   if (!path) return null;
@@ -42,6 +43,12 @@ export async function exportDocumentFile(suggestedName: string, bytes: Uint8Arra
   if (recheck) await recheck();
   return invoke<string>('export_document', { path: target, bytes: Array.from(bytes), kind: format });
 }
+
+/** Word import: pick or receive a .docx and read its text parts. Rust only reads; nothing is changed on disk. */
+export const pickWordFile = (): Promise<string | null> => invoke<string | null>('pick_open_file', { kind: 'docx' });
+export const readWordFile = (path: string): Promise<DocxParts> => invoke<DocxParts>('read_docx_file', { path });
+/** Asks for a folder of pages and copies them into a new project. Returns the project, or null when cancelled. */
+export const importPagesFolder = (root: string): Promise<string | null> => invoke<string | null>('import_folder', { root });
 
 /** Save a selected historic version separately. A cancelled dialog never changes the open document. */
 export async function exportRecoveryCopy(name: string, content: string, livePath: string | null): Promise<boolean> {
